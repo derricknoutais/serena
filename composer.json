@@ -1,8 +1,8 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "laravel/vue-starter-kit",
+    "name": "derricknoutais/saas-template",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
+    "description": "Reusable Laravel 12 SaaS boilerplate with multi-tenancy (stancl + Herd).",
     "keywords": [
         "laravel",
         "framework"
@@ -14,7 +14,8 @@
         "laravel/fortify": "^1.30",
         "laravel/framework": "^12.0",
         "laravel/tinker": "^2.10.1",
-        "laravel/wayfinder": "^0.1.9"
+        "laravel/wayfinder": "^0.1.9",
+        "stancl/tenancy": "^3.9"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
