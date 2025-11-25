@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { dashboard, login, register } from '@/routes';
+import { dashboard, login, logout, register } from '@/routes';
 import { Head, Link } from '@inertiajs/vue3';
 
 withDefaults(
@@ -30,6 +30,16 @@ withDefaults(
                     class="inline-block rounded-sm border border-[#19140035] px-5 py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#1915014a] dark:border-[#3E3E3A] dark:text-[#EDEDEC] dark:hover:border-[#62605b]"
                 >
                     Dashboard
+                </Link>
+                <Link
+                    v-if="$page.props.auth.user"
+                    :href="logout()"
+                    method="post"
+                    as="button"
+                    type="button"
+                    class="inline-block rounded-sm border border-transparent px-5 py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#19140035] dark:text-[#EDEDEC] dark:hover:border-[#3E3E3A]"
+                >
+                    Log out
                 </Link>
                 <template v-else>
                     <Link

@@ -6,8 +6,6 @@ use Laravel\Fortify\Features;
 use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
 use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
 
-Auth::loginUsingId(1);
-
 /*
 |--------------------------------------------------------------------------
 | Central (Landlord) Routes
@@ -38,8 +36,7 @@ Route::middleware('web')->group(function () {
 
 Route::middleware(['web', InitializeTenancyByDomain::class, PreventAccessFromCentralDomains::class])->group(function () {
     Route::get('/dashboard', function () {
-        return 'Tenant Dashboard';
-        // return Inertia::render('Dashboard');
+        return Inertia::render('Dashboard');
     })
         ->middleware(['auth', 'verified'])
         ->name('dashboard');

@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Actions\Auth\RegisterNewTenantAndUser;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Http\Responses\TenantRegisterResponse;
+use App\Http\Responses\TenantVerifyEmailResponse;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -12,6 +13,7 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Laravel\Fortify\Contracts\RegisterResponse;
+use Laravel\Fortify\Contracts\VerifyEmailResponse;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
 
@@ -81,6 +83,7 @@ class FortifyServiceProvider extends ServiceProvider
     private function configureResponses(): void
     {
         $this->app->singleton(RegisterResponse::class, TenantRegisterResponse::class);
+        $this->app->singleton(VerifyEmailResponse::class, TenantVerifyEmailResponse::class);
     }
 
     /**

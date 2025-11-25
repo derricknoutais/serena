@@ -101,7 +101,11 @@ return [
     |
     */
 
-    'middleware' => ['web'],
+    'middleware' => [
+        'web',
+        App\Http\Middleware\InitializeFortifyTenancy::class,
+        App\Http\Middleware\EnsureCentralForRegistration::class,
+    ],
 
     /*
     |--------------------------------------------------------------------------

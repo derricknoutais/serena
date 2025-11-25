@@ -9,6 +9,44 @@ import AuthBase from '@/layouts/AuthLayout.vue';
 import { login } from '@/routes';
 import { store } from '@/routes/register';
 import { Form, Head } from '@inertiajs/vue3';
+import { computed, ref, watch } from 'vue';
+
+const props = defineProps<{
+    centralDomain?: string;
+}>();
+
+const businessName = ref('');
+const tenantSlug = ref('');
+const name = ref('');
+const email = ref('');
+const password = ref('');
+const passwordConfirmation = ref('');
+const slugManuallyEdited = ref(false);
+
+const slugify = (value: string): string =>
+    value
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .replace(/-{2,}/g, '-')
+        .slice(0, 63);
+
+const handleSlugInput = (value: string) => {
+    tenantSlug.value = slugify(value);
+    slugManuallyEdited.value = value.length > 0;
+};
+
+watch(businessName, (value) => {
+    if (slugManuallyEdited.value) {
+        return;
+    }
+
+    tenantSlug.value = slugify(value);
+});
+
+const domainPreview = computed(
+    () => `${tenantSlug.value || 'your-team'}.${props.centralDomain ?? 'saas-template.test'}`,
+);
 </script>
 
 <template>
@@ -26,13 +64,49 @@ import { Form, Head } from '@inertiajs/vue3';
         >
             <div class="grid gap-6">
                 <div class="grid gap-2">
-                    <Label for="name">Name</Label>
+                    <Label for="business_name">Business name</Label>
                     <Input
-                        id="name"
+                        id="business_name"
+                        v-model="businessName"
                         type="text"
                         required
                         autofocus
                         :tabindex="1"
+                        autocomplete="organization"
+                        name="business_name"
+                        placeholder="Acme, Inc."
+                    />
+                    <InputError :message="errors.business_name" />
+                </div>
+
+                <div class="grid gap-2">
+                    <div class="flex items-center justify-between">
+                        <Label for="tenant_slug">Subdomain</Label>
+                        <span class="text-xs text-muted-foreground"
+                            >Preview: {{ domainPreview }}</span
+                        >
+                    </div>
+                    <Input
+                        id="tenant_slug"
+                        name="tenant_slug"
+                        :model-value="tenantSlug"
+                        @update:modelValue="handleSlugInput"
+                        type="text"
+                        :tabindex="2"
+                        autocomplete="off"
+                        placeholder="acme"
+                    />
+                    <InputError :message="errors.tenant_slug" />
+                </div>
+
+                <div class="grid gap-2">
+                    <Label for="name">Your name</Label>
+                    <Input
+                        id="name"
+                        v-model="name"
+                        type="text"
+                        required
+                        :tabindex="3"
                         autocomplete="name"
                         name="name"
                         placeholder="Full name"
@@ -44,9 +118,10 @@ import { Form, Head } from '@inertiajs/vue3';
                     <Label for="email">Email address</Label>
                     <Input
                         id="email"
+                        v-model="email"
                         type="email"
                         required
-                        :tabindex="2"
+                        :tabindex="4"
                         autocomplete="email"
                         name="email"
                         placeholder="email@example.com"
@@ -58,9 +133,10 @@ import { Form, Head } from '@inertiajs/vue3';
                     <Label for="password">Password</Label>
                     <Input
                         id="password"
+                        v-model="password"
                         type="password"
                         required
-                        :tabindex="3"
+                        :tabindex="5"
                         autocomplete="new-password"
                         name="password"
                         placeholder="Password"
@@ -72,9 +148,10 @@ import { Form, Head } from '@inertiajs/vue3';
                     <Label for="password_confirmation">Confirm password</Label>
                     <Input
                         id="password_confirmation"
+                        v-model="passwordConfirmation"
                         type="password"
                         required
-                        :tabindex="4"
+                        :tabindex="6"
                         autocomplete="new-password"
                         name="password_confirmation"
                         placeholder="Confirm password"
@@ -85,7 +162,7 @@ import { Form, Head } from '@inertiajs/vue3';
                 <Button
                     type="submit"
                     class="mt-2 w-full"
-                    tabindex="5"
+                    tabindex="7"
                     :disabled="processing"
                     data-test="register-user-button"
                 >

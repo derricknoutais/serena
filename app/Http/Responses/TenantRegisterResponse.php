@@ -4,30 +4,30 @@ namespace App\Http\Responses;
 
 use App\Models\Tenant;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Laravel\Fortify\Contracts\RegisterResponse;
 
 class TenantRegisterResponse implements RegisterResponse
 {
-    public function toResponse($request): Response
+    public function toResponse($request)
     {
-        $this->prepareSessionCookieDomain($request);
-
         $tenantDomain = $this->resolveTenantDomain($request, $request->user()?->tenant_id);
 
         if ($tenantDomain === null) {
             return redirect()->intended(config('fortify.home'));
         }
 
-        $destination = sprintf('%s://%s/dashboard', config('app.url_scheme', 'http'), $tenantDomain);
+        $base = sprintf('%s://%s', config('app.url_scheme', 'http'), $tenantDomain);
+        $destination = $request->user()?->hasVerifiedEmail()
+            ? $base.'/dashboard'
+            : $base.route('verification.notice', absolute: false);
 
         if ($request->header('X-Inertia')) {
             return Inertia::location($destination);
         }
 
-        return redirect()->intended($destination);
+        return redirect()->away($destination);
     }
 
     private function resolveTenantDomain(Request $request, ?string $tenantId): ?string
@@ -42,7 +42,7 @@ class TenantRegisterResponse implements RegisterResponse
             return $domain;
         }
 
-        $slug = $this->normalizeSlug((string) ($request->input('tenant_subdomain') ?? $tenantId));
+        $slug = $this->normalizeSlug((string) ($request->input('tenant_slug') ?? $tenantId));
 
         if ($slug === '') {
             return null;
@@ -56,23 +56,5 @@ class TenantRegisterResponse implements RegisterResponse
     private function normalizeSlug(string $value): string
     {
         return Str::limit(Str::slug($value), 63, '');
-    }
-
-    private function prepareSessionCookieDomain(Request $request): void
-    {
-        $host = $this->centralHost($request);
-
-        if ($host === null) {
-            return;
-        }
-
-        config()->set('session.domain', '.'.ltrim($host, '.'));
-    }
-
-    private function centralHost(Request $request): ?string
-    {
-        return config('app.url_host')
-            ?? config('tenancy.central_domains.0')
-            ?? $request->getHost();
     }
 }
