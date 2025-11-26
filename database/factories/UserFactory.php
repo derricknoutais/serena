@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Tenant;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -24,6 +25,7 @@ class UserFactory extends Factory
     public function definition(): array
     {
         return [
+            'tenant_id' => $this->defaultTenantId(),
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
@@ -55,5 +57,28 @@ class UserFactory extends Factory
             'two_factor_recovery_codes' => null,
             'two_factor_confirmed_at' => null,
         ]);
+    }
+
+    private function defaultTenantId(): string
+    {
+        $existing = Tenant::query()->first();
+
+        if ($existing !== null) {
+            return (string) $existing->getKey();
+        }
+
+        $id = (string) Str::uuid();
+        $slug = Str::slug(Str::random(8));
+
+        Tenant::create([
+            'id' => $id,
+            'name' => 'Test Tenant',
+            'slug' => $slug,
+            'plan' => 'standard',
+            'contact_email' => 'test@example.com',
+            'data' => ['name' => 'Test Tenant', 'slug' => $slug],
+        ]);
+
+        return $id;
     }
 }

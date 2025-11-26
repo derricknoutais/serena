@@ -11,6 +11,7 @@ import { register } from '@/routes';
 import { store } from '@/routes/login';
 import { request } from '@/routes/password';
 import { Form, Head } from '@inertiajs/vue3';
+import { computed, reactive, ref, watch } from 'vue';
 
 defineProps<{
     status?: string;
@@ -23,14 +24,36 @@ defineProps<{
     } | null;
     centralLoginUrl?: string;
 }>();
+
+const emailValue = ref('');
+const passwordValue = ref('');
+const localErrors = reactive({
+    email: 'Adresse e-mail requise.',
+    password: 'Mot de passe requis.',
+});
+const touched = reactive({
+    email: false,
+    password: false,
+});
+
+const validate = () => {
+    localErrors.email = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue.value)
+        ? ''
+        : 'Adresse e-mail invalide.';
+    localErrors.password = passwordValue.value ? '' : 'Mot de passe requis.';
+};
+
+watch([emailValue, passwordValue], validate, { immediate: true });
+
+const isLoginInvalid = computed(() => Object.values(localErrors).some((message) => message !== ''));
 </script>
 
 <template>
     <AuthBase
-        title="Log in to your account"
-        description="Enter your email and password below to log in"
+        title="Connexion"
+        description="Saisissez vos identifiants pour accéder à votre compte"
     >
-        <Head title="Log in" />
+        <Head title="Connexion" />
 
         <div
             v-if="tenant"
@@ -48,7 +71,7 @@ defineProps<{
                     :href="centralLoginUrl"
                     class="text-xs"
                 >
-                    Not your company?
+                    Ce n'est pas votre société ?
                 </TextLink>
             </div>
         </div>
@@ -68,48 +91,52 @@ defineProps<{
         >
             <div class="grid gap-6">
                 <div class="grid gap-2">
-                    <Label for="email">Email address</Label>
+                    <Label for="email">Adresse e-mail</Label>
                     <Input
                         id="email"
+                        v-model="emailValue"
                         type="email"
                         name="email"
                         required
                         autofocus
                         :tabindex="1"
                         autocomplete="email"
-                        placeholder="email@example.com"
+                        placeholder="email@exemple.com"
+                        @focus="touched.email = true"
                     />
-                    <InputError :message="errors.email" />
+                    <InputError :message="errors.email || (touched.email ? localErrors.email : '')" />
                 </div>
 
                 <div class="grid gap-2">
                     <div class="flex items-center justify-between">
-                        <Label for="password">Password</Label>
+                        <Label for="password">Mot de passe</Label>
                         <TextLink
                             v-if="canResetPassword"
                             :href="request()"
                             class="text-sm"
                             :tabindex="5"
                         >
-                            Forgot password?
+                            Mot de passe oublié ?
                         </TextLink>
                     </div>
                     <Input
                         id="password"
+                        v-model="passwordValue"
                         type="password"
                         name="password"
                         required
                         :tabindex="2"
                         autocomplete="current-password"
-                        placeholder="Password"
+                        placeholder="Mot de passe"
+                        @focus="touched.password = true"
                     />
-                    <InputError :message="errors.password" />
+                    <InputError :message="errors.password || (touched.password ? localErrors.password : '')" />
                 </div>
 
                 <div class="flex items-center justify-between">
                     <Label for="remember" class="flex items-center space-x-3">
                         <Checkbox id="remember" name="remember" :tabindex="3" />
-                        <span>Remember me</span>
+                        <span>Se souvenir de moi</span>
                     </Label>
                 </div>
 
@@ -117,11 +144,11 @@ defineProps<{
                     type="submit"
                     class="mt-4 w-full"
                     :tabindex="4"
-                    :disabled="processing"
+                    :disabled="processing || isLoginInvalid"
                     data-test="login-button"
                 >
                     <Spinner v-if="processing" />
-                    Log in
+                    Se connecter
                 </Button>
             </div>
 
@@ -129,8 +156,8 @@ defineProps<{
                 class="text-center text-sm text-muted-foreground"
                 v-if="canRegister"
             >
-                Don't have an account?
-                <TextLink :href="register()" :tabindex="5">Sign up</TextLink>
+                Pas encore de compte ?
+                <TextLink :href="register()" :tabindex="5">Créer un compte</TextLink>
             </div>
         </Form>
     </AuthBase>

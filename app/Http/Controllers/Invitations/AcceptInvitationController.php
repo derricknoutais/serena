@@ -64,6 +64,8 @@ class AcceptInvitationController extends Controller
             'token' => hash('sha256', Str::random(64)),
         ])->save();
 
+        $user->assignRole('member');
+
         Auth::login($user);
         $request->session()->regenerate();
 

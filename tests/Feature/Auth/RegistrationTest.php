@@ -40,11 +40,12 @@ test('new tenants and admin users can register', function () {
     $response->assertRedirect('http://acme-hotels.saas-template.test/email/verify');
     $this->assertAuthenticated();
 
-    $tenant = Tenant::find('acme-hotels');
+    $tenantId = Domain::where('domain', 'acme-hotels.saas-template.test')->value('tenant_id');
+    $tenant = Tenant::find($tenantId);
 
     expect($tenant)->not->toBeNull();
     expect(Domain::where('domain', 'acme-hotels.saas-template.test')->exists())->toBeTrue();
-    expect(auth()->user()->tenant_id)->toBe('acme-hotels');
+    expect(auth()->user()->tenant_id)->toBe($tenantId);
 
     Notification::assertSentTo(auth()->user(), VerifyEmail::class, function (VerifyEmail $notification) {
         $mail = $notification->toMail(auth()->user());
@@ -63,7 +64,7 @@ test('tenant slug defaults to business name', function () {
     ]);
 
     $response->assertRedirect('http://bright-studio.saas-template.test/email/verify');
-    expect(Tenant::find('bright-studio'))->not->toBeNull();
+    expect(Domain::where('domain', 'bright-studio.saas-template.test')->exists())->toBeTrue();
 });
 
 test('verification link is signed for tenant domain', function () {

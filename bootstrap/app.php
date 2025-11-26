@@ -2,6 +2,8 @@
 
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\SetPermissionsTeam;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -16,7 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
-        $middleware->web(append: [HandleAppearance::class, HandleInertiaRequests::class, AddLinkHeadersForPreloadedAssets::class]);
+        $middleware->web(append: [HandleAppearance::class, HandleInertiaRequests::class, SetPermissionsTeam::class, AddLinkHeadersForPreloadedAssets::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (TenantCouldNotBeIdentifiedOnDomainException $e, Request $request) {
@@ -36,6 +38,18 @@ return Application::configure(basePath: dirname(__DIR__))
             ])
                 ->toResponse($request)
                 ->setStatusCode(Response::HTTP_NOT_FOUND);
+        });
+
+        $exceptions->render(function (AuthorizationException $e, Request $request) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Vous n\'avez pas les permissions nécessaires pour cette action.',
+                ], Response::HTTP_FORBIDDEN);
+            }
+
+            return Inertia::render('errors/Unauthorized', [
+                'message' => 'Vous n\'avez pas les permissions nécessaires pour cette action.',
+            ])->toResponse($request)->setStatusCode(Response::HTTP_FORBIDDEN);
         });
     })
     ->create();

@@ -34,17 +34,17 @@ const submit = () => {
 
 <template>
     <AuthBase
-        title="Find your company"
-        description="Enter your company domain or slug to continue"
+        title="Retrouvez votre espace"
+        description="Indiquez le domaine ou le slug de votre société pour continuer"
     >
-        <Head title="Log in" />
+        <Head title="Connexion" />
 
         <form class="flex flex-col gap-6" @submit.prevent="submit">
             <div class="grid gap-2">
                 <div class="flex items-center justify-between">
-                    <Label for="tenant">Company domain</Label>
+                    <Label for="tenant">Domaine de la société</Label>
                     <span class="text-xs text-muted-foreground">
-                        e.g. {{ preview }}
+                        ex. {{ preview }}
                     </span>
                 </div>
                 <Input
@@ -55,7 +55,7 @@ const submit = () => {
                     required
                     autofocus
                     autocomplete="organization"
-                    placeholder="acme or acme.saas-template.test"
+                    placeholder="acme ou acme.saas-template.test"
                 />
                 <InputError :message="form.errors.tenant" />
             </div>
@@ -67,7 +67,7 @@ const submit = () => {
                 data-test="tenant-login-redirect"
             >
                 <Spinner v-if="form.processing" />
-                Continue to login
+                Continuer vers la connexion
             </Button>
         </form>
     </AuthBase>

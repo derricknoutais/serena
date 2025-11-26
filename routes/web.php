@@ -1,7 +1,11 @@
 <?php
 
+use App\Http\Controllers\Activity\ActivityController;
+use App\Http\Controllers\Auth\CheckEmailAvailabilityController;
+use App\Http\Controllers\Auth\CheckTenantSlugController;
 use App\Http\Controllers\Invitations\AcceptInvitationController;
 use App\Http\Controllers\Invitations\InvitationController;
+use App\Http\Controllers\Users\UpdateUserRoleController;
 use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -49,23 +53,15 @@ Route::middleware('web')->group(function () {
             return back()->withErrors(['tenant' => 'Please enter a valid tenant domain or slug.']);
         }
 
-        $tenant = Tenant::query()
-            ->whereKey($slug)
-            ->orWhereHas('domains', fn ($query) => $query->where('domain', sprintf('%s.%s', $slug, $baseDomain)))
-            ->first();
+        $tenantId = \Stancl\Tenancy\Database\Models\Domain::query()->where('domain', sprintf('%s.%s', $slug, $baseDomain))->value('tenant_id');
+
+        $tenant = $tenantId ? Tenant::find($tenantId) : null;
 
         if (! $tenant) {
             return back()->withErrors(['tenant' => 'We could not find that tenant.']);
         }
 
-        $centralDomain = config('tenancy.central_domains', [])[0] ?? config('app.url_host', $baseDomain);
-
-        $target = sprintf(
-            '%s://%s/login?%s',
-            config('app.url_scheme', 'http'),
-            $centralDomain,
-            http_build_query(['tenant' => $slug]),
-        );
+        $target = sprintf('%s://%s/login', config('app.url_scheme', 'http'), $tenant->domains()->value('domain') ?? sprintf('%s.%s', $slug, $baseDomain));
 
         if ($request->header('X-Inertia')) {
             return Inertia::location($target);
@@ -73,6 +69,10 @@ Route::middleware('web')->group(function () {
 
         return redirect()->away($target);
     })->name('tenant.login.redirect');
+
+    Route::get('/register/check-slug', CheckTenantSlugController::class)->name('register.slug.check');
+
+    Route::get('/register/check-email', CheckEmailAvailabilityController::class)->name('register.email.check');
 });
 
 /*
@@ -87,7 +87,25 @@ Route::middleware('web')->group(function () {
 
 Route::middleware(['web', InitializeTenancyByDomain::class, PreventAccessFromCentralDomains::class])->group(function () {
     Route::get('/dashboard', function () {
-        return Inertia::render('Dashboard');
+        return Inertia::render('Dashboard', [
+            'users' => \App\Models\User::query()
+                ->orderBy('name')
+                ->with(['roles'])
+                ->get()
+                ->map(
+                    fn ($user) => [
+                        'id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'role' => $user->roles->first()?->name,
+                    ],
+                ),
+            'roles' => \Spatie\Permission\Models\Role::query()->orderBy('name')->get()->map(
+                fn ($role) => [
+                    'name' => $role->name,
+                ],
+            ),
+        ]);
     })
         ->middleware(['auth', 'verified'])
         ->name('dashboard');
@@ -96,11 +114,17 @@ Route::middleware(['web', InitializeTenancyByDomain::class, PreventAccessFromCen
         ->middleware(['auth', 'verified'])
         ->name('invitations.store');
 
-    Route::get('/invitations/accept', [AcceptInvitationController::class, 'show'])
-        ->name('invitations.accept.show');
+    Route::get('/invitations/accept', [AcceptInvitationController::class, 'show'])->name('invitations.accept.show');
 
-    Route::post('/invitations/accept', [AcceptInvitationController::class, 'store'])
-        ->name('invitations.accept.store');
+    Route::post('/invitations/accept', [AcceptInvitationController::class, 'store'])->name('invitations.accept.store');
+
+    Route::patch('/users/{user}/role', UpdateUserRoleController::class)
+        ->middleware(['auth', 'verified', 'can:users.manage'])
+        ->name('users.role.update');
+
+    Route::get('/activity', [ActivityController::class, 'index'])
+        ->middleware(['auth', 'verified'])
+        ->name('activity.index');
 });
 
 /*

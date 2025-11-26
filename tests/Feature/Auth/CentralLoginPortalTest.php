@@ -30,7 +30,7 @@ test('central login portal renders on central domain', function () {
     $response->assertOk()->assertInertia(fn (Assert $page) => $page->component('auth/CentralLogin'));
 });
 
-test('central login portal redirects to central login when tenant exists', function () {
+test('central login portal redirects to tenant login when tenant exists', function () {
     $tenant = portalTenant('orchid');
 
     $response = $this->withHeader('X-Inertia', 'true')->post('http://saas-template.login/login/tenant', [
@@ -38,7 +38,7 @@ test('central login portal redirects to central login when tenant exists', funct
     ]);
 
     $response->assertStatus(409);
-    $response->assertHeader('X-Inertia-Location', 'http://saas-template.login/login?tenant='.$tenant->id);
+    $response->assertHeader('X-Inertia-Location', 'http://'.$tenant->domains()->value('domain').'/login');
 });
 
 test('central login portal validates unknown tenant', function () {
@@ -48,24 +48,4 @@ test('central login portal validates unknown tenant', function () {
         ]);
 
     $response->assertSessionHasErrors('tenant');
-});
-
-test('tenant login routes to central login domain with inertia redirect', function () {
-    $tenant = portalTenant('daisy');
-
-    $response = $this->withHeader('X-Inertia', 'true')->get('http://'.$tenant->domains()->value('domain').'/login');
-
-    $response->assertStatus(409);
-    $response->assertHeader('X-Inertia-Location', 'http://saas-template.login/login?tenant='.$tenant->id);
-});
-
-test('central login renders tenant login view when tenant is provided', function () {
-    $tenant = portalTenant('violet');
-
-    $response = $this->get('http://saas-template.login/login?tenant='.$tenant->id);
-
-    $response->assertOk()->assertInertia(fn (Assert $page) => $page
-        ->component('auth/Login')
-        ->where('tenant.slug', $tenant->id)
-        ->where('tenant.domain', $tenant->domains()->value('domain')));
 });

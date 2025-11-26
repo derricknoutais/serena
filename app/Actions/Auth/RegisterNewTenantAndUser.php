@@ -25,6 +25,7 @@ class RegisterNewTenantAndUser implements CreatesNewUsers
     {
         $businessName = trim((string) ($input['business_name'] ?? ''));
         $tenantSlug = $this->determineTenantSlug($input, $businessName);
+        $tenantId = (string) Str::uuid();
 
         $validator = Validator::make($input, [
             'business_name' => ['required', 'string', 'max:255'],
@@ -35,7 +36,7 @@ class RegisterNewTenantAndUser implements CreatesNewUsers
                 'string',
                 'email',
                 'max:255',
-                Rule::unique(User::class)->where(fn ($query) => $query->where('tenant_id', $tenantSlug)),
+                Rule::unique(User::class, 'email'),
             ],
             'password' => $this->passwordRules(),
         ]);
@@ -47,10 +48,6 @@ class RegisterNewTenantAndUser implements CreatesNewUsers
                 return;
             }
 
-            if (Tenant::whereKey($tenantSlug)->exists()) {
-                $validator->errors()->add('tenant_slug', 'This subdomain is already taken.');
-            }
-
             if (Domain::where('domain', $this->buildTenantDomain($tenantSlug))->exists()) {
                 $validator->errors()->add('tenant_slug', 'This subdomain is already taken.');
             }
@@ -59,11 +56,16 @@ class RegisterNewTenantAndUser implements CreatesNewUsers
         $validator->validate();
 
         $tenant = Tenant::create([
-            'id' => $tenantSlug,
+            'id' => $tenantId,
+            'name' => $businessName,
+            'slug' => $tenantSlug,
+            'contact_email' => $input['email'],
+            'plan' => 'standard',
             'data' => [
                 'name' => $businessName,
                 'contact_email' => $input['email'],
                 'plan' => 'standard',
+                'slug' => $tenantSlug,
             ],
         ]);
 
@@ -74,11 +76,25 @@ class RegisterNewTenantAndUser implements CreatesNewUsers
         $this->tenancy->initialize($tenant);
 
         try {
-            return User::create([
+            $user = User::create([
                 'name' => $input['name'],
                 'email' => $input['email'],
                 'password' => $input['password'],
             ]);
+
+            $user->assignRole('owner');
+
+            activity('users')
+                ->event('tenant_registered')
+                ->causedBy($user)
+                ->performedOn($tenant)
+                ->withProperties([
+                    'tenant_id' => $tenant->id,
+                    'email' => $user->email,
+                ])
+                ->log('Création de tenant et compte admin');
+
+            return $user;
         } finally {
             $this->tenancy->end();
         }

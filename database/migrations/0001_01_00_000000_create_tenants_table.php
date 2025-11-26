@@ -10,13 +10,15 @@ class CreateTenantsTable extends Migration
 {
     /**
      * Run the migrations.
-     *
-     * @return void
      */
     public function up(): void
     {
         Schema::create('tenants', function (Blueprint $table) {
             $table->string('id')->primary();
+            $table->string('name')->nullable();
+            $table->string('slug')->unique();
+            $table->string('contact_email')->nullable();
+            $table->string('plan')->default('standard')->nullable();
 
             // your custom columns may go here
 
@@ -27,8 +29,6 @@ class CreateTenantsTable extends Migration
 
     /**
      * Reverse the migrations.
-     *
-     * @return void
      */
     public function down(): void
     {

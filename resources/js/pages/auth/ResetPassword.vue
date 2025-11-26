@@ -7,7 +7,7 @@ import { Spinner } from '@/components/ui/spinner';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { update } from '@/routes/password';
 import { Form, Head } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 
 const props = defineProps<{
     token: string;
@@ -15,14 +15,28 @@ const props = defineProps<{
 }>();
 
 const inputEmail = ref(props.email);
+const password = ref('');
+const passwordConfirmation = ref('');
+const localErrors = reactive({
+    password: 'Le mot de passe doit contenir au moins 8 caracteres.',
+    password_confirmation: 'Les mots de passe doivent correspondre.',
+});
+
+watch([password, passwordConfirmation], () => {
+    localErrors.password = password.value.length >= 8 ? '' : 'Le mot de passe doit contenir au moins 8 caracteres.';
+    localErrors.password_confirmation =
+        passwordConfirmation.value === password.value ? '' : 'Les mots de passe doivent correspondre.';
+}, { immediate: true });
+
+const isInvalid = computed(() => Object.values(localErrors).some((message) => message !== ''));
 </script>
 
 <template>
     <AuthLayout
-        title="Reset password"
-        description="Please enter your new password below"
+        title="Réinitialiser le mot de passe"
+        description="Renseignez votre nouveau mot de passe"
     >
-        <Head title="Reset password" />
+        <Head title="Réinitialiser le mot de passe" />
 
         <Form
             v-bind="update.form()"
@@ -46,42 +60,44 @@ const inputEmail = ref(props.email);
                 </div>
 
                 <div class="grid gap-2">
-                    <Label for="password">Password</Label>
+                    <Label for="password">Nouveau mot de passe</Label>
                     <Input
                         id="password"
+                        v-model="password"
                         type="password"
                         name="password"
                         autocomplete="new-password"
                         class="mt-1 block w-full"
                         autofocus
-                        placeholder="Password"
+                        placeholder="Au moins 8 caractères"
                     />
-                    <InputError :message="errors.password" />
+                    <InputError :message="errors.password || localErrors.password" />
                 </div>
 
                 <div class="grid gap-2">
                     <Label for="password_confirmation">
-                        Confirm Password
+                        Confirmer le mot de passe
                     </Label>
                     <Input
                         id="password_confirmation"
+                        v-model="passwordConfirmation"
                         type="password"
                         name="password_confirmation"
                         autocomplete="new-password"
                         class="mt-1 block w-full"
-                        placeholder="Confirm password"
+                        placeholder="Répétez le mot de passe"
                     />
-                    <InputError :message="errors.password_confirmation" />
+                    <InputError :message="errors.password_confirmation || localErrors.password_confirmation" />
                 </div>
 
                 <Button
                     type="submit"
                     class="mt-4 w-full"
-                    :disabled="processing"
+                    :disabled="processing || isInvalid"
                     data-test="reset-password-button"
                 >
                     <Spinner v-if="processing" />
-                    Reset password
+                    Réinitialiser le mot de passe
                 </Button>
             </div>
         </Form>

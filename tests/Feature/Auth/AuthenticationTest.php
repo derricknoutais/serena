@@ -4,6 +4,16 @@ use App\Models\User;
 use Illuminate\Support\Facades\RateLimiter;
 use Laravel\Fortify\Features;
 
+beforeEach(function () {
+    config([
+        'app.url' => 'http://saas-template.test',
+        'app.url_host' => 'saas-template.test',
+        'app.url_scheme' => 'http',
+        'tenancy.central_domains' => ['saas-template.test'],
+        'session.domain' => '.saas-template.test',
+    ]);
+});
+
 test('login screen can be rendered', function () {
     $response = $this->get(route('login'));
 
@@ -19,7 +29,7 @@ test('users can authenticate using the login screen', function () {
     ]);
 
     $this->assertAuthenticated();
-    $response->assertRedirect(route('dashboard', absolute: false));
+    $response->assertRedirect('http://'.$user->tenant_id.'.saas-template.test/dashboard');
 });
 
 test('users with two factor enabled are redirected to two factor challenge', function () {
@@ -64,10 +74,13 @@ test('users can not authenticate with invalid password', function () {
 test('users can logout', function () {
     $user = User::factory()->create();
 
-    $response = $this->actingAs($user)->post(route('logout'));
+    $response = $this->actingAs($user)->post('http://saas-template.test'.route('logout', absolute: false));
 
+    $home = $this->get(route('home'));
+    app('auth')->forgetGuards();
     $this->assertGuest();
     $response->assertRedirect(route('home'));
+    $home->assertOk();
 });
 
 test('users are rate limited', function () {
