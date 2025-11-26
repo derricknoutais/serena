@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head } from '@inertiajs/vue3';
 import { computed } from 'vue';
 
 const props = defineProps<{
@@ -33,12 +33,12 @@ const centralLink = computed(() => {
                 We could not find a tenant for <strong>{{ domain }}</strong>. Check
                 the spelling or contact your administrator.
             </p>
-            <Link
+            <a
                 :href="centralLink"
                 class="inline-flex items-center justify-center rounded-md border border-input bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition hover:brightness-110"
             >
                 Go to central login
-            </Link>
+            </a>
         </div>
     </div>
 </template>

@@ -1,8 +1,8 @@
 <?php
 
+use Illuminate\Support\Facades\Route;
 use Inertia\Testing\AssertableInertia as Assert;
 use Stancl\Tenancy\Exceptions\TenantCouldNotBeIdentifiedOnDomainException;
-use Illuminate\Support\Facades\Route;
 
 beforeEach(function () {
     config([

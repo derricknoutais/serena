@@ -61,7 +61,7 @@ defineProps<{
         </div>
 
         <Form
-            v-bind="store.form()"
+            v-bind="store.form(tenant ? { query: { tenant: tenant.slug } } : undefined)"
             :reset-on-success="['password']"
             v-slot="{ errors, processing }"
             class="flex flex-col gap-6"
