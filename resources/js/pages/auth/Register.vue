@@ -16,12 +16,10 @@ const props = defineProps<{
 }>();
 
 const businessName = ref('');
-const tenantSlug = ref('');
 const name = ref('');
 const email = ref('');
 const password = ref('');
 const passwordConfirmation = ref('');
-const slugManuallyEdited = ref(false);
 
 const slugify = (value: string): string =>
     value
@@ -31,18 +29,7 @@ const slugify = (value: string): string =>
         .replace(/-{2,}/g, '-')
         .slice(0, 63);
 
-const handleSlugInput = (value: string) => {
-    tenantSlug.value = slugify(value);
-    slugManuallyEdited.value = value.length > 0;
-};
-
-watch(businessName, (value) => {
-    if (slugManuallyEdited.value) {
-        return;
-    }
-
-    tenantSlug.value = slugify(value);
-});
+const tenantSlug = computed(() => slugify(businessName.value));
 
 const domainPreview = computed(
     () => `${tenantSlug.value || 'your-team'}.${props.centralDomain ?? 'saas-template.test'}`,
@@ -90,10 +77,10 @@ const domainPreview = computed(
                         id="tenant_slug"
                         name="tenant_slug"
                         :model-value="tenantSlug"
-                        @update:modelValue="handleSlugInput"
                         type="text"
                         :tabindex="2"
                         autocomplete="off"
+                        readonly
                         placeholder="acme"
                     />
                     <InputError :message="errors.tenant_slug" />

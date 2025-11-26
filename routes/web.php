@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Invitations\AcceptInvitationController;
+use App\Http\Controllers\Invitations\InvitationController;
 use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -90,7 +92,15 @@ Route::middleware(['web', InitializeTenancyByDomain::class, PreventAccessFromCen
         ->middleware(['auth', 'verified'])
         ->name('dashboard');
 
-    // You can place more tenant routes here …
+    Route::post('/invitations', [InvitationController::class, 'store'])
+        ->middleware(['auth', 'verified'])
+        ->name('invitations.store');
+
+    Route::get('/invitations/accept', [AcceptInvitationController::class, 'show'])
+        ->name('invitations.accept.show');
+
+    Route::post('/invitations/accept', [AcceptInvitationController::class, 'store'])
+        ->name('invitations.accept.store');
 });
 
 /*
