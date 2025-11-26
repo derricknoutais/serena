@@ -1,0 +1,22 @@
+<?php
+
+namespace App\Filament\Superadmin\Resources\TenantResource\Pages;
+
+use App\Filament\Superadmin\Resources\TenantResource;
+use Filament\Actions;
+use Filament\Resources\Pages\EditRecord;
+
+class EditTenant extends EditRecord
+{
+    protected static string $resource = TenantResource::class;
+
+    /**
+     * @return array<int, \Filament\Actions\Action>
+     */
+    protected function getHeaderActions(): array
+    {
+        return [
+            Actions\DeleteAction::make(),
+        ];
+    }
+}

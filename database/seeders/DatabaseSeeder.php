@@ -24,6 +24,7 @@ class DatabaseSeeder extends Seeder
             // SaasDemoSeeder::class,
             PermissionsSeeder::class,
             RolesSeeder::class,
+            DemoTenantSeeder::class,
             SuperAdminSeeder::class,
         ]);
     }

@@ -18,9 +18,11 @@ class SuperAdminSeeder extends Seeder
                 'password' => 'password',
                 'email_verified_at' => now(),
                 'tenant_id' => User::factory()->create()->tenant_id,
+                'is_superadmin' => true,
             ],
         );
 
         $user->assignRole('superadmin');
+        $user->forceFill(['is_superadmin' => true])->save();
     }
 }

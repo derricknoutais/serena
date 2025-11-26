@@ -7,6 +7,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { useForm } from '@inertiajs/vue3';
+import { onMounted, reactive, ref, watch } from 'vue';
 
 const props = defineProps<{
     roles: { name: string; permissions: string[] }[];
@@ -33,14 +34,33 @@ const breadcrumbItems: BreadcrumbItem[] = [
 const form = useForm({
     role: '',
 });
+const selectedRoles = reactive<Record<number, string>>({});
+const lastSubmittedUserId = ref<number | null>(null);
+const loadingUserId = ref<number | null>(null);
+
+const syncSelectedRoles = () => {
+    props.users.forEach((user) => {
+        selectedRoles[user.id] = user.role ?? '';
+    });
+};
+
+onMounted(syncSelectedRoles);
+watch(
+    () => props.users,
+    () => syncSelectedRoles(),
+    { deep: true },
+);
 
 const submitRole = (userId: number) => {
+    form.role = selectedRoles[userId] ?? '';
+    lastSubmittedUserId.value = userId;
+
     form.patch(`/users/${userId}/role`, {
         onStart: () => {
-            form.processing = true;
+            loadingUserId.value = userId;
         },
         onFinish: () => {
-            form.processing = false;
+            loadingUserId.value = null;
         },
     });
 };
@@ -72,7 +92,8 @@ const submitRole = (userId: number) => {
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-3">
-                                    <select v-model="form.role" :disabled="user.is_owner || form.processing"
+                                    <select v-model="selectedRoles[user.id]"
+                                        :disabled="user.is_owner || loadingUserId === user.id"
                                         class="w-40 rounded-md border border-border bg-background px-3 py-2 text-sm disabled:opacity-60">
                                         <option disabled value="">Choisir un rôle</option>
                                         <option v-for="role in roles" :key="role.name" :value="role.name"
@@ -80,12 +101,14 @@ const submitRole = (userId: number) => {
                                             {{ role.name }}
                                         </option>
                                     </select>
-                                    <Button size="sm" :disabled="user.is_owner || form.processing || !form.role"
+                                    <Button
+                                        size="sm"
+                                        :disabled="user.is_owner || loadingUserId === user.id || !selectedRoles[user.id]"
                                         @click="submitRole(user.id)">
                                         Mettre à jour
                                     </Button>
                                 </div>
-                                <InputError :message="form.errors.role" />
+                                <InputError v-if="lastSubmittedUserId === user.id" :message="form.errors.role" />
                             </div>
                         </div>
                         <div class="space-y-4">

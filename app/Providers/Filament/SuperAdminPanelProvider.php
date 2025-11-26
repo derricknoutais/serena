@@ -4,6 +4,8 @@ namespace App\Providers\Filament;
 
 use App\Filament\Superadmin\Resources\PermissionResource;
 use App\Filament\Superadmin\Resources\RoleResource;
+use App\Filament\Superadmin\Resources\TenantResource;
+use App\Filament\Superadmin\Resources\UserResource;
 use App\Http\Middleware\EnsureSuperAdmin;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -31,13 +33,17 @@ class SuperAdminPanelProvider extends PanelProvider
             ->id('superadmin')
             ->path('superadmin')
             ->domain(config('tenancy.central_domains')[0] ?? null)
+            ->brandName('Superadmin')
             ->login()
+            ->authGuard('web')
             ->colors([
                 'primary' => Color::Amber,
             ])
             ->resources([
                 RoleResource::class,
                 PermissionResource::class,
+                TenantResource::class,
+                UserResource::class,
             ])
             ->pages([
                 Dashboard::class,

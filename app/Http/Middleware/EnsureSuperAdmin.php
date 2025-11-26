@@ -17,7 +17,7 @@ class EnsureSuperAdmin
     {
         $user = $request->user();
 
-        if ($user && $user->hasRole('superadmin')) {
+        if ($user && ($user->is_superadmin || $user->hasRole('superadmin'))) {
             return $next($request);
         }
 
