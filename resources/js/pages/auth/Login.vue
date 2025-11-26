@@ -16,6 +16,12 @@ defineProps<{
     status?: string;
     canResetPassword: boolean;
     canRegister: boolean;
+    tenant?: {
+        name: string;
+        domain: string;
+        slug: string;
+    } | null;
+    centralLoginUrl?: string;
 }>();
 </script>
 
@@ -25,6 +31,27 @@ defineProps<{
         description="Enter your email and password below to log in"
     >
         <Head title="Log in" />
+
+        <div
+            v-if="tenant"
+            class="rounded-md border border-border/60 bg-muted/40 p-3 text-sm text-muted-foreground"
+        >
+            <div class="flex items-center justify-between gap-3">
+                <div>
+                    <p class="font-medium text-foreground">{{ tenant.name }}</p>
+                    <p class="text-xs text-muted-foreground">
+                        {{ tenant.domain }}
+                    </p>
+                </div>
+                <TextLink
+                    v-if="centralLoginUrl"
+                    :href="centralLoginUrl"
+                    class="text-xs"
+                >
+                    Not your company?
+                </TextLink>
+            </div>
+        </div>
 
         <div
             v-if="status"
