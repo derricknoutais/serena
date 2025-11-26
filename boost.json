@@ -7,7 +7,8 @@
         "vscode"
     ],
     "guidelines": [
-        "laravel/fortify"
+        "laravel/fortify",
+        "filament/filament"
     ],
     "herd_mcp": true
 }

@@ -10,6 +10,7 @@ class RolesSeeder extends Seeder
 {
     public function run(): void
     {
+        $superadmin = Role::findOrCreate('superadmin', 'web');
         $owner = Role::findOrCreate('owner', 'web');
         $admin = Role::findOrCreate('admin', 'web');
         $member = Role::findOrCreate('member', 'web');
@@ -18,21 +19,8 @@ class RolesSeeder extends Seeder
 
         $owner->syncPermissions($permissions->keys()->all());
 
-        $admin->syncPermissions([
-            'dashboard.view',
-            'users.view',
-            'users.manage',
-            'invitations.view',
-            'invitations.manage',
-            'profile.update',
-            'activity.view',
-        ]);
+        $admin->syncPermissions(['dashboard.view', 'users.view', 'users.manage', 'invitations.view', 'invitations.manage', 'profile.update', 'activity.view']);
 
-        $member->syncPermissions([
-            'dashboard.view',
-            'users.view',
-            'invitations.view',
-            'profile.update',
-        ]);
+        $member->syncPermissions(['dashboard.view', 'users.view', 'invitations.view', 'profile.update']);
     }
 }
