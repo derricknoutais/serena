@@ -11,7 +11,7 @@ class UpdateUserRoleRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->user()?->can('users.manage') ?? false;
+        return $this->user()?->hasAnyRole(['owner', 'manager', 'superadmin']) ?? false;
     }
 
     /**

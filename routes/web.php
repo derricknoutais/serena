@@ -119,7 +119,7 @@ Route::middleware(['web', InitializeTenancyByDomain::class, PreventAccessFromCen
     Route::post('/invitations/accept', [AcceptInvitationController::class, 'store'])->name('invitations.accept.store');
 
     Route::patch('/users/{user}/role', UpdateUserRoleController::class)
-        ->middleware(['auth', 'verified', 'role:owner'])
+        ->middleware(['auth', 'verified', 'role:owner|manager|superadmin'])
         ->name('users.role.update');
 
     Route::get('/activity', [ActivityController::class, 'index'])

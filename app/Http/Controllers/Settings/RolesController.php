@@ -13,12 +13,10 @@ class RolesController extends Controller
     public function index(): Response
     {
         $roles = Role::query()
-            ->with('permissions')
             ->orderBy('name')
             ->get()
             ->map(fn ($role) => [
                 'name' => $role->name,
-                'permissions' => $role->permissions->pluck('name')->all(),
             ]);
 
         $users = User::query()

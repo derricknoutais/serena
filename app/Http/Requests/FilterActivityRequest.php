@@ -11,7 +11,7 @@ class FilterActivityRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->user()?->can('activity.view') ?? false;
+        return $this->user()?->hasAnyRole(['owner', 'manager', 'superadmin']) ?? false;
     }
 
     /**

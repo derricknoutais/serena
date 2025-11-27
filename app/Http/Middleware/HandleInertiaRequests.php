@@ -44,16 +44,10 @@ class HandleInertiaRequests extends Middleware
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
                 'user' => $request->user()
-                    ? (method_exists($request->user(), 'roles')
-                        ? $request->user()->load([
-                            'roles' => function ($query) {
-                                $query->with('permissions');
-                            },
-                        ])
-                        : $request->user())
+                    ? ($request->user()->relationLoaded('roles') ? $request->user() : $request->user()->load('roles'))
                     : null,
                 'can' => [
-                    'activity.view' => $request->user()?->can('activity.view') ?? false,
+                    'activity.view' => $request->user()?->hasAnyRole(['owner', 'manager', 'superadmin']) ?? false,
                 ],
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',

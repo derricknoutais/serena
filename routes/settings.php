@@ -21,7 +21,7 @@ Route::middleware('auth')->group(function () {
         ->name('user-password.update');
 
     Route::get('settings/roles', [RolesController::class, 'index'])
-        ->middleware('can:users.manage')
+        ->middleware('role:owner|manager|superadmin')
         ->name('settings.roles.index');
 
     Route::get('settings/appearance', function () {
