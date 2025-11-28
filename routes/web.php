@@ -3,6 +3,13 @@
 use App\Http\Controllers\Activity\ActivityController;
 use App\Http\Controllers\Auth\CheckEmailAvailabilityController;
 use App\Http\Controllers\Auth\CheckTenantSlugController;
+use App\Http\Controllers\Config\HotelConfigController;
+use App\Http\Controllers\Config\OfferController;
+use App\Http\Controllers\Config\ProductController;
+use App\Http\Controllers\Config\RoomController;
+use App\Http\Controllers\Config\RoomTypeController;
+use App\Http\Controllers\Config\TaxController;
+use App\Http\Controllers\Config\UserConfigController;
 use App\Http\Controllers\Invitations\AcceptInvitationController;
 use App\Http\Controllers\Invitations\InvitationController;
 use App\Http\Controllers\Users\UpdateUserRoleController;
@@ -125,6 +132,21 @@ Route::middleware(['web', InitializeTenancyByDomain::class, PreventAccessFromCen
     Route::get('/activity', [ActivityController::class, 'index'])
         ->middleware(['auth', 'verified'])
         ->name('activity.index');
+
+    Route::prefix('ressources')
+        ->name('ressources.')
+        ->middleware(['auth'])
+        ->group(function () {
+            Route::get('/hotel', [HotelConfigController::class, 'edit'])->name('hotel.edit');
+            Route::put('/hotel', [HotelConfigController::class, 'update'])->name('hotel.update');
+
+            Route::resource('room-types', RoomTypeController::class)->except(['show']);
+            Route::resource('rooms', RoomController::class)->except(['show']);
+            Route::resource('offers', OfferController::class)->except(['show']);
+            Route::resource('taxes', TaxController::class)->except(['show']);
+            Route::resource('products', ProductController::class)->except(['show']);
+            Route::resource('users', UserConfigController::class)->except(['show']);
+        });
 });
 
 /*

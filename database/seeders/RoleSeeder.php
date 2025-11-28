@@ -20,6 +20,7 @@ class RoleSeeder extends Seeder
             'receptionist',
             'housekeeping',
             'accountant',
+            'superadmin',
         ] as $role) {
             Role::query()->firstOrCreate(
                 [
