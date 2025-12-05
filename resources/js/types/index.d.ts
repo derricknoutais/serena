@@ -35,6 +35,7 @@ export interface User {
     created_at: string;
     updated_at: string;
     roles?: { name: string }[];
+    activeHotel?: { id: number; name: string } | null;
 }
 
 export type BreadcrumbItemType = BreadcrumbItem;

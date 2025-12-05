@@ -13,13 +13,12 @@ return new class extends Migration
     {
         Schema::create('offers', function (Blueprint $table) {
             $table->id();
-            $table->string('tenant_id')->index();
+            $table->foreignUuid('tenant_id')->index();
             $table->foreignId('hotel_id')->constrained('hotels')->cascadeOnDelete();
             $table->string('name');
-            $table->string('code');
             $table->string('kind');
             $table->integer('fixed_duration_hours')->nullable();
-            $table->string('billing_mode');
+            $table->string('billing_mode')->nullable();
             $table->time('check_in_from')->nullable();
             $table->time('check_out_until')->nullable();
             $table->json('valid_days_of_week')->nullable();

@@ -16,11 +16,6 @@
                     <p v-if="errors.name" class="mt-1 text-xs text-red-600">{{ errors.name }}</p>
                 </div>
                 <div>
-                    <label class="text-sm font-medium text-gray-700">Code</label>
-                    <input v-model="form.code" type="text" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100" />
-                    <p v-if="errors.code" class="mt-1 text-xs text-red-600">{{ errors.code }}</p>
-                </div>
-                <div>
                     <label class="text-sm font-medium text-gray-700">Capacité adultes</label>
                     <input v-model.number="form.capacity_adults" type="number" min="1" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100" />
                     <p v-if="errors.capacity_adults" class="mt-1 text-xs text-red-600">{{ errors.capacity_adults }}</p>
@@ -43,14 +38,10 @@
             </div>
 
             <div class="flex justify-end">
-                <button
-                    type="submit"
-                    class="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    :disabled="processing"
-                >
+                <PrimaryButton type="submit" class="px-4 py-2 text-sm" :disabled="processing">
                     <span v-if="processing">Enregistrement…</span>
                     <span v-else>Enregistrer</span>
-                </button>
+                </PrimaryButton>
             </div>
         </form>
     </ConfigLayout>
@@ -59,15 +50,15 @@
 <script>
 import { Link, router } from '@inertiajs/vue3';
 import ConfigLayout from '@/layouts/ConfigLayout.vue';
+import PrimaryButton from '@/components/PrimaryButton.vue';
 
 export default {
     name: 'RoomTypesCreate',
-    components: { ConfigLayout, Link },
+    components: { ConfigLayout, Link, PrimaryButton },
     data() {
         return {
             form: {
                 name: '',
-                code: '',
                 capacity_adults: 1,
                 capacity_children: 0,
                 base_price: 0,

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import AlertError from '@/components/AlertError.vue';
 import InputError from '@/components/InputError.vue';
-import { Button } from '@/components/ui/button';
+import PrimaryButton from '@/components/PrimaryButton.vue';
+import SecondaryButton from '@/components/SecondaryButton.vue';
 import { Spinner } from '@/components/ui/spinner';
 import {
     Dialog,
@@ -46,27 +47,27 @@ const modalConfig = computed<{
     buttonText: string;
 }>(() => {
     if (props.twoFactorEnabled) {
-        return {
-            title: 'Two-Factor Authentication Enabled',
-            description:
-                'Two-factor authentication is now enabled. Scan the QR code or enter the setup key in your authenticator app.',
-            buttonText: 'Close',
-        };
+    return {
+        title: 'Authentification à deux facteurs activée',
+        description:
+            'L’authentification à deux facteurs est désormais active. Scannez le QR code ou saisissez la clé de configuration dans votre application d’authentification.',
+        buttonText: 'Fermer',
+    };
     }
 
     if (showVerificationStep.value) {
         return {
-            title: 'Verify Authentication Code',
-            description: 'Enter the 6-digit code from your authenticator app',
-            buttonText: 'Continue',
+            title: 'Vérifier le code d’authentification',
+            description: 'Saisissez le code à 6 chiffres fourni par votre application d’authentification',
+            buttonText: 'Continuer',
         };
     }
 
     return {
-        title: 'Enable Two-Factor Authentication',
+        title: 'Activer l’authentification à deux facteurs',
         description:
-            'To finish enabling two-factor authentication, scan the QR code or enter the setup key in your authenticator app',
-        buttonText: 'Continue',
+            'Pour activer l’authentification à deux facteurs, scannez le QR code ou saisissez la clé de configuration dans votre application d’authentification',
+        buttonText: 'Continuer',
     };
 });
 
@@ -114,10 +115,10 @@ watch(
         <DialogContent class="sm:max-w-md">
             <DialogHeader class="flex items-center justify-center">
                 <div
-                    class="mb-3 w-auto rounded-full border border-border bg-card p-0.5 shadow-sm"
+                    class="mb-3 w-auto rounded-full border border-serena-border bg-serena-card p-0.5 shadow-sm"
                 >
                     <div
-                        class="relative overflow-hidden rounded-full border border-border bg-muted p-2.5"
+                        class="relative overflow-hidden rounded-full border border-serena-border bg-serena-primary-soft p-2.5"
                     >
                         <div
                             class="absolute inset-0 grid grid-cols-5 opacity-50"
@@ -125,7 +126,7 @@ watch(
                             <div
                                 v-for="i in 5"
                                 :key="`col-${i}`"
-                                class="border-r border-border last:border-r-0"
+                                class="border-r border-serena-border last:border-r-0"
                             />
                         </div>
                         <div
@@ -134,7 +135,7 @@ watch(
                             <div
                                 v-for="i in 5"
                                 :key="`row-${i}`"
-                                class="border-b border-border last:border-b-0"
+                                class="border-b border-serena-border last:border-b-0"
                             />
                         </div>
                         <ScanLine
@@ -158,17 +159,17 @@ watch(
                             class="relative mx-auto flex max-w-md items-center overflow-hidden"
                         >
                             <div
-                                class="relative mx-auto aspect-square w-64 overflow-hidden rounded-lg border border-border"
+                                class="relative mx-auto aspect-square w-64 overflow-hidden rounded-lg border border-serena-border"
                             >
                                 <div
                                     v-if="!qrCodeSvg"
-                                    class="absolute inset-0 z-10 flex aspect-square h-auto w-full animate-pulse items-center justify-center bg-background"
+                                    class="absolute inset-0 z-10 flex aspect-square h-auto w-full animate-pulse items-center justify-center bg-serena-card"
                                 >
                                     <Spinner class="size-6" />
                                 </div>
                                 <div
                                     v-else
-                                    class="relative z-10 overflow-hidden border p-5"
+                                    class="relative z-10 overflow-hidden border border-serena-border p-5"
                                 >
                                     <div
                                         v-html="qrCodeSvg"
@@ -179,31 +180,33 @@ watch(
                         </div>
 
                         <div class="flex w-full items-center space-x-5">
-                            <Button class="w-full" @click="handleModalNextStep">
+                            <PrimaryButton
+                                class="w-full justify-center"
+                                type="button"
+                                @click="handleModalNextStep"
+                            >
                                 {{ modalConfig.buttonText }}
-                            </Button>
+                            </PrimaryButton>
                         </div>
 
                         <div
                             class="relative flex w-full items-center justify-center"
                         >
                             <div
-                                class="absolute inset-0 top-1/2 h-px w-full bg-border"
+                                class="absolute inset-0 top-1/2 h-px w-full bg-serena-border/70"
                             />
-                            <span class="relative bg-card px-2 py-1"
-                                >or, enter the code manually</span
+                            <span class="relative bg-serena-card px-2 py-1"
+                                >ou saisissez le code manuellement</span
                             >
                         </div>
 
-                        <div
-                            class="flex w-full items-center justify-center space-x-2"
-                        >
+                        <div class="flex w-full items-center justify-center space-x-2">
                             <div
-                                class="flex w-full items-stretch overflow-hidden rounded-xl border border-border"
+                                class="flex w-full items-stretch overflow-hidden rounded-xl border border-serena-border"
                             >
                                 <div
                                     v-if="!manualSetupKey"
-                                    class="flex h-full w-full items-center justify-center bg-muted p-3"
+                                    class="flex h-full w-full items-center justify-center bg-serena-primary-soft p-3"
                                 >
                                     <Spinner />
                                 </div>
@@ -212,11 +215,11 @@ watch(
                                         type="text"
                                         readonly
                                         :value="manualSetupKey"
-                                        class="h-full w-full bg-background p-3 text-foreground"
+                                        class="h-full w-full bg-white p-3 text-serena-text-main"
                                     />
                                     <button
                                         @click="copy(manualSetupKey || '')"
-                                        class="relative block h-auto border-l border-border px-3 hover:bg-muted"
+                                        class="relative block h-auto border-l border-serena-border px-3 py-2 transition hover:bg-serena-primary-soft"
                                     >
                                         <Check
                                             v-if="copied"
@@ -272,24 +275,23 @@ watch(
                             </div>
 
                             <div class="flex w-full items-center space-x-5">
-                                <Button
+                                <SecondaryButton
                                     type="button"
-                                    variant="outline"
-                                    class="w-auto flex-1"
+                                    class="w-auto flex-1 justify-center"
                                     @click="showVerificationStep = false"
                                     :disabled="processing"
                                 >
-                                    Back
-                                </Button>
-                                <Button
+                                    Retour
+                                </SecondaryButton>
+                                <PrimaryButton
                                     type="submit"
-                                    class="w-auto flex-1"
+                                    class="w-auto flex-1 justify-center"
                                     :disabled="
                                         processing || codeValue.length < 6
                                     "
                                 >
-                                    Confirm
-                                </Button>
+                                    Confirmer
+                                </PrimaryButton>
                             </div>
                         </div>
                     </Form>

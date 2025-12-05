@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
+import PrimaryButton from '@/components/PrimaryButton.vue';
+import TextInput from '@/components/TextInput.vue';
 import TextLink from '@/components/TextLink.vue';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import AuthBase from '@/layouts/AuthLayout.vue';
 import { login } from '@/routes';
@@ -215,10 +214,10 @@ const isFormInvalid = computed(() => {
         >
             <div class="grid gap-6">
                 <div class="grid gap-2">
-                    <Label for="business_name">Nom de l’entreprise</Label>
-                    <Input
+                    <TextInput
                         id="business_name"
                         v-model="businessName"
+                        label="Nom de l’entreprise"
                         type="text"
                         required
                         autofocus
@@ -232,15 +231,10 @@ const isFormInvalid = computed(() => {
                 </div>
 
                 <div class="grid gap-2">
-                    <div class="flex items-center justify-between">
-                        <Label for="tenant_slug">Sous-domaine</Label>
-                        <span class="text-xs text-muted-foreground"
-                            >Aperçu : {{ domainPreview }}</span
-                        >
-                    </div>
-                    <Input
+                    <TextInput
                         id="tenant_slug"
                         name="tenant_slug"
+                        label="Sous-domaine"
                         :model-value="tenantSlug"
                         @update:modelValue="handleSlugInput"
                         type="text"
@@ -248,7 +242,13 @@ const isFormInvalid = computed(() => {
                         autocomplete="off"
                         placeholder="acme"
                         @focus="touched.tenant_slug = true"
-                    />
+                    >
+                        <template #label-action>
+                            <span class="text-xs text-serena-text-muted"
+                                >Aperçu : {{ domainPreview }}</span
+                            >
+                        </template>
+                    </TextInput>
                     <InputError
                         :message="errors.tenant_slug || (touched.tenant_slug ? localErrors.tenant_slug : '')"
                     />
@@ -257,8 +257,8 @@ const isFormInvalid = computed(() => {
                         class="text-xs"
                         :class="{
                             'text-green-600': slugStatus === 'available',
-                            'text-destructive': slugStatus === 'unavailable' || slugStatus === 'invalid',
-                            'text-muted-foreground': slugStatus === 'checking',
+                            'text-serena-danger': slugStatus === 'unavailable' || slugStatus === 'invalid',
+                            'text-serena-text-muted': slugStatus === 'checking',
                         }"
                     >
                         <template v-if="slugStatus === 'checking'">Vérification…</template>
@@ -269,10 +269,10 @@ const isFormInvalid = computed(() => {
                 </div>
 
                 <div class="grid gap-2">
-                    <Label for="name">Votre nom</Label>
-                    <Input
+                    <TextInput
                         id="name"
                         v-model="name"
+                        label="Votre nom"
                         type="text"
                         required
                         :tabindex="3"
@@ -285,10 +285,10 @@ const isFormInvalid = computed(() => {
                 </div>
 
                 <div class="grid gap-2">
-                    <Label for="email">Adresse e-mail</Label>
-                    <Input
+                    <TextInput
                         id="email"
                         v-model="email"
+                        label="Adresse e-mail"
                         type="email"
                         required
                         :tabindex="4"
@@ -303,8 +303,8 @@ const isFormInvalid = computed(() => {
                         class="text-xs"
                         :class="{
                             'text-green-600': emailStatus === 'available',
-                            'text-destructive': emailStatus === 'unavailable' || emailStatus === 'invalid',
-                            'text-muted-foreground': emailStatus === 'checking',
+                            'text-serena-danger': emailStatus === 'unavailable' || emailStatus === 'invalid',
+                            'text-serena-text-muted': emailStatus === 'checking',
                         }"
                     >
                         <template v-if="emailStatus === 'checking'">Vérification de l’e-mail…</template>
@@ -315,10 +315,10 @@ const isFormInvalid = computed(() => {
                 </div>
 
                 <div class="grid gap-2">
-                    <Label for="password">Mot de passe</Label>
-                    <Input
+                    <TextInput
                         id="password"
                         v-model="password"
+                        label="Mot de passe"
                         type="password"
                         required
                         :tabindex="5"
@@ -331,10 +331,10 @@ const isFormInvalid = computed(() => {
                 </div>
 
                 <div class="grid gap-2">
-                    <Label for="password_confirmation">Confirmer le mot de passe</Label>
-                    <Input
+                    <TextInput
                         id="password_confirmation"
                         v-model="passwordConfirmation"
+                        label="Confirmer le mot de passe"
                         type="password"
                         required
                         :tabindex="6"
@@ -351,9 +351,9 @@ const isFormInvalid = computed(() => {
                     />
                 </div>
 
-                <Button
+                <PrimaryButton
                     type="submit"
-                    class="mt-2 w-full"
+                    class="mt-2 w-full justify-center"
                     tabindex="7"
                     :disabled="
                         processing ||
@@ -364,7 +364,7 @@ const isFormInvalid = computed(() => {
                 >
                     <Spinner v-if="processing" />
                     Créer le compte
-                </Button>
+                </PrimaryButton>
             </div>
 
             <div class="text-center text-sm text-muted-foreground">

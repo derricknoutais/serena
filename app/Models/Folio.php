@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use LogicException;
 
 class Folio extends Model
 {
@@ -21,12 +22,37 @@ class Folio extends Model
         'guest_id',
         'code',
         'status',
+        'is_main',
         'type',
         'origin',
         'currency',
-        'balance',
         'billing_name',
+        'opened_at',
+        'closed_at',
     ];
+
+    /**
+     * @var list<string>
+     */
+    protected $appends = [
+        'total_charges',
+        'total_payments',
+        'balance',
+        'charges_total',
+        'payments_total',
+    ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'balance' => 'float',
+            'opened_at' => 'datetime',
+            'closed_at' => 'datetime',
+        ];
+    }
 
     public function hotel(): BelongsTo
     {
@@ -48,8 +74,139 @@ class Folio extends Model
         return $this->hasMany(FolioItem::class);
     }
 
+    public function itemsWithTrashed(): HasMany
+    {
+        return $this->items()->withTrashed();
+    }
+
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);
+    }
+
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class);
+    }
+
+    public function canEditItems(): bool
+    {
+        if ($this->relationLoaded('invoices')) {
+            return ! $this->invoices->contains(fn (Invoice $invoice) => $invoice->status === Invoice::STATUS_ISSUED);
+        }
+
+        return ! $this->invoices()
+            ->where('status', Invoice::STATUS_ISSUED)
+            ->exists();
+    }
+
+    public function isClosed(): bool
+    {
+        return $this->closed_at !== null;
+    }
+
+    public function getTotalChargesAttribute(): float
+    {
+        if ($this->relationLoaded('items')) {
+            return (float) $this->items->sum('total_amount');
+        }
+
+        return (float) $this->items()->sum('total_amount');
+    }
+
+    public function getChargesTotalAttribute(): float
+    {
+        return $this->total_charges;
+    }
+
+    public function getTotalPaymentsAttribute(): float
+    {
+        if ($this->relationLoaded('payments')) {
+            return (float) $this->payments->sum('amount');
+        }
+
+        return (float) $this->payments()->sum('amount');
+    }
+
+    public function getPaymentsTotalAttribute(): float
+    {
+        return $this->total_payments;
+    }
+
+    public function getBalanceAttribute(?string $value): float
+    {
+        if ($value !== null) {
+            return (float) $value;
+        }
+
+        return $this->total_charges - $this->total_payments;
+    }
+
+    public function addCharge(array $data): FolioItem
+    {
+        if ($this->isClosed()) {
+            throw new LogicException('Cannot add charges to a closed folio.');
+        }
+
+        $quantity = (float) ($data['quantity'] ?? 1);
+        $unitPrice = (float) ($data['unit_price'] ?? 0);
+        $baseAmount = $quantity * $unitPrice;
+        $taxAmount = (float) ($data['tax_amount'] ?? 0);
+
+        $payload = $data;
+        $payload['tenant_id'] = $this->tenant_id;
+        $payload['hotel_id'] = $this->hotel_id;
+        $payload['date'] = $data['date'] ?? now()->toDateString();
+        $payload['quantity'] = $quantity;
+        $payload['unit_price'] = $unitPrice;
+        $payload['base_amount'] = $baseAmount;
+        $payload['tax_amount'] = $taxAmount;
+        $payload['discount_percent'] = (float) ($data['discount_percent'] ?? 0);
+        $payload['discount_amount'] = (float) ($data['discount_amount'] ?? 0);
+
+        $item = $this->items()->create($payload);
+        $item->recalculateAmounts();
+        $item->save();
+
+        return tap($item, fn () => $this->recalculateTotals());
+    }
+
+    public function addPayment(array $data): Payment
+    {
+        if ($this->isClosed()) {
+            throw new LogicException('Cannot add payments to a closed folio.');
+        }
+
+        $payload = $data;
+        $payload['tenant_id'] = $this->tenant_id;
+        $payload['hotel_id'] = $this->hotel_id;
+        $payload['currency'] = $data['currency'] ?? $this->currency;
+        $payload['paid_at'] = $data['paid_at'] ?? now();
+
+        $payment = $this->payments()->create($payload);
+
+        return tap($payment, fn () => $this->recalculateTotals());
+    }
+
+    public function recalculateTotals(): void
+    {
+        $charges = (float) $this->items()->sum('total_amount');
+        $payments = (float) $this->payments()->sum('amount');
+
+        $this->forceFill([
+            'balance' => $charges - $payments,
+        ])->save();
+    }
+
+    public function close(): void
+    {
+        if ($this->isClosed()) {
+            return;
+        }
+
+        $this->forceFill([
+            'status' => 'closed',
+            'closed_at' => now(),
+        ])->save();
     }
 }

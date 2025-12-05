@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from 'vue'
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
 import { PanelLeft } from 'lucide-vue-next'
 import { useSidebar } from './utils'
 
@@ -13,15 +12,14 @@ const { toggleSidebar } = useSidebar()
 </script>
 
 <template>
-  <Button
+  <button
+    type="button"
     data-sidebar="trigger"
     data-slot="sidebar-trigger"
-    variant="ghost"
-    size="icon"
-    :class="cn('h-7 w-7', props.class)"
+    :class="cn('flex h-7 w-7 items-center justify-center rounded-lg border border-serena-border bg-white text-serena-text-main shadow-sm transition hover:bg-serena-primary-soft', props.class)"
     @click="toggleSidebar"
   >
-    <PanelLeft />
+    <PanelLeft class="h-4 w-4" />
     <span class="sr-only">Toggle Sidebar</span>
-  </Button>
+  </button>
 </template>

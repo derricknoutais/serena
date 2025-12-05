@@ -13,17 +13,19 @@ return new class extends Migration
     {
         Schema::create('folio_items', function (Blueprint $table) {
             $table->id();
-            $table->string('tenant_id')->index();
+            $table->foreignUuid('tenant_id')->index();
+            $table->foreignId('hotel_id')->constrained('hotels')->cascadeOnDelete();
             $table->foreignId('folio_id')->constrained('folios')->cascadeOnDelete();
             $table->foreignId('product_id')->nullable()->constrained('products')->nullOnDelete();
-            $table->date('date');
+            $table->date('date')->default(today());
             $table->string('description');
-            $table->string('type');
-            $table->string('account_code');
-            $table->integer('quantity')->default(1);
-            $table->decimal('unit_price', 10, 2);
-            $table->decimal('total', 10, 2);
-            $table->decimal('tax_amount', 10, 2);
+            $table->string('type')->nullable();
+            $table->string('account_code')->nullable();
+            $table->decimal('quantity', 10, 2)->default(1);
+            $table->decimal('unit_price', 10, 2)->default(0);
+            $table->decimal('base_amount', 10, 2)->default(0);
+            $table->decimal('tax_amount', 10, 2)->default(0);
+            $table->decimal('total_amount', 10, 2)->default(0);
             $table->json('meta')->nullable();
             $table->timestamps();
 
@@ -31,6 +33,8 @@ return new class extends Migration
                 ->references('id')
                 ->on('tenants')
                 ->cascadeOnDelete();
+
+            $table->index(['tenant_id', 'hotel_id']);
         });
     }
 

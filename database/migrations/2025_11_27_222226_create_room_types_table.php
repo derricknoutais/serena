@@ -13,10 +13,9 @@ return new class extends Migration
     {
         Schema::create('room_types', function (Blueprint $table) {
             $table->id();
-            $table->string('tenant_id')->index();
+            $table->foreignUuid('tenant_id')->index();
             $table->foreignId('hotel_id')->constrained('hotels')->cascadeOnDelete();
             $table->string('name');
-            $table->string('code')->nullable();
             $table->integer('capacity_adults')->default(1);
             $table->integer('capacity_children')->default(0);
             $table->decimal('base_price', 10, 2);

@@ -18,7 +18,6 @@ class RoomType extends Model
         'tenant_id',
         'hotel_id',
         'name',
-        'code',
         'capacity_adults',
         'capacity_children',
         'base_price',

@@ -26,6 +26,7 @@ class Payment extends Model
         'reference',
         'notes',
         'created_by_user_id',
+        'cash_session_id',
     ];
 
     /**
@@ -52,5 +53,10 @@ class Payment extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    public function cashSession(): BelongsTo
+    {
+        return $this->belongsTo(CashSession::class);
     }
 }

@@ -7,11 +7,13 @@ import {
     DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { logout } from '@/routes';
-import { edit } from '@/routes/profile';
+import { edit } from '@/routes/profile/index';
 import type { User } from '@/types';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { Hotel, LogOut, Settings } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import Swal from 'sweetalert2';
+import 'sweetalert2/dist/sweetalert2.min.css';
 
 interface Props {
     user: User;
@@ -27,21 +29,69 @@ const page = usePage();
 
 const hotels = computed(() => page.props.auth?.hotels || []);
 const activeHotel = computed(() => page.props.auth?.activeHotel || null);
+// Capture le flash au chargement pour éviter qu'il ne disparaisse après navigation Inertia.
+const initialHotelNotice = ref(page.props.auth?.hotelNotice || null);
 const switching = ref(false);
+const noticeShown = ref(false);
 
 const switchHotel = (hotelId: number) => {
     switching.value = true;
+    let timerInterval: ReturnType<typeof setInterval> | undefined;
+
     router.post(
         '/ressources/active-hotel',
         { hotel_id: hotelId },
         {
             preserveScroll: true,
+            onSuccess: () => {
+                const selected = hotels.value.find((h) => h.id === hotelId);
+                const hotelName = selected?.name ?? 'cet hôtel';
+
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Hôtel actif',
+                    html: `Toutes vos actions sont désormais liées à l’hôtel "<b>${hotelName}</b>".<br/><small>Redirection automatique...</small>`,
+                    timer: 5200,
+                    timerProgressBar: true,
+                    didOpen: () => {
+                        Swal.showLoading();
+                        timerInterval = setInterval(() => {
+                            const timer = Swal.getHtmlContainer()?.querySelector('b.timer');
+                            if (timer) {
+                                timer.textContent = `${Swal.getTimerLeft()}`;
+                            }
+                        }, 100);
+                    },
+                    willClose: () => {
+                        if (timerInterval) {
+                            clearInterval(timerInterval);
+                        }
+                    },
+                }).then(() => {
+                    router.visit('/dashboard', { replace: true });
+                });
+            },
             onFinish: () => {
                 switching.value = false;
             },
         },
     );
 };
+
+onMounted(() => {
+    if (initialHotelNotice.value && !noticeShown.value) {
+        Swal.fire({
+            icon: 'info',
+            title: 'Hôtel actif',
+            text: initialHotelNotice.value as string,
+            confirmButtonText: 'OK',
+            customClass: {
+                confirmButton: 'bg-indigo-600 text-white px-4 py-2 rounded-md',
+            },
+        });
+        noticeShown.value = true;
+    }
+});
 </script>
 
 <template>
@@ -78,6 +128,10 @@ const switchHotel = (hotelId: number) => {
             </Link>
         </DropdownMenuItem>
     </DropdownMenuGroup>
+    <DropdownMenuSeparator v-if="hotelNotice" />
+    <div v-if="hotelNotice" class="px-3 pb-2 text-xs text-indigo-700">
+        {{ hotelNotice }}
+    </div>
     <DropdownMenuSeparator />
     <DropdownMenuItem :as-child="true">
         <Link

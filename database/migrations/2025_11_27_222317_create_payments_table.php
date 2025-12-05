@@ -13,14 +13,16 @@ return new class extends Migration
     {
         Schema::create('payments', function (Blueprint $table) {
             $table->id();
-            $table->string('tenant_id')->index();
+            $table->uuid('tenant_id')->index();
+            $table->foreignId('hotel_id')->constrained('hotels')->cascadeOnDelete();
             $table->foreignId('folio_id')->constrained('folios')->cascadeOnDelete();
-            $table->date('date');
-            $table->string('method');
+            $table->foreignId('payment_method_id')->nullable()->constrained('payment_methods')->nullOnDelete();
             $table->decimal('amount', 10, 2);
             $table->string('currency', 3);
+            $table->timestamp('paid_at')->nullable();
             $table->string('reference')->nullable();
-            $table->foreignId('received_by_user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->text('notes')->nullable();
+            $table->foreignId('created_by_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
 
             $table->foreign('tenant_id')

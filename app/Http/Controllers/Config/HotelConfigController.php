@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Config;
 
+use App\Http\Controllers\Config\Concerns\ResolvesActiveHotel;
 use App\Http\Controllers\Controller;
 use App\Models\Hotel;
 use Illuminate\Http\RedirectResponse;
@@ -11,13 +12,25 @@ use Inertia\Response;
 
 class HotelConfigController extends Controller
 {
+    use ResolvesActiveHotel;
+
     public function edit(Request $request): Response
     {
-        $hotel = Hotel::query()
-            ->where('tenant_id', $request->user()->tenant_id)
-            ->firstOrFail();
+        $hotel = $this->activeHotel($request);
 
-        return Inertia::render('Config/HotelConfig', [
+        if ($hotel === null) {
+            $hotel = Hotel::query()
+                ->where('tenant_id', $request->user()->tenant_id)
+                ->first();
+
+            if ($hotel !== null) {
+                $request->user()->forceFill(['active_hotel_id' => $hotel->id])->save();
+                $request->user()->hotels()->syncWithoutDetaching([$hotel->id]);
+                $request->session()->put('active_hotel_id', $hotel->id);
+            }
+        }
+
+        return Inertia::render('Config/Hotel/HotelIndex', [
             'hotel' => $hotel,
             'flash' => [
                 'success' => session('success'),
@@ -39,11 +52,22 @@ class HotelConfigController extends Controller
             'country' => ['nullable', 'string'],
         ]);
 
-        $hotel = Hotel::query()
-            ->where('tenant_id', $request->user()->tenant_id)
-            ->firstOrFail();
+        $hotel = $this->activeHotel($request);
 
-        $hotel->update($data);
+        if ($hotel === null) {
+            $hotel = Hotel::query()
+                ->where('tenant_id', $request->user()->tenant_id)
+                ->firstOrCreate([
+                    'tenant_id' => $request->user()->tenant_id,
+                    'code' => $data['code'],
+                ], $data);
+        } else {
+            $hotel->update($data);
+        }
+
+        $request->user()->forceFill(['active_hotel_id' => $hotel->id])->save();
+        $request->user()->hotels()->syncWithoutDetaching([$hotel->id]);
+        $request->session()->put('active_hotel_id', $hotel->id);
 
         return redirect()
             ->route('ressources.hotel.edit')

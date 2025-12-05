@@ -5,13 +5,9 @@
                 <h1 class="text-xl font-semibold">Chambres</h1>
                 <p class="text-sm text-gray-500">Gestion des chambres.</p>
             </div>
-            <button
-                type="button"
-                class="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
-                @click="openCreateModal"
-            >
+            <PrimaryButton type="button" class="px-4 py-2" @click="openCreateModal">
                 Nouvelle chambre
-            </button>
+            </PrimaryButton>
         </div>
 
         <div class="overflow-hidden rounded-xl bg-white shadow-sm">
@@ -32,8 +28,21 @@
                         <td class="px-4 py-3 text-sm text-gray-600">{{ room.floor || '—' }}</td>
                         <td class="px-4 py-3 text-sm text-gray-600">{{ room.status }}</td>
                         <td class="space-x-3 px-4 py-3 text-sm text-gray-600">
-                            <button class="text-indigo-600 hover:underline" @click="openEditModal(room)">Éditer</button>
-                            <button type="button" class="text-red-600 hover:underline" @click="destroy(room.id)">Supprimer</button>
+                            <SecondaryButton
+                                type="button"
+                                class="px-2 py-1 text-xs"
+                                @click="openEditModal(room)"
+                            >
+                                Éditer
+                            </SecondaryButton>
+                            <PrimaryButton
+                                type="button"
+                                variant="danger"
+                                class="px-2 py-1 text-xs bg-serena-danger"
+                                @click="destroy(room.id)"
+                            >
+                                Supprimer
+                            </PrimaryButton>
                         </td>
                     </tr>
                 </tbody>
@@ -54,12 +63,12 @@
                         <h2 class="text-lg font-semibold">{{ isEditing ? 'Modifier la chambre' : 'Nouvelle chambre' }}</h2>
                         <p class="text-sm text-gray-500">Renseignez les informations de la chambre.</p>
                     </div>
-                    <button type="button" class="text-sm text-gray-500 hover:text-gray-700" @click="closeModal">Fermer</button>
+                    <SecondaryButton type="button" class="text-sm" @click="closeModal">Fermer</SecondaryButton>
                 </div>
 
-                <Form @submit="handleSubmit" class="space-y-4">
+                <Form :key="formKey" :initial-values="form" @submit="handleSubmit" class="space-y-4">
                     <div class="grid gap-4 md:grid-cols-2">
-                        <Field name="number" rules="required" v-slot="{ field }">
+                        <Field name="number" rules="required" v-slot="{ field, meta }">
                             <div>
                                 <label class="text-sm font-medium text-gray-700">Numéro</label>
                                 <input
@@ -68,15 +77,19 @@
                                     class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                                 />
                                 <ErrorMessage name="number" class="mt-1 text-xs text-red-600" />
+                                <p v-if="!meta.valid && meta.touched" class="mt-1 text-xs text-red-600">
+                                    Champ requis.
+                                </p>
+                                <p v-if="errors.number" class="mt-1 text-xs text-red-600">{{ errors.number }}</p>
                             </div>
                         </Field>
 
-                        <Field name="room_type_id" rules="required" v-slot="{ meta }">
+                        <Field name="room_type_id" rules="required" v-slot="{ field, meta }">
                             <div>
                                 <label class="text-sm font-medium text-gray-700">Type de chambre</label>
                                 <Multiselect
-                                    :model-value="form.room_type_id"
-                                    @update:modelValue="(val) => (form.room_type_id = val)"
+                                    :model-value="field.value ?? form.room_type_id"
+                                    @update:modelValue="(val) => { field.onChange(val); form.room_type_id = val; }"
                                     :options="roomTypeOptions"
                                     label="label"
                                     track-by="value"
@@ -87,6 +100,7 @@
                                 <p v-if="!meta.valid && meta.touched" class="mt-1 text-xs text-red-600">
                                     <ErrorMessage name="room_type_id" />
                                 </p>
+                                <p v-if="errors.room_type_id" class="mt-1 text-xs text-red-600">{{ errors.room_type_id }}</p>
                             </div>
                         </Field>
 
@@ -102,12 +116,12 @@
                             </div>
                         </Field>
 
-                        <Field name="status" rules="required" v-slot="{ meta }">
+                        <Field name="status" rules="required" v-slot="{ field, meta }">
                             <div>
                                 <label class="text-sm font-medium text-gray-700">Statut</label>
                                 <Multiselect
-                                    :model-value="form.status"
-                                    @update:modelValue="(val) => (form.status = val)"
+                                    :model-value="field.value ?? form.status"
+                                    @update:modelValue="(val) => { field.onChange(val); form.status = val; }"
                                     :options="statusOptions"
                                     label="label"
                                     track-by="value"
@@ -118,15 +132,16 @@
                                 <p v-if="!meta.valid && meta.touched" class="mt-1 text-xs text-red-600">
                                     <ErrorMessage name="status" />
                                 </p>
+                                <p v-if="errors.status" class="mt-1 text-xs text-red-600">{{ errors.status }}</p>
                             </div>
                         </Field>
 
-                        <Field name="hk_status" rules="required" v-slot="{ meta }">
+                        <Field name="hk_status" rules="required" v-slot="{ field, meta }">
                             <div>
                                 <label class="text-sm font-medium text-gray-700">Statut ménager</label>
                                 <Multiselect
-                                    :model-value="form.hk_status"
-                                    @update:modelValue="(val) => (form.hk_status = val)"
+                                    :model-value="field.value ?? form.hk_status"
+                                    @update:modelValue="(val) => { field.onChange(val); form.hk_status = val; }"
                                     :options="hkStatusOptions"
                                     label="label"
                                     track-by="value"
@@ -137,20 +152,21 @@
                                 <p v-if="!meta.valid && meta.touched" class="mt-1 text-xs text-red-600">
                                     <ErrorMessage name="hk_status" />
                                 </p>
+                                <p v-if="errors.hk_status" class="mt-1 text-xs text-red-600">{{ errors.hk_status }}</p>
                             </div>
                         </Field>
                     </div>
 
                     <div class="flex items-center justify-end gap-3">
-                        <button type="button" class="text-sm text-gray-600 hover:text-gray-800" @click="closeModal">Annuler</button>
-                        <button
+                        <SecondaryButton type="button" class="text-sm" @click="closeModal">Annuler</SecondaryButton>
+                        <PrimaryButton
                             type="submit"
-                            class="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            class="px-4 py-2 text-sm"
                             :disabled="submitting"
                         >
                             <span v-if="submitting">Enregistrement…</span>
                             <span v-else>Enregistrer</span>
-                        </button>
+                        </PrimaryButton>
                     </div>
                 </Form>
             </div>
@@ -159,13 +175,16 @@
 </template>
 
 <script>
+import Swal from 'sweetalert2';
 import { router } from '@inertiajs/vue3';
 import { ErrorMessage, Field, Form, configure, defineRule } from 'vee-validate';
 import ConfigLayout from '@/layouts/ConfigLayout.vue';
+import PrimaryButton from '@/components/PrimaryButton.vue';
+import SecondaryButton from '@/components/SecondaryButton.vue';
 
 export default {
     name: 'RoomsIndex',
-    components: { ConfigLayout, Form, Field, ErrorMessage },
+    components: { ConfigLayout, Form, Field, ErrorMessage, PrimaryButton, SecondaryButton },
     props: {
         rooms: {
             type: Object,
@@ -190,6 +209,7 @@ export default {
             isEditing: false,
             submitting: false,
             editId: null,
+            formKey: 0,
             form: {
                 number: '',
                 room_type_id: null,
@@ -201,7 +221,7 @@ export default {
     },
     computed: {
         roomTypeOptions() {
-            return this.roomTypes.map((rt) => ({ label: rt.name, value: rt.id }));
+            return this.roomTypes.map((rt) => ({ label: rt.name, value: Number(rt.id) }));
         },
         statusOptions() {
             return this.statuses.map((s) => ({ label: s, value: s }));
@@ -218,6 +238,7 @@ export default {
             this.isEditing = false;
             this.editId = null;
             this.resetForm();
+            this.formKey += 1;
             this.showModal = true;
         },
         openEditModal(room) {
@@ -225,11 +246,12 @@ export default {
             this.editId = room.id;
             this.form = {
                 number: room.number || '',
-                room_type_id: this.roomTypes.find((rt) => rt.name === room.room_type)?.id ?? null,
+                room_type_id: this.roomTypeOptions.find((opt) => opt.value === Number(room.room_type_id)) ?? null,
                 floor: room.floor || '',
-                status: room.status || '',
-                hk_status: room.hk_status || '',
+                status: this.statusOptions.find((opt) => opt.value === room.status) ?? null,
+                hk_status: this.hkStatusOptions.find((opt) => opt.value === room.hk_status) ?? null,
             };
+            this.formKey += 1;
             this.showModal = true;
         },
         closeModal() {
@@ -245,25 +267,69 @@ export default {
                 hk_status: '',
             };
         },
-        handleSubmit() {
+        handleSubmit(values) {
             this.submitting = true;
             const url = this.isEditing ? `/ressources/rooms/${this.editId}` : '/ressources/rooms';
-            const method = this.isEditing ? router.put : router.post;
-
-            method(url, this.form, {
-                preserveScroll: true,
-                onSuccess: () => {
-                    this.closeModal();
-                },
-                onFinish: () => {
-                    this.submitting = false;
-                },
-            });
+            if (this.isEditing) {
+                router.put(
+                    url,
+                    {
+                        ...values,
+                        room_type_id: values.room_type_id?.value ?? values.room_type_id,
+                        status: values.status?.value ?? values.status,
+                        hk_status: values.hk_status?.value ?? values.hk_status,
+                    },
+                    {
+                        preserveScroll: true,
+                        onSuccess: () => {
+                            this.closeModal();
+                        },
+                        onError: () => {
+                            this.submitting = false;
+                        },
+                        onFinish: () => {
+                            this.submitting = false;
+                        },
+                    },
+                );
+            } else {
+                router.post(
+                    url,
+                    {
+                        ...values,
+                        room_type_id: values.room_type_id?.value ?? values.room_type_id,
+                        status: values.status?.value ?? values.status,
+                        hk_status: values.hk_status?.value ?? values.hk_status,
+                    },
+                    {
+                        preserveScroll: true,
+                        onSuccess: () => {
+                            this.closeModal();
+                        },
+                        onError: () => {
+                            this.submitting = false;
+                        },
+                        onFinish: () => {
+                            this.submitting = false;
+                        },
+                    },
+                );
+            }
         },
         destroy(id) {
-            if (confirm('Supprimer cette chambre ?')) {
-                router.delete(`/ressources/rooms/${id}`);
-            }
+            Swal.fire({
+                title: 'Supprimer cette chambre ?',
+                text: 'Cette action est irréversible.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Oui, supprimer',
+                cancelButtonText: 'Annuler',
+                confirmButtonColor: '#dc2626',
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    router.delete(`/ressources/rooms/${id}`, { preserveScroll: true });
+                }
+            });
         },
     },
 };

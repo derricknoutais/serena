@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureUserTenantMatchesDomain;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\SetPermissionsTeam;
@@ -24,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
+            'ensure_user_tenant_matches_domain' => EnsureUserTenantMatchesDomain::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

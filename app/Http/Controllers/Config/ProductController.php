@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Config;
 
+use App\Http\Controllers\Config\Concerns\ResolvesActiveHotel;
 use App\Http\Controllers\Controller;
 use App\Models\Hotel;
 use App\Models\Product;
@@ -14,24 +15,44 @@ use Inertia\Response;
 
 class ProductController extends Controller
 {
+    use ResolvesActiveHotel;
+
     public function index(Request $request): Response
     {
         $products = Product::query()
             ->with(['category'])
+            ->when($this->activeHotelId($request), fn ($q) => $q->where('hotel_id', $this->activeHotelId($request)))
             ->where('tenant_id', $request->user()->tenant_id)
             ->orderBy('name')
             ->paginate(15)
             ->through(fn (Product $product) => [
                 'id' => $product->id,
                 'name' => $product->name,
+                'product_category_id' => $product->product_category_id,
                 'unit_price' => $product->unit_price,
                 'account_code' => $product->account_code,
                 'is_active' => $product->is_active,
                 'category' => $product->category?->name,
+                'tax_id' => $product->tax_id,
+                'sku' => $product->sku,
             ]);
+
+        $categories = ProductCategory::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->when($this->activeHotelId($request), fn ($q) => $q->where('hotel_id', $this->activeHotelId($request)))
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $taxes = Tax::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->when($this->activeHotelId($request), fn ($q) => $q->where('hotel_id', $this->activeHotelId($request)))
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         return Inertia::render('Config/Products/ProductsIndex', [
             'products' => $products,
+            'categories' => $categories,
+            'taxes' => $taxes,
         ]);
     }
 
@@ -39,11 +60,13 @@ class ProductController extends Controller
     {
         $categories = ProductCategory::query()
             ->where('tenant_id', $request->user()->tenant_id)
+            ->when($this->activeHotelId($request), fn ($q) => $q->where('hotel_id', $this->activeHotelId($request)))
             ->orderBy('name')
             ->get(['id', 'name']);
 
         $taxes = Tax::query()
             ->where('tenant_id', $request->user()->tenant_id)
+            ->when($this->activeHotelId($request), fn ($q) => $q->where('hotel_id', $this->activeHotelId($request)))
             ->orderBy('name')
             ->get(['id', 'name']);
 
@@ -65,7 +88,10 @@ class ProductController extends Controller
             'is_active' => ['sometimes', 'boolean'],
         ]);
 
-        $hotel = Hotel::query()->where('tenant_id', $request->user()->tenant_id)->firstOrFail();
+        $hotel = Hotel::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->when($this->activeHotelId($request), fn ($q) => $q->where('id', $this->activeHotelId($request)))
+            ->firstOrFail();
 
         Product::query()->create([
             ...$data,
@@ -79,16 +105,19 @@ class ProductController extends Controller
     public function edit(Request $request, int $id): Response
     {
         $product = Product::query()
+            ->where('hotel_id', $this->activeHotelId($request))
             ->where('tenant_id', $request->user()->tenant_id)
             ->findOrFail($id);
 
         $categories = ProductCategory::query()
             ->where('tenant_id', $request->user()->tenant_id)
+            ->where('hotel_id', $product->hotel_id)
             ->orderBy('name')
             ->get(['id', 'name']);
 
         $taxes = Tax::query()
             ->where('tenant_id', $request->user()->tenant_id)
+            ->where('hotel_id', $product->hotel_id)
             ->orderBy('name')
             ->get(['id', 'name']);
 
@@ -112,6 +141,7 @@ class ProductController extends Controller
         ]);
 
         $product = Product::query()
+            ->where('hotel_id', $this->activeHotelId($request))
             ->where('tenant_id', $request->user()->tenant_id)
             ->findOrFail($id);
 

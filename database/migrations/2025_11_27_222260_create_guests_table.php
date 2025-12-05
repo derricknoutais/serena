@@ -6,15 +6,11 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::create('guests', function (Blueprint $table) {
+        Schema::create('guests', function (Blueprint $table): void {
             $table->id();
-            $table->string('tenant_id')->index();
-            $table->foreignId('hotel_id')->constrained('hotels')->cascadeOnDelete();
+            $table->uuid('tenant_id')->index();
             $table->string('first_name');
             $table->string('last_name');
             $table->string('email')->nullable()->index();
@@ -27,16 +23,11 @@ return new class extends Migration
             $table->text('notes')->nullable();
             $table->timestamps();
 
-            $table->foreign('tenant_id')
-                ->references('id')
-                ->on('tenants')
-                ->cascadeOnDelete();
+            $table->unique(['tenant_id', 'email']);
+            $table->unique(['tenant_id', 'phone']);
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('guests');

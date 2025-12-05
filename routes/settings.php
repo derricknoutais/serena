@@ -26,10 +26,10 @@ Route::middleware(['web', InitializeTenancyByDomain::class, PreventAccessFromCen
         ->middleware('role:owner|manager|superadmin')
         ->name('settings.roles.index');
 
-    Route::get('settings/appearance', function () {
-        return Inertia::render('settings/Appearance');
-    })->name('appearance.edit');
+    // Route::get('settings/appearance', function () {
+    //     return Inertia::render('settings/Appearance');
+    // })->name('appearance.edit');
 
-    Route::get('settings/two-factor', [TwoFactorAuthenticationController::class, 'show'])
-        ->name('two-factor.show');
+    // Route::get('settings/two-factor', [TwoFactorAuthenticationController::class, 'show'])
+    //     ->name('two-factor.show');
 });

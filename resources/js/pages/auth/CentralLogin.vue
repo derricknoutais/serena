@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import PrimaryButton from '@/components/PrimaryButton.vue';
+import TextInput from '@/components/TextInput.vue';
 import { Spinner } from '@/components/ui/spinner';
 import AuthBase from '@/layouts/AuthLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
@@ -41,13 +40,7 @@ const submit = () => {
 
         <form class="flex flex-col gap-6" @submit.prevent="submit">
             <div class="grid gap-2">
-                <div class="flex items-center justify-between">
-                    <Label for="tenant">Domaine de la société</Label>
-                    <span class="text-xs text-muted-foreground">
-                        ex. {{ preview }}
-                    </span>
-                </div>
-                <Input
+                <TextInput
                     id="tenant"
                     v-model="form.tenant"
                     type="text"
@@ -55,20 +48,27 @@ const submit = () => {
                     required
                     autofocus
                     autocomplete="organization"
+                    label="Domaine de la société"
                     placeholder="acme ou acme.saas-template.test"
-                />
+                >
+                    <template #label-action>
+                        <span class="text-xs text-serena-text-muted">
+                            ex. {{ preview }}
+                        </span>
+                    </template>
+                </TextInput>
                 <InputError :message="form.errors.tenant" />
             </div>
 
-            <Button
+            <PrimaryButton
                 type="submit"
-                class="w-full"
+                class="w-full justify-center"
                 :disabled="form.processing"
                 data-test="tenant-login-redirect"
             >
                 <Spinner v-if="form.processing" />
                 Continuer vers la connexion
-            </Button>
+            </PrimaryButton>
         </form>
     </AuthBase>
 </template>

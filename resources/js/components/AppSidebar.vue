@@ -11,7 +11,8 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { dashboard } from '@/routes';
+import { dashboard as appDashboard } from '@/routes';
+import { dashboard as frontdeskDashboard } from '@/routes/frontdesk';
 import { edit as settingsProfile } from '@/routes/profile';
 import { index as activityIndex } from '@/routes/activity/index';
 // import { index as activityIndex } from '@/routes/activity';
@@ -39,14 +40,14 @@ import { computed, ref } from 'vue';
 const mainNavItems: NavItem[] = [
     {
         title: 'Dashboard',
-        href: dashboard(),
+        href: appDashboard(),
         icon: LayoutGrid,
     },
-    // {
-    //     title: 'Utilisateurs',
-    //     href: settingsProfile(),
-    //     icon: Users,
-    // }
+    {
+        title: 'Frontdesk',
+        href: frontdeskDashboard(),
+        icon: ConciergeBell,
+    },
 ];
 
 const ressourcesNavItems: NavItem[] = [
@@ -96,7 +97,7 @@ const page = usePage();
 const currentUrl = computed(() => (page?.url ? page.url : page.value.url) || '');
 
 const ressourcesOpen = ref(currentUrl.value.startsWith('/ressources/'));
-const receptionOpen = ref(currentUrl.value.startsWith('/guests'));
+const receptionOpen = ref(currentUrl.value.startsWith('/guests') || currentUrl.value.startsWith('/frontdesk'));
 
 const footerNavItems: NavItem[] = [
     {
@@ -113,7 +114,7 @@ const footerNavItems: NavItem[] = [
             <SidebarMenu>
                 <SidebarMenuItem>
                     <SidebarMenuButton size="lg" as-child>
-                        <Link :href="dashboard()">
+                        <Link :href="appDashboard()">
                         <AppLogo />
                         </Link>
                     </SidebarMenuButton>
@@ -165,6 +166,14 @@ const footerNavItems: NavItem[] = [
                 <SidebarMenu v-if="receptionOpen">
                     <SidebarMenuItem>
                         <SidebarMenuButton as-child class="pl-6" @click.stop.prevent>
+                            <Link :href="frontdeskDashboard()" @click.stop.prevent>
+                                <ConciergeBell class="h-4 w-4" />
+                                <span>Frontdesk</span>
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton as-child class="pl-6" @click.stop.prevent>
                             <Link href="/guests" @click.stop.prevent>
                                 <UsersRound class="h-4 w-4" />
                                 <span>Clients</span>
@@ -175,7 +184,7 @@ const footerNavItems: NavItem[] = [
                         <SidebarMenuButton as-child class="pl-6" @click.stop.prevent>
                             <Link href="/reservations" @click.stop.prevent>
                                 <CalendarDays class="h-4 w-4" />
-                                <span>Réservations</span>
+                                <span>Réservation</span>
                             </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>

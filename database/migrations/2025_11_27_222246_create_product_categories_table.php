@@ -13,10 +13,9 @@ return new class extends Migration
     {
         Schema::create('product_categories', function (Blueprint $table) {
             $table->id();
-            $table->string('tenant_id')->index();
+            $table->foreignUuid('tenant_id')->index();
             $table->foreignId('hotel_id')->constrained('hotels')->cascadeOnDelete();
             $table->string('name');
-            $table->string('code');
             $table->text('description')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();

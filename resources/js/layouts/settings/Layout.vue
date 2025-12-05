@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import Heading from '@/components/Heading.vue';
-import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { toUrl, urlIsActive } from '@/lib/utils';
 import { edit as editAppearance } from '@/routes/appearance';
@@ -21,25 +20,25 @@ const canManageRoles = computed(() =>
 
 const sidebarNavItems = computed<NavItem[]>(() => [
     {
-        title: 'Profile',
+        title: 'Profil',
         href: editProfile(),
     },
     {
-        title: 'Password',
+        title: 'Mot de passe',
         href: editPassword(),
     },
-    {
-        title: 'Two-Factor Auth',
-        href: show(),
-    },
-    {
-        title: 'Appearance',
-        href: editAppearance(),
-    },
+    // {
+    //     title: 'Authentification à deux facteurs',
+    //     href: show(),
+    // },
+    // {
+    //     title: 'Apparence',
+    //     href: editAppearance(),
+    // },
     ...(canManageRoles.value
         ? [
             {
-                title: 'Roles & Permissions',
+                title: 'Rôles & permissions',
                 href: rolesIndex().url,
             } satisfies NavItem,
         ]
@@ -51,20 +50,21 @@ const currentPath = typeof window !== undefined ? window.location.pathname : '';
 
 <template>
     <div class="px-4 py-6">
-        <Heading title="Settings" description="Manage your profile and account settings" />
+        <Heading title="Paramètres" description="Gérez votre profil et les paramètres de votre compte" />
 
         <div class="flex flex-col lg:flex-row lg:space-x-12">
             <aside class="w-full max-w-full lg:w-48">
-                <nav class="flex flex-col space-y-1 space-x-0">
-                    <Button v-for="item in sidebarNavItems" :key="toUrl(item.href)" variant="ghost" :class="[
-                        'w-full justify-start',
-                        { 'bg-muted': urlIsActive(item.href, currentPath) },
-                    ]" as-child>
-                        <Link :href="item.href">
+                <nav class="flex flex-col space-y-2">
+                    <Link
+                        v-for="item in sidebarNavItems"
+                        :key="toUrl(item.href)"
+                        :href="item.href"
+                        class="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition hover:bg-serena-primary-soft hover:text-serena-primary"
+                        :class="urlIsActive(item.href, currentPath) ? 'bg-serena-primary-soft text-serena-primary' : 'text-serena-text-muted'"
+                    >
                         <component v-if="item.icon" :is="item.icon" class="h-4 w-4" />
                         {{ item.title }}
-                        </Link>
-                    </Button>
+                    </Link>
                 </nav>
             </aside>
 

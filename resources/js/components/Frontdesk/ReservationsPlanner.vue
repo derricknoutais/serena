@@ -1,0 +1,1992 @@
+<template>
+    <div class="space-y-4">
+        <div class="mb-4 flex items-center justify-between">
+            <div>
+                <h1 class="text-xl font-semibold">Réservations</h1>
+                <p class="text-sm text-gray-500">Vue calendrier des réservations.</p>
+            </div>
+        </div>
+
+        <div class="grid gap-4 lg:grid-cols-3">
+            <div class="overflow-hidden rounded-xl bg-white p-4 shadow-sm lg:col-span-2">
+                <FullCalendar :options="calendarOptions" />
+            </div>
+
+            <div class="rounded-xl bg-white p-4 shadow-sm">
+                <h3 class="text-base font-semibold text-gray-800">Détails</h3>
+                <p class="text-sm text-gray-500">Cliquez sur un événement pour voir le détail.</p>
+
+            <div v-if="selectedEvent" class="mt-4 space-y-2 rounded-lg border border-gray-200 p-3">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-semibold text-gray-800">{{ selectedEvent.title }}</span>
+                    <span
+                        class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium"
+                        :class="statusClass(selectedEvent.status)"
+                    >
+                        {{ statusLabel(selectedEvent.status) }}
+                    </span>
+                </div>
+                <p class="text-xs text-gray-600">
+                    Arrivée :
+                    <span class="font-medium text-gray-800">
+                        {{ formatDateTime(selectedEvent.check_in) }}
+                    </span>
+                </p>
+                <p class="text-xs text-gray-600">
+                    Départ :
+                    <span class="font-medium text-gray-800">
+                        {{ formatDateTime(selectedEvent.check_out) }}
+                    </span>
+                </p>
+                <p class="text-xs text-gray-600" v-if="selectedEvent.id">ID: {{ selectedEvent.id }}</p>
+
+                <div class="mt-3 space-y-2">
+                    <label class="text-xs font-semibold text-gray-700">Actions</label>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button
+                            v-if="selectedEvent?.status === 'pending'"
+                            type="button"
+                            class="rounded-lg bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            :disabled="statusSubmitting"
+                            @click="changeStatus('confirm')"
+                        >
+                            Confirmer
+                        </button>
+                        <button
+                            v-if="selectedEvent?.status === 'pending'"
+                            type="button"
+                            class="rounded-lg bg-red-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            :disabled="statusSubmitting"
+                            @click="changeStatus('cancel')"
+                        >
+                            Annuler
+                        </button>
+                        <button
+                            v-if="selectedEvent?.status === 'confirmed'"
+                            type="button"
+                            class="rounded-lg bg-green-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            :disabled="statusSubmitting"
+                            @click="changeStatus('check_in')"
+                        >
+                            Check-in
+                        </button>
+                        <button
+                            v-if="selectedEvent?.status === 'confirmed'"
+                            type="button"
+                            class="rounded-lg bg-red-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            :disabled="statusSubmitting"
+                            @click="changeStatus('cancel')"
+                        >
+                            Annuler
+                        </button>
+                        <button
+                            v-if="selectedEvent?.status === 'confirmed'"
+                            type="button"
+                            class="rounded-lg bg-amber-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            :disabled="statusSubmitting"
+                            @click="changeStatus('no_show')"
+                            >
+                                No-show
+                            </button>
+                            <button
+                                v-if="selectedEvent?.status === 'in_house'"
+                            type="button"
+                            class="rounded-lg bg-gray-800 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
+                            :disabled="statusSubmitting"
+                            @click="changeStatus('check_out')"
+                        >
+                            Check-out
+                            </button>
+                    </div>
+                    <button
+                        type="button"
+                        class="mt-2 w-full rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-70"
+                        :disabled="!selectedEvent?.id || folioLoading"
+                        @click="openFolioForSelectedReservation('payments')"
+                    >
+                        {{ folioLoading ? 'Ouverture du folio...' : 'Encaisser / Folio' }}
+                    </button>
+                </div>
+
+                <div
+                    v-if="selectedEvent?.status === 'in_house'"
+                    class="mt-3 space-y-2 rounded-lg border border-dashed border-gray-200 p-3"
+                >
+                    <label class="text-xs font-semibold text-gray-700">Gestion du séjour</label>
+                    <div class="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            class="rounded-lg border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                            @click="openStayModal('extend')"
+                        >
+                            Prolonger
+                        </button>
+                        <button
+                            type="button"
+                            class="rounded-lg border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                            @click="openStayModal('shorten')"
+                        >
+                            Raccourcir
+                        </button>
+                        <button
+                            v-if="canChangeRoom"
+                            type="button"
+                            class="rounded-lg border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                            @click="openChangeRoomModal"
+                        >
+                            Changer de chambre
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div
+        v-if="showModal"
+        class="fixed inset-0 z-40 flex items-start justify-center bg-black/40 px-4 py-10 sm:items-center"
+        @click.self="closeModal"
+    >
+        <div class="w-full max-w-xl rounded-xl bg-white p-6 shadow-xl">
+                <div class="mb-4 flex items-center justify-between">
+                    <div>
+                        <h2 class="text-lg font-semibold">{{ editingId ? 'Modifier la réservation' : 'Nouvelle réservation' }}</h2>
+                        <p class="text-sm text-gray-500">
+                            Mode {{ fullMode ? 'complet' : 'rapide' }} · Date pré-remplie depuis le calendrier.
+                        </p>
+                    </div>
+
+                    <button type="button" class="text-sm text-gray-500 hover:text-gray-700" @click="closeModal">
+                        Fermer
+                    </button>
+                </div>
+
+                <div
+                    v-if="fullMode"
+                    class="mb-3 flex items-center gap-2 text-xs font-medium"
+                >
+                    <span :class="currentStep === 1 ? 'text-indigo-600' : 'text-gray-400'">
+                        Étape 1 : Infos principales
+                    </span>
+                    <span>›</span>
+                    <span :class="currentStep === 2 ? 'text-indigo-600' : 'text-gray-400'">
+                        Étape 2 : Détails tarifaires
+                    </span>
+                </div>
+
+                <div class="mb-3 flex items-center gap-2 text-sm">
+                    <span class="text-gray-600">Mode :</span>
+                    <button
+                        type="button"
+                        class="rounded-lg border px-2 py-1 text-xs font-semibold"
+                        :class="fullMode ? 'border-gray-300 text-gray-700' : 'border-indigo-500 text-indigo-600'"
+                        @click="fullMode = false"
+                    >
+                        Rapide
+                    </button>
+                    <button
+                        type="button"
+                        class="rounded-lg border px-2 py-1 text-xs font-semibold"
+                        :class="fullMode ? 'border-indigo-500 text-indigo-600' : 'border-gray-300 text-gray-700'"
+                        @click="fullMode = true"
+                        >
+                            Complet
+                        </button>
+                    </div>
+
+                <form class="space-y-4" @submit.prevent>
+                    <div v-if="!fullMode || currentStep === 1" class="space-y-4">
+                        <div>
+                            <label class="text-sm font-medium text-gray-700">Code *</label>
+                            <input
+                                v-model="form.code"
+                                type="text"
+                                class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                required
+                            />
+                        </div>
+
+                        <div class="grid gap-4 md:grid-cols-2">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Client *</label>
+                                <Multiselect
+                                    v-model="selectedGuest"
+                                    :options="guests"
+                                    track-by="id"
+                                    label="name"
+                                    placeholder="Sélectionner un client"
+                                    class="mt-1"
+                                />
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Type de chambre *</label>
+                                <Multiselect
+                                    v-model="selectedRoomType"
+                                    :options="roomTypes"
+                                    track-by="id"
+                                    label="name"
+                                    placeholder="Sélectionner un type"
+                                    class="mt-1"
+                                />
+                            </div>
+                        </div>
+
+                        <div class="mt-4 grid gap-4 md:grid-cols-2">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Chambre</label>
+                                <Multiselect
+                                    v-model="selectedRoom"
+                                    :options="filteredRooms"
+                                    track-by="id"
+                                    :custom-label="roomLabel"
+                                    placeholder="Sélectionner une chambre"
+                                    class="mt-1"
+                                    :allow-empty="true"
+                                />
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Offre</label>
+                                <Multiselect
+                                    v-model="selectedOffer"
+                                    :options="filteredOffers"
+                                    track-by="id"
+                                    label="name"
+                                    placeholder="Sélectionner une offre"
+                                    class="mt-1"
+                                    :allow-empty="true"
+                                />
+                                <div v-if="form.unit_price > 0" class="mt-1 text-xs text-gray-600">
+                                    Prix de l’offre :
+                                    <span class="font-semibold">
+                                        {{ form.unit_price }} {{ form.currency }}
+                                    </span>
+                                </div>
+                                <div v-else class="mt-1 text-xs text-gray-400">
+                                    Aucun tarif configuré pour cette combinaison type de chambre / offre.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid gap-4 md:grid-cols-2">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Arrivée</label>
+                                <input
+                                    v-model="form.check_in_date"
+                                    type="datetime-local"
+                                    class="mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                    :class="dateError ? 'border-red-400 focus:border-red-400 focus:ring-red-100' : 'border-gray-200 focus:border-indigo-500'"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Départ</label>
+                                <input
+                                    v-model="form.check_out_date"
+                                    type="datetime-local"
+                                    class="mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                    :class="dateError ? 'border-red-400 focus:border-red-400 focus:ring-red-100' : 'border-gray-200 focus:border-indigo-500'"
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        <p v-if="staySummary" class="mt-1 text-[11px] text-gray-500">
+                            {{ staySummary }}
+                        </p>
+
+                        <div
+                            v-if="form.total_amount > 0"
+                            class="mt-1 text-xs text-gray-700"
+                        >
+                            Total pour le séjour :
+                            <span class="font-semibold">
+                                {{ form.total_amount }} {{ form.currency }}
+                            </span>
+                        </div>
+
+                        <div>
+                            <label class="text-sm font-medium text-gray-700">Statut</label>
+                            <select
+                                v-model="form.status"
+                                class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                            >
+                                <option v-for="status in statusOptions" :key="status" :value="status">
+                                    {{ statusLabel(status) }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <p v-if="dateError" class="mt-1 text-xs text-red-600">
+                            {{ dateError }}
+                        </p>
+                    </div>
+
+                    <div v-if="fullMode && currentStep === 2" class="space-y-4">
+                        <div class="grid gap-4 md:grid-cols-2">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Devise</label>
+                                <input
+                                    v-model="form.currency"
+                                    type="text"
+                                    maxlength="3"
+                                    class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm uppercase focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Prix unitaire</label>
+                                <input
+                                    v-model.number="form.unit_price"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        <div class="grid gap-4 md:grid-cols-2">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Source</label>
+                                <input
+                                    v-model="form.source"
+                                    type="text"
+                                    class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                    placeholder="walk_in, phone, ota..."
+                                />
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Heure d'arrivée prévue</label>
+                                <input
+                                    v-model="form.expected_arrival_time"
+                                    type="time"
+                                    class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                />
+                            </div>
+                        </div>
+
+                        <div class="grid gap-4 md:grid-cols-3">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Montant net</label>
+                                <input
+                                    v-model.number="form.base_amount"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Montant taxe</label>
+                                <input
+                                    v-model.number="form.tax_amount"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Total</label>
+                                <input
+                                    v-model.number="form.total_amount"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        <div class="grid gap-4 md:grid-cols-2">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Adultes</label>
+                                <input
+                                    v-model.number="form.adults"
+                                    type="number"
+                                    min="0"
+                                    class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                />
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Enfants</label>
+                                <input
+                                    v-model.number="form.children"
+                                    type="number"
+                                    min="0"
+                                    class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="text-sm font-medium text-gray-700">Notes</label>
+                            <textarea
+                                v-model="form.notes"
+                                rows="3"
+                                class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                            ></textarea>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-3">
+                        <button type="button" class="text-sm text-gray-600 hover:text-gray-800" @click="closeModal">
+                            Annuler
+                        </button>
+                        <button
+                            v-if="!fullMode"
+                            type="button"
+                            class="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
+                            :disabled="submitting"
+                            @click="submitForm"
+                        >
+                            Enregistrer
+                        </button>
+                        <button
+                            v-if="fullMode && currentStep === 1"
+                            type="button"
+                            class="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
+                            @click="goToStep(2)"
+                        >
+                            Suivant
+                        </button>
+                        <button
+                            v-if="fullMode && currentStep === 2"
+                            type="button"
+                            class="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
+                            :disabled="submitting"
+                            @click="submitForm"
+                        >
+                            Enregistrer
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <FolioModal
+            v-if="folioData"
+            :show="showFolioModal"
+            :folio="folioData.folio"
+            :reservation="folioData.reservation"
+            :items="folioData.items"
+            :payments="folioData.payments"
+            :invoices="folioData.invoices"
+            :payment-methods="folioData.paymentMethods"
+            :initial-tab="folioInitialTab"
+            :permissions="folioData.permissions || {}"
+            @close="closeFolioModal"
+            @updated="refreshFolioData"
+        />
+
+        <div
+            v-if="showStayModal && selectedEvent"
+            class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4"
+        >
+            <div class="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+                <div class="mb-4 flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900">
+                            {{ stayModalTitle }}
+                        </h3>
+                        <p class="text-xs text-gray-500">
+                            Réservation {{ selectedEvent.code || selectedEvent.title }}
+                        </p>
+                    </div>
+                    <button type="button" class="text-sm text-gray-500" @click="closeStayModal">
+                        Fermer
+                    </button>
+                </div>
+
+                <div class="space-y-3 text-sm text-gray-700">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <p class="text-xs font-semibold text-gray-500">Arrivée</p>
+                            <p>{{ formatDateTime(selectedEvent.check_in) }}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs font-semibold text-gray-500">Départ actuel</p>
+                            <p>{{ formatDateTime(selectedEvent.check_out) }}</p>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-gray-500">Nouveau départ</label>
+                        <input
+                            v-model="stayModalDate"
+                            type="datetime-local"
+                            class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                            :min="stayModalMin"
+                            :max="stayModalMax"
+                            step="900"
+                        />
+                    </div>
+                    <div class="rounded-lg bg-gray-50 p-3">
+                        <p class="text-xs font-semibold text-gray-500">Résumé</p>
+                        <p class="text-sm">
+                            {{ stayModalSummary.nights }} nuit(s) · {{ formatAmount(stayModalSummary.total) }}
+                        </p>
+                    </div>
+                </div>
+
+                <div class="mt-4 flex items-center justify-end gap-3">
+                    <button type="button" class="text-sm text-gray-500" @click="closeStayModal">
+                        Annuler
+                    </button>
+                    <button
+                        type="button"
+                        class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                        :disabled="stayModalSubmitting"
+                        @click="submitStayModal"
+                    >
+                        Valider
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div
+            v-if="showChangeRoomModal && selectedEvent"
+            class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4"
+        >
+            <div class="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+                <div class="mb-4 flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900">Changer de chambre</h3>
+                        <p class="text-xs text-gray-500">
+                            Réservation {{ selectedEvent.code || selectedEvent.title }}
+                        </p>
+                    </div>
+                    <button type="button" class="text-sm text-gray-500" @click="closeChangeRoomModal">
+                        Fermer
+                    </button>
+                </div>
+
+                <div class="space-y-3 text-sm text-gray-700">
+                    <div>
+                        <p class="text-xs font-semibold text-gray-500">Chambre actuelle</p>
+                        <p v-if="selectedEvent.room_number">Chambre {{ selectedEvent.room_number }}</p>
+                        <p v-else>Aucune chambre assignée</p>
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-gray-500">Nouvelle chambre</label>
+                        <select
+                            v-model="changeRoomSelection"
+                            class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                        >
+                            <option disabled :value="null">Sélectionner</option>
+                            <option
+                                v-for="room in plannerChangeRoomOptions"
+                                :key="room.id"
+                                :value="room.id"
+                            >
+                                Chambre {{ room.number }} · {{ room.room_type_name || 'Type inconnu' }}
+                            </option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mt-4 flex items-center justify-end gap-3">
+                    <button type="button" class="text-sm text-gray-500" @click="closeChangeRoomModal">
+                        Annuler
+                    </button>
+                    <button
+                        type="button"
+                        class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                        :disabled="!changeRoomSelection || changeRoomSubmitting"
+                        @click="submitChangeRoom"
+                    >
+                        Valider
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script>
+    import axios from 'axios';
+    import { router } from '@inertiajs/vue3';
+    import Swal from 'sweetalert2';
+    import FullCalendar from '@fullcalendar/vue3';
+    import dayGridPlugin from '@fullcalendar/daygrid';
+    import FolioModal from '@/components/Frontdesk/FolioModal.vue';
+    import Multiselect from 'vue-multiselect';
+
+    export default {
+        name: 'ReservationsPlanner',
+        components: { FullCalendar, FolioModal, Multiselect },
+        props: {
+            events: {
+                type: Array,
+                required: true,
+            },
+            guests: {
+                type: Array,
+                required: true,
+            },
+            roomTypes: {
+                type: Array,
+                required: true,
+            },
+            statusOptions: {
+                type: Array,
+                required: true,
+            },
+            defaults: {
+                type: Object,
+                required: true,
+            },
+            rooms: {
+                type: Array,
+                required: true,
+            },
+            offers: {
+                type: Array,
+                required: true,
+            },
+            offerRoomTypePrices: {
+                type: Array,
+                default: () => [],
+            },
+            canManageTimes: {
+                type: Boolean,
+                required: true,
+            },
+        },
+        data() {
+            return {
+                showModal: false,
+                form: {
+                    code: '',
+                    check_in_date: '',
+                    check_out_date: '',
+                    status: 'pending',
+                    guest_id: '',
+                    room_type_id: '',
+                    room_id: null,
+                    offer_id: null,
+                    currency: this.defaults.currency || 'XAF',
+                    unit_price: 0,
+                    base_amount: 0,
+                    tax_amount: 0,
+                    total_amount: 0,
+                    adults: 1,
+                    children: 0,
+                    notes: '',
+                    source: '',
+                    expected_arrival_time: '',
+                    offer_name: '',
+                    offer_kind: '',
+                },
+                fullMode: false,
+                currentStep: 1,
+                dateError: '',
+                selectedEvent: null,
+                editingId: null,
+                eventsLocal: [...this.events],
+                submitting: false,
+                statusSubmitting: false,
+                calendarOptions: {
+                    plugins: [dayGridPlugin],
+                    initialView: 'dayGridMonth',
+                    headerToolbar: {
+                        left: 'prev,next today',
+                        center: 'title',
+                        right: 'dayGridMonth,dayGridWeek,dayGridDay',
+                    },
+                    height: 'auto',
+                    eventDisplay: 'block',
+                    events: [...this.events],
+                    dayCellDidMount: this.attachDayClick,
+                    eventClick: this.onEventClick,
+                    eventDidMount: this.onEventDidMount,
+                    eventClassNames: this.eventClassNames,
+                },
+                selectedGuest: null,
+                selectedRoomType: null,
+                selectedRoom: null,
+                selectedOffer: null,
+                priceMatrix: {},
+                showFolioModal: false,
+                folioData: null,
+                folioLoading: false,
+                folioInitialTab: 'charges',
+                skipNextOfferDateApplication: false,
+                showStayModal: false,
+                stayModalMode: 'extend',
+                stayModalDate: '',
+                stayModalSubmitting: false,
+                showChangeRoomModal: false,
+                changeRoomSelection: null,
+                changeRoomSubmitting: false,
+            };
+        },
+        created() {
+            this.buildPriceMatrix();
+        },
+        watch: {
+            events: {
+                immediate: true,
+                handler(newEvents) {
+                    this.eventsLocal = [...newEvents];
+                    this.calendarOptions = {
+                        ...this.calendarOptions,
+                        events: this.eventsLocal,
+                    };
+
+                    if (this.selectedEvent?.id) {
+                        const fresh = this.eventsLocal.find((e) => e.id == this.selectedEvent.id);
+                        if (fresh) {
+                            this.updateSelectedEventFromRaw(fresh);
+                        }
+                    }
+                },
+            },
+            offerRoomTypePrices: {
+                immediate: true,
+                handler() {
+                    this.buildPriceMatrix();
+                },
+            },
+            selectedGuest(newVal) {
+                this.form.guest_id = newVal ? newVal.id : '';
+            },
+            selectedRoomType(newVal) {
+                this.form.room_type_id = newVal ? newVal.id : '';
+                if (newVal) {
+                    if (
+                        this.selectedRoom &&
+                        this.selectedRoom.room_type_id !== newVal.id
+                    ) {
+                        this.selectedRoom = null;
+                        this.form.room_id = null;
+                    }
+                    if (
+                        this.selectedOffer &&
+                        !this.isOfferCompatibleWithRoomType(newVal.id, this.selectedOffer.id)
+                    ) {
+                        this.selectedOffer = null;
+                        this.form.offer_id = null;
+                    }
+                } else {
+                    this.selectedRoom = null;
+                    this.form.room_id = null;
+                    this.selectedOffer = null;
+                    this.form.offer_id = null;
+                }
+                this.updateUnitPriceFromSelection();
+            },
+            selectedRoom(newVal) {
+                this.form.room_id = newVal ? newVal.id : null;
+                if (newVal) {
+                    const rt = this.roomTypes.find(
+                        (rt) => rt.id === newVal.room_type_id,
+                    );
+                    if (rt) {
+                        this.selectedRoomType = rt;
+                        this.form.room_type_id = rt.id;
+                    }
+                }
+                this.updateUnitPriceFromSelection();
+            },
+            selectedOffer(newVal) {
+                this.form.offer_id = newVal ? newVal.id : null;
+                this.form.offer_name = newVal ? newVal.name : '';
+                this.form.offer_kind = newVal ? newVal.kind : '';
+                if (newVal && this.skipNextOfferDateApplication) {
+                    this.skipNextOfferDateApplication = false;
+                } else {
+                    this.applyOfferDates(newVal);
+                }
+                this.updateUnitPriceFromSelection();
+            },
+                'form.check_in_date'() {
+                    this.validateDates();
+                    this.recalculateAmounts();
+                },
+                'form.check_out_date'() {
+                    this.validateDates();
+                    this.recalculateAmounts();
+                },
+            },
+        computed: {
+            filteredRooms() {
+                if (this.selectedRoomType && this.selectedRoomType.id) {
+                    return this.rooms.filter(
+                        (room) =>
+                            room.room_type_id === this.selectedRoomType.id &&
+                            room.status === 'active',
+                    );
+                }
+
+                return this.rooms.filter((room) => room.status === 'active');
+            },
+            filteredOffers() {
+                if (this.selectedRoomType && this.selectedRoomType.id) {
+                    const roomTypeId = this.selectedRoomType.id;
+                    const offerIdsForRoomType = (this.offerRoomTypePrices || [])
+                        .filter((entry) => entry.room_type_id === roomTypeId)
+                        .map((entry) => entry.offer_id);
+
+                    if (!offerIdsForRoomType.length) {
+                        return [];
+                    }
+
+                    return this.offers.filter((offer) =>
+                        offerIdsForRoomType.includes(offer.id),
+                    );
+                }
+
+                return this.offers;
+            },
+            staySummary() {
+                if (!this.selectedOffer || !this.form.check_in_date || !this.form.check_out_date) {
+                    return '';
+                }
+
+                const start = this.form.check_in_date;
+                const end = this.form.check_out_date;
+                const kind = this.selectedOffer.kind ?? 'night';
+
+                if (kind === 'short_stay') {
+                    return `Séjour courte durée (~3h) le ${start}.`;
+                }
+
+                if (kind === 'weekend') {
+                    return `Séjour week-end du ${start} au ${end}.`;
+                }
+
+                if (kind === 'full_day') {
+                    return `Séjour 24h du ${start} au ${end}.`;
+                }
+
+                return `Séjour du ${start} au ${end}.`;
+            },
+            stayModalTitle() {
+                return this.stayModalMode === 'extend'
+                    ? 'Prolonger le séjour'
+                    : 'Raccourcir le séjour';
+            },
+            stayModalMin() {
+                if (!this.selectedEvent) {
+                    return undefined;
+                }
+
+                const source = this.stayModalMode === 'extend'
+                    ? this.selectedEvent.checkOutDate
+                        ?? this.selectedEvent.check_out
+                        ?? this.selectedEvent.end
+                    : this.selectedEvent.checkInDate
+                        ?? this.selectedEvent.check_in
+                        ?? this.selectedEvent.start;
+
+                const normalized = this.normalizeDateTimeLocal(source);
+
+                return normalized || undefined;
+            },
+            stayModalMax() {
+                if (!this.selectedEvent || this.stayModalMode !== 'shorten') {
+                    return undefined;
+                }
+
+                const source = this.selectedEvent.checkOutDate
+                    ?? this.selectedEvent.check_out
+                    ?? this.selectedEvent.end;
+
+                const normalized = this.normalizeDateTimeLocal(source);
+
+                return normalized || undefined;
+            },
+        stayModalSummary() {
+                if (!this.selectedEvent || !this.stayModalDate) {
+                    return {
+                        nights: 0,
+                        total: 0,
+                    };
+                }
+
+                const kind = this.selectedEvent.offer_kind || this.selectedEvent.offerKind || 'night';
+                const start = this.normalizeDateTimeLocal(
+                    this.selectedEvent.checkInDate
+                        ?? this.selectedEvent.check_in
+                        ?? this.selectedEvent.start,
+                );
+
+                if (!start) {
+                    return {
+                        nights: 0,
+                        total: 0,
+                    };
+                }
+
+                const nights = this.calculateStayUnits(
+                    kind,
+                    start,
+                    this.stayModalDate,
+                );
+                const unitPrice = Number(this.selectedEvent.unit_price || 0);
+
+                return {
+                    nights,
+                    total: nights * unitPrice,
+                };
+            },
+            canChangeRoom() {
+                if (!this.selectedEvent) {
+                    return false;
+                }
+
+                return ['confirmed', 'in_house'].includes(this.selectedEvent.status);
+            },
+            currentEventOffer() {
+                if (!this.selectedEvent?.offer_id) {
+                    return null;
+                }
+
+                const offerId = Number(this.selectedEvent.offer_id);
+
+                return this.offers.find((offer) => Number(offer.id) === offerId) ?? null;
+            },
+            plannerChangeRoomOptions() {
+                if (!this.selectedEvent) {
+                    return [];
+                }
+
+                const currentRoomId = this.selectedEvent.room_id ?? null;
+
+                return this.rooms
+                    .filter((room) => {
+                        if (!room || room.status !== 'active') {
+                            return false;
+                        }
+
+                        if (room.id === currentRoomId) {
+                            return false;
+                        }
+
+                        return !room.current_reservation || room.current_reservation.id === this.selectedEvent.id;
+                    });
+            },
+        },
+        methods: {
+            refreshReservationsData() {
+                router.reload({ only: ['reservationsData'] });
+            },
+            openStayModal(mode) {
+                if (!this.selectedEvent?.id) {
+                    return;
+                }
+
+                const rawDeparture =
+                    this.selectedEvent.checkOutDate
+                        ?? this.selectedEvent.check_out
+                        ?? this.selectedEvent.end;
+
+                const departureDate = this.valueToDate(rawDeparture);
+
+                if (!departureDate) {
+                    return;
+                }
+
+                const targetDate = new Date(departureDate.getTime());
+
+                this.stayModalMode = mode;
+                this.stayModalDate = this.applyOfferCheckoutTime(targetDate) || this.toDateTimeLocal(targetDate);
+                this.showStayModal = true;
+            },
+            closeStayModal() {
+                this.showStayModal = false;
+                this.stayModalSubmitting = false;
+            },
+            async submitStayModal() {
+                if (!this.selectedEvent?.id || !this.stayModalDate) {
+                    return;
+                }
+
+                this.stayModalSubmitting = true;
+
+                try {
+                    await axios.patch(
+                        `/reservations/${this.selectedEvent.id}/stay/dates`,
+                        {
+                            check_out_date: this.stayModalDate,
+                        },
+                    );
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Séjour mis à jour',
+                        timer: 1500,
+                        showConfirmButton: false,
+                    });
+
+                    this.closeStayModal();
+                    this.refreshReservationsData();
+                } catch (error) {
+                    const message =
+                        error.response?.data?.message
+                        ?? error.response?.data?.errors?.check_out_date?.[0]
+                        ?? 'Impossible de mettre à jour le séjour.';
+
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erreur',
+                        text: message,
+                    });
+                } finally {
+                    this.stayModalSubmitting = false;
+                }
+            },
+            openChangeRoomModal() {
+                if (!this.canChangeRoom || !this.selectedEvent?.id) {
+                    return;
+                }
+
+                this.changeRoomSelection = null;
+                this.showChangeRoomModal = true;
+            },
+            closeChangeRoomModal() {
+                this.showChangeRoomModal = false;
+                this.changeRoomSubmitting = false;
+            },
+            async submitChangeRoom() {
+                if (!this.selectedEvent?.id || !this.changeRoomSelection) {
+                    return;
+                }
+
+                this.changeRoomSubmitting = true;
+
+                try {
+                    await axios.patch(
+                        `/reservations/${this.selectedEvent.id}/stay/room`,
+                        {
+                            room_id: this.changeRoomSelection,
+                        },
+                    );
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Chambre mise à jour',
+                        timer: 1500,
+                        showConfirmButton: false,
+                    });
+
+                    this.closeChangeRoomModal();
+                    this.refreshReservationsData();
+                } catch (error) {
+                    const message =
+                        error.response?.data?.message
+                        ?? error.response?.data?.errors?.room_id?.[0]
+                        ?? 'Impossible de changer la chambre.';
+
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erreur',
+                        text: message,
+                    });
+                } finally {
+                    this.changeRoomSubmitting = false;
+                }
+            },
+            calculateStayUnits(kind, start, end) {
+                const startDate = new Date(start);
+                const endDate = new Date(end);
+
+                if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+                    return 0;
+                }
+
+                const msPerDay = 1000 * 60 * 60 * 24;
+                const nights = Math.max(1, Math.round((endDate - startDate) / msPerDay));
+
+                switch (kind) {
+                    case 'short_stay':
+                        return 1;
+                    case 'weekend':
+                        return Math.max(2, nights);
+                    default:
+                        return nights;
+                }
+            },
+            formatAmount(value) {
+                const amount = Number(value || 0);
+                const currency = this.selectedEvent?.currency
+                    || this.defaults.currency
+                    || 'XAF';
+
+                return `${amount.toFixed(0)} ${currency}`;
+            },
+            normalizeDateTimeLocal(value) {
+                const date = this.valueToDate(value);
+
+                if (!date) {
+                    return '';
+                }
+
+                return this.toDateTimeLocal(date);
+            },
+            applyOfferCheckoutTime(value) {
+                const date = this.valueToDate(value);
+
+                if (!date) {
+                    return '';
+                }
+
+                const checkoutTime = this.currentEventOffer?.check_out_until;
+
+                if (typeof checkoutTime === 'string') {
+                    const [hStr, mStr] = checkoutTime.split(':');
+                    const h = Number(hStr);
+                    const m = Number(mStr);
+
+                    date.setHours(Number.isFinite(h) ? h : 0, Number.isFinite(m) ? m : 0, 0, 0);
+                }
+
+                return this.toDateTimeLocal(date);
+            },
+            valueToDate(value) {
+                if (!value) {
+                    return null;
+                }
+
+                if (value instanceof Date) {
+                    return Number.isNaN(value.getTime()) ? null : new Date(value.getTime());
+                }
+
+                const date = new Date(value);
+
+                return Number.isNaN(date.getTime()) ? null : date;
+            },
+            dateOnly(value) {
+                if (!value) {
+                    return '';
+                }
+
+                if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+                    return value.slice(0, 10);
+                }
+
+                const date = new Date(value);
+
+                if (Number.isNaN(date.getTime())) {
+                    return '';
+                }
+
+                return date.toISOString().slice(0, 10);
+            },
+            async openFolioForSelectedReservation(tab = 'charges') {
+                if (!this.selectedEvent?.id) {
+                    return;
+                }
+
+                this.folioLoading = true;
+                this.folioInitialTab = tab || 'charges';
+
+                try {
+                    const http = window.axios ?? axios;
+                    const response = await http.get(`/reservations/${this.selectedEvent.id}/folio`);
+                    this.folioData = response.data;
+                    this.showFolioModal = true;
+                } finally {
+                    this.folioLoading = false;
+                }
+            },
+            async refreshFolioData() {
+                if (!this.selectedEvent?.id || !this.showFolioModal) {
+                    return;
+                }
+
+                const http = window.axios ?? axios;
+                const response = await http.get(`/reservations/${this.selectedEvent.id}/folio`);
+                this.folioData = response.data;
+                this.refreshReservationsData();
+            },
+            closeFolioModal() {
+                this.showFolioModal = false;
+                this.folioInitialTab = 'charges';
+            },
+            attachDayClick(arg) {
+                arg.el.style.cursor = 'pointer';
+                arg.el.addEventListener('click', (e) => {
+                    if (e.target.closest('.fc-event')) {
+                        return;
+                    }
+                    const dateStr = this.formatDate(arg.date);
+                    this.handleDateClick(dateStr);
+                });
+            },
+            handleDateClick(dateStr) {
+                let start = new Date(`${dateStr}T12:00:00`);
+                if (Number.isNaN(start.getTime())) {
+                    start = new Date();
+                }
+                const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+                this.form = {
+                    ...this.form,
+                    code: `RSV-${new Date().getTime()}`,
+                    check_in_date: this.toDateTimeLocal(start),
+                    check_out_date: this.toDateTimeLocal(end),
+                    status: 'pending',
+                    guest_id: '',
+                    room_type_id: '',
+                    room_id: null,
+                    offer_id: null,
+                    source: '',
+                    expected_arrival_time: '',
+                };
+                this.skipNextOfferDateApplication = false;
+                this.selectedGuest = null;
+                this.selectedRoomType = null;
+                this.selectedRoom = null;
+                this.selectedOffer = null;
+                this.dateError = '';
+                this.fullMode = false;
+                this.currentStep = 1;
+                this.showModal = true;
+                this.editingId = null;
+            },
+            refreshEvents() {
+                this.refreshReservationsData();
+            },
+            onEventClick(arg) {
+                const raw = this.eventsLocal.find((e) => String(e.id) === String(arg.event.id));
+                if (raw) {
+                    this.updateSelectedEventFromRaw(raw);
+                }
+            },
+            updateSelectedEventFromRaw(event) {
+                const checkIn = event.check_in_date ?? event.start;
+                const checkOut = event.check_out_date ?? event.end;
+                
+                this.selectedEvent = {
+                    id: event.id,
+                    title: event.title,
+                    code: event.code || event.title || '',
+                    status: event.status || '',
+                    start: event.start,
+                    end: event.end,
+                    check_in: checkIn,
+                    check_out: checkOut,
+                    checkInDate: checkIn,
+                    checkOutDate: checkOut,
+                    room_hk_status: event.room_hk_status ?? null,
+                    room_id: event.room_id ?? null,
+                    room_number: event.room_number ?? null,
+                    room_type_id: event.room_type_id ?? null,
+                    room_type_name: event.room_type_name ?? null,
+                    unit_price: event.unit_price ?? 0,
+                    currency: event.currency ?? this.defaults.currency ?? 'XAF',
+                    offer_kind: event.offer_kind ?? event.kind ?? 'night',
+                    offer_id: event.offer_id ?? null,
+                };
+            },
+            onEventDidMount(arg) {
+                arg.el.addEventListener('dblclick', () => {
+                    const event = arg.event;
+                    this.editingId = event.id ? event.id.toString() : null;
+                    this.selectedEvent = {
+                        id: event.id,
+                        title: event.title,
+                        code: event.extendedProps?.code ?? event.title ?? '',
+                        status: event.extendedProps?.status ?? event.status ?? '',
+                        start: event.startStr,
+                        end: event.endStr,
+                        check_in: event.extendedProps?.check_in_date ?? event.startStr,
+                        check_out: event.extendedProps?.check_out_date ?? event.endStr,
+                        checkInDate: event.extendedProps?.check_in_date ?? event.startStr,
+                        checkOutDate: event.extendedProps?.check_out_date ?? event.endStr,
+                        room_hk_status: event.extendedProps?.room_hk_status ?? null,
+                        room_id: event.extendedProps?.room_id ?? null,
+                        room_number: event.extendedProps?.room_number ?? null,
+                        room_type_id: event.extendedProps?.room_type_id ?? null,
+                        room_type_name: event.extendedProps?.room_type_name ?? null,
+                        unit_price: event.extendedProps?.unit_price ?? 0,
+                        currency: event.extendedProps?.currency ?? this.defaults.currency ?? 'XAF',
+                        offer_kind: event.extendedProps?.offer_kind ?? event.extendedProps?.kind ?? 'night',
+                    };
+                    const rawCheckIn = event.extendedProps?.check_in_date;
+                    const rawCheckOut = event.extendedProps?.check_out_date;
+                    const resolvedCheckIn = rawCheckIn
+                        ? new Date(rawCheckIn)
+                        : event.start
+                            ? new Date(event.start)
+                            : null;
+                    let resolvedCheckOut = rawCheckOut
+                        ? new Date(rawCheckOut)
+                        : null;
+                    if (!resolvedCheckOut && event.end) {
+                        resolvedCheckOut = new Date(event.end.getTime() - 24 * 60 * 60 * 1000);
+                    }
+                    if (!resolvedCheckOut && event.start) {
+                        resolvedCheckOut = new Date(event.start);
+                    }
+                    this.form = {
+                        ...this.form,
+                        code: event.title || '',
+                        status: event.extendedProps?.status ?? event.status ?? 'pending',
+                        guest_id: event.extendedProps?.guest_id ?? '',
+                        room_type_id: event.extendedProps?.room_type_id ?? '',
+                        currency: event.extendedProps?.currency ?? this.defaults.currency ?? 'XAF',
+                        unit_price: event.extendedProps?.unit_price ?? 0,
+                        base_amount: event.extendedProps?.base_amount ?? 0,
+                        tax_amount: event.extendedProps?.tax_amount ?? 0,
+                        total_amount: event.extendedProps?.total_amount ?? 0,
+                        adults: event.extendedProps?.adults ?? 1,
+                        children: event.extendedProps?.children ?? 0,
+                        notes: event.extendedProps?.notes ?? '',
+                        check_in_date: resolvedCheckIn ? this.toDateTimeLocal(resolvedCheckIn) : '',
+                        check_out_date: resolvedCheckOut ? this.toDateTimeLocal(resolvedCheckOut) : '',
+                        source: event.extendedProps?.source ?? '',
+                        expected_arrival_time:
+                            event.extendedProps?.expected_arrival_time ?? '',
+                        room_id: event.extendedProps?.room_id ?? null,
+                        offer_id: event.extendedProps?.offer_id ?? null,
+                    };
+                    const guest = this.guests.find(
+                        (g) => g.id === this.form.guest_id,
+                    );
+                    const roomType = this.roomTypes.find(
+                        (rt) => rt.id === this.form.room_type_id,
+                    );
+                    const room = this.rooms.find(
+                        (r) => r.id === this.form.room_id,
+                    );
+                    const offer = this.offers.find(
+                        (o) => o.id === this.form.offer_id,
+                    );
+                    this.selectedGuest = guest || null;
+                    this.selectedRoomType = roomType || null;
+                    this.selectedRoom = room || null;
+                    this.skipNextOfferDateApplication = Boolean(offer);
+                    this.selectedOffer = offer || null;
+                    this.fullMode = true;
+                    this.currentStep = 1;
+                    this.dateError = '';
+                    this.showModal = true;
+                });
+            },
+            closeModal() {
+                this.showModal = false;
+                this.editingId = null;
+                this.currentStep = 1;
+                this.dateError = '';
+            },
+            async changeStatus(action, reservationId = null) {
+                const targetId = reservationId ?? this.selectedEvent?.id ?? null;
+
+                if (!targetId || this.statusSubmitting) {
+                    return;
+                }
+
+                if (action === 'check_in') {
+                    const hkStatus = this.getReservationHkStatus(targetId);
+
+                    if (hkStatus && !['clean', 'inspected'].includes(hkStatus)) {
+                        const warning = await Swal.fire({
+                            title: 'Chambre non prête',
+                            text: 'Cette chambre est signalée comme sale ou à inspecter. Voulez-vous continuer le check-in ?',
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: 'Oui',
+                            cancelButtonText: 'Non',
+                        });
+
+                        if (!warning.isConfirmed) {
+                            return;
+                        }
+                    }
+                }
+
+                if (['cancel', 'no_show'].includes(action)) {
+                    this.promptPenalty(action, targetId);
+
+                    return;
+                }
+
+                this.simpleStatusConfirm(action, targetId);
+            },
+            simpleStatusConfirm(action, reservationId) {
+                Swal.fire({
+                    title: 'Confirmer cette action ?',
+                    text: this.getActionLabel(action),
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Oui',
+                    cancelButtonText: 'Non',
+                }).then((result) => {
+                    if (!result.isConfirmed) {
+                        return;
+                    }
+
+                    this.sendStatusRequest(reservationId, { action });
+                });
+            },
+            eventClassNames(arg) {
+                const status = arg.event.extendedProps?.status;
+                switch (status) {
+                    case 'confirmed':
+                        return ['event-confirmed'];
+                    case 'in_house':
+                        return ['event-in-house'];
+                    case 'checked_out':
+                        return ['event-checked-out'];
+                    case 'cancelled':
+                        return ['event-cancelled'];
+                    case 'no_show':
+                        return ['event-no-show'];
+                    default:
+                        return ['event-pending'];
+                }
+            },
+            promptPenalty(action, reservationId) {
+                const title = action === 'cancel' ? 'Annuler la réservation ?' : 'Marquer no-show ?';
+
+                Swal.fire({
+                    title,
+                    text: 'Vous pouvez saisir un montant de pénalité ou laisser 0 pour ne pas pénaliser.',
+                    icon: 'warning',
+                    html:
+                        '<div class="text-left">'
+                        + '<label class="block text-xs font-semibold text-gray-600">Montant de la pénalité</label>'
+                        + '<input id="swal-penalty-amount" type="number" min="0" step="0.01" value="0" class="swal2-input" />'
+                        + '</div>'
+                        + '<div class="mt-2 text-left">'
+                        + '<label class="block text-xs font-semibold text-gray-600">Note (optionnelle)</label>'
+                        + '<input id="swal-penalty-note" type="text" class="swal2-input" />'
+                        + '</div>',
+                    showCancelButton: true,
+                    confirmButtonText: 'Valider',
+                    cancelButtonText: 'Annuler',
+                    focusConfirm: false,
+                    preConfirm: () => {
+                        const amountInput = document.getElementById('swal-penalty-amount');
+                        const noteInput = document.getElementById('swal-penalty-note');
+                        const amount = parseFloat((amountInput?.value ?? '0').toString());
+
+                        if (Number.isNaN(amount) || amount < 0) {
+                            Swal.showValidationMessage('Le montant doit être un nombre positif.');
+
+                            return false;
+                        }
+
+                        return {
+                            amount,
+                            note: (noteInput?.value ?? '').toString(),
+                        };
+                    },
+                }).then((result) => {
+                    if (!result.isConfirmed) {
+                        return;
+                    }
+
+                    this.sendStatusRequest(reservationId, {
+                        action,
+                        penalty_amount: result.value?.amount ?? 0,
+                        penalty_note: result.value?.note ?? '',
+                    });
+                });
+            },
+            sendStatusRequest(reservationId, payload) {
+                this.statusSubmitting = true;
+
+                router.patch(
+                    `/reservations/${reservationId}/status`,
+                    payload,
+                    {
+                        preserveScroll: true,
+                        onSuccess: () => {
+                            this.refreshEvents();
+                                Swal.fire({
+                                icon: 'success',
+                                title: 'Succès',
+                                text: 'Statut mis à jour.',
+                                timer: 1500,
+                                showConfirmButton: false,
+                            });
+                        },
+                        onError: (errors) => {
+                            const firstError =
+                                Object.values(errors || {})[0] ?? 'Erreur lors de la mise à jour.';
+
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Erreur',
+                                text: firstError,
+                            });
+                        },
+                        onFinish: () => {
+                            this.statusSubmitting = false;
+                        },
+                    },
+                );
+            },
+            getActionLabel(action) {
+                switch (action) {
+                    case 'confirm':
+                        return 'Confirmer cette réservation ?';
+                    case 'check_in':
+                        return 'Effectuer le check-in de ce client ?';
+                    case 'check_out':
+                        return 'Effectuer le check-out de ce client ?';
+                    case 'cancel':
+                        return 'Annuler cette réservation ?';
+                    case 'no_show':
+                        return 'Marquer cette réservation comme no-show ?';
+                    default:
+                        return 'Confirmer cette action ?';
+                }
+            },
+            validateDates() {
+                this.dateError = '';
+
+                if (!this.form.check_in_date || !this.form.check_out_date) {
+                    return true;
+                }
+
+                const start = new Date(this.form.check_in_date);
+                const end = new Date(this.form.check_out_date);
+
+                if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+                    return true;
+                }
+
+                if (end.getTime() <= start.getTime()) {
+                    this.dateError = 'La date de départ doit être postérieure à la date d’arrivée.';
+
+                    return false;
+                }
+
+                return true;
+            },
+            recalculateAmounts() {
+                if (!this.form.check_in_date || !this.form.check_out_date) {
+                    this.form.base_amount = 0;
+                    this.form.tax_amount = 0;
+                    this.form.total_amount = 0;
+
+                    return;
+                }
+
+                const start = new Date(this.form.check_in_date);
+                const end = new Date(this.form.check_out_date);
+
+                if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+                    return;
+                }
+
+                let units = 1;
+                const kind = this.form.offer_kind || 'night';
+
+                if (kind === 'short_stay') {
+                    const diffMs = end.getTime() - start.getTime();
+                    const diffHours = Math.max(1, Math.round(diffMs / (1000 * 60 * 60)));
+                    units = diffHours;
+                } else {
+                    const diffMs = end.getTime() - start.getTime();
+                    const diffDays = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+
+                    units = diffDays;
+
+                    if (kind === 'weekend') {
+                        units = Math.max(2, diffDays);
+                    }
+                }
+
+                const unit = Number(this.form.unit_price || 0);
+                const base = units * unit;
+                const tax = 0;
+                const total = base + tax;
+
+                this.form.base_amount = base;
+                this.form.tax_amount = tax;
+                this.form.total_amount = total;
+            },
+            applyOfferDates(offer) {
+                if (!offer) {
+                    return;
+                }
+
+                const now = new Date();
+                let start = this.form.check_in_date
+                    ? new Date(this.form.check_in_date)
+                    : new Date();
+
+                if (Number.isNaN(start.getTime())) {
+                    start = new Date();
+                }
+
+                if (offer.check_in_from) {
+                    const [hStr, mStr] = offer.check_in_from.split(':');
+                    const h = Number(hStr) || 0;
+                    const m = Number(mStr) || 0;
+                    start.setHours(h, m, 0, 0);
+                } else if (!this.form.check_in_date) {
+                    start.setHours(now.getHours(), now.getMinutes(), 0, 0);
+                }
+
+                this.form.check_in_date = this.toDateTimeLocal(start);
+
+                let end = new Date(start.getTime());
+                const kind = offer.kind ?? 'night';
+
+                const fixedHours = Number(offer.fixed_duration_hours || 0);
+
+                if (fixedHours > 0) {
+                    end = new Date(start.getTime() + fixedHours * 60 * 60 * 1000);
+                } else if (offer.check_out_until) {
+                    const [hStr, mStr] = offer.check_out_until.split(':');
+                    const h = Number(hStr) || 0;
+                    const m = Number(mStr) || 0;
+                    end.setHours(h, m, 0, 0);
+
+                    if (end.getTime() <= start.getTime()) {
+                        end.setDate(end.getDate() + 1);
+                    }
+                } else {
+                    let durationHours = 0;
+
+                    if (kind === 'short_stay') {
+                        durationHours = 3;
+                    } else if (kind === 'weekend') {
+                        durationHours = 48;
+                    } else if (kind === 'full_day' || kind === 'night') {
+                        durationHours = 24;
+                    } else {
+                        durationHours = 24;
+                    }
+
+                    end = new Date(start.getTime() + durationHours * 60 * 60 * 1000);
+                }
+
+                this.form.check_out_date = this.toDateTimeLocal(end);
+            },
+            buildPriceMatrix() {
+                const matrix = {};
+                (this.offerRoomTypePrices || []).forEach((entry) => {
+                    const key = `${entry.room_type_id}|${entry.offer_id}`;
+                    matrix[key] = {
+                        price: Number(entry.price || 0),
+                        currency: entry.currency || this.defaults.currency || 'XAF',
+                    };
+                });
+                this.priceMatrix = matrix;
+            },
+            updateUnitPriceFromSelection() {
+                const rtId = this.form.room_type_id;
+                const ofId = this.form.offer_id;
+
+                if (!rtId || !ofId) {
+                    this.form.unit_price = 0;
+                    this.form.base_amount = 0;
+                    this.form.tax_amount = 0;
+                    this.form.total_amount = 0;
+
+                    return;
+                }
+
+                const entry = this.priceMatrix[`${rtId}|${ofId}`];
+
+                if (entry) {
+                    this.form.unit_price = entry.price;
+                    this.form.currency = entry.currency;
+                } else {
+                    this.form.unit_price = 0;
+                }
+
+                this.recalculateAmounts();
+            },
+            goToStep(step) {
+                if (step === 2) {
+                    if (!this.validateDates()) {
+                        return;
+                    }
+
+                    if (
+                        !this.form.guest_id ||
+                        !this.form.room_type_id ||
+                        !this.form.check_in_date ||
+                        !this.form.check_out_date
+                    ) {
+                        alert(
+                            'Veuillez remplir au minimum : client, type de chambre et dates.',
+                        );
+
+                        return;
+                    }
+                }
+
+                this.currentStep = step;
+            },
+            submitForm() {
+                if (!this.validateDates()) {
+                    return;
+                }
+
+                this.submitting = true;
+                const payload = {
+                    ...this.form,
+                };
+
+                if (this.editingId) {
+                    router.put(`/reservations/${this.editingId}`, payload, {
+                        preserveScroll: true,
+                        onSuccess: () => {
+                            this.refreshReservationsData();
+                            this.closeModal();
+                            this.notifyBookingSuccess('Réservation mise à jour avec succès.');
+                        },
+                        onError: (errors) => {
+                            this.handleAvailabilityErrors(errors);
+                        },
+                        onFinish: () => {
+                            this.submitting = false;
+                        },
+                    });
+                } else {
+                    router.post('/reservations', payload, {
+                        preserveScroll: true,
+                        onSuccess: () => {
+                            this.refreshReservationsData();
+                            this.closeModal();
+                            this.notifyBookingSuccess('Réservation enregistrée avec succès.');
+                        },
+                        onError: (errors) => {
+                            this.handleAvailabilityErrors(errors);
+                        },
+                        onFinish: () => {
+                            this.submitting = false;
+                        },
+                    });
+                }
+            },
+            formatDate(dateObj) {
+                if (!dateObj) {
+                    return '';
+                }
+                const year = dateObj.getFullYear();
+                const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                const day = String(dateObj.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            },
+            handleAvailabilityErrors(errors) {
+                if (!errors) {
+                    return;
+                }
+
+                const message = errors.room_id ?? errors.room_type_id ?? null;
+
+                if (!message) {
+                    return;
+                }
+
+                const text = Array.isArray(message) ? message[0] : message;
+
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Indisponible',
+                    text: text,
+                });
+            },
+            notifyBookingSuccess(message) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Succès',
+                    text: message,
+                    timer: 2500,
+                    showConfirmButton: false,
+                });
+            },
+            addOneDay(dateStr) {
+                if (!dateStr) {
+                    return '';
+                }
+                const d = new Date(dateStr);
+                d.setDate(d.getDate() + 1);
+                return this.formatDate(d);
+            },
+            eventClassNames(arg) {
+                const status = arg.event.extendedProps?.status ?? arg.event.status ?? '';
+                const map = {
+                    pending: 'fc-status-pending',
+                    confirmed: 'fc-status-confirmed',
+                    in_house: 'fc-status-in-house',
+                    checked_out: 'fc-status-checked-out',
+                    cancelled: 'fc-status-cancelled',
+                    no_show: 'fc-status-no-show',
+                };
+                return map[status] ? [map[status]] : [];
+            },
+            statusClass(status) {
+                const map = {
+                    pending: 'bg-yellow-50 text-yellow-700',
+                    confirmed: 'bg-blue-50 text-blue-700',
+                    in_house: 'bg-green-50 text-green-700',
+                    checked_out: 'bg-gray-100 text-gray-700',
+                    cancelled: 'bg-red-50 text-red-700',
+                    no_show: 'bg-orange-50 text-orange-700',
+                };
+                return map[status] || 'bg-gray-100 text-gray-700';
+            },
+            statusLabel(status) {
+                const map = {
+                    pending: 'En attente',
+                    confirmed: 'Confirmée',
+                    in_house: 'En séjour',
+                    checked_out: 'Départ effectué',
+                    cancelled: 'Annulée',
+                    no_show: 'No-show',
+                };
+
+                return map[status] || status;
+            },
+            toDateTimeLocal(date) {
+                const pad = (n) => String(n).padStart(2, '0');
+                const year = date.getFullYear();
+                const month = pad(date.getMonth() + 1);
+                const day = pad(date.getDate());
+                const hours = pad(date.getHours());
+                const minutes = pad(date.getMinutes());
+
+                return `${year}-${month}-${day}T${hours}:${minutes}`;
+            },
+            roomLabel(room) {
+                if (! room) {
+                    return '';
+                }
+
+                const typeName = room.room_type_name
+                    ? ` · ${room.room_type_name}`
+                    : '';
+
+                return `Chambre ${room.number}${typeName}`;
+            },
+            getReservationHkStatus(reservationId) {
+                if (this.selectedEvent && this.selectedEvent.id?.toString() === reservationId?.toString()) {
+                    return this.selectedEvent.room_hk_status ?? null;
+                }
+
+                const event = (this.eventsLocal || []).find(
+                    (evt) => evt.id?.toString() === reservationId?.toString(),
+                );
+
+                if (!event) {
+                    return null;
+                }
+
+                return event.room_hk_status ?? event.extendedProps?.room_hk_status ?? null;
+            },
+            formatDateTime(value) {
+                if (!value) {
+                    return '—';
+                }
+
+                const date = new Date(value);
+
+                if (Number.isNaN(date.getTime())) {
+                    return value;
+                }
+
+                return date.toLocaleString('fr-FR', {
+                    dateStyle: 'short',
+                    timeStyle: 'short',
+                });
+            },
+            isOfferCompatibleWithRoomType(roomTypeId, offerId) {
+                if (!roomTypeId || !offerId) {
+                    return false;
+                }
+
+                return Boolean(this.priceMatrix[`${roomTypeId}|${offerId}`]);
+            },
+        },
+    };
+</script>
+
+<style scoped>
+    .fc-status-pending {
+        background-color: #fef3c7 !important;
+        border-color: #facc15 !important;
+        color: #854d0e !important;
+    }
+    .fc-status-confirmed {
+        background-color: #dbeafe !important;
+        border-color: #3b82f6 !important;
+        color: #1d4ed8 !important;
+    }
+    .fc-status-in-house {
+        background-color: #dcfce7 !important;
+        border-color: #22c55e !important;
+        color: #15803d !important;
+    }
+    .fc-status-checked-out {
+        background-color: #e5e7eb !important;
+        border-color: #9ca3af !important;
+        color: #374151 !important;
+    }
+    .fc-status-cancelled {
+        background-color: #fee2e2 !important;
+        border-color: #ef4444 !important;
+        color: #991b1b !important;
+    }
+    .fc-status-no-show {
+        background-color: #ffedd5 !important;
+        border-color: #f97316 !important;
+        color: #c2410c !important;
+    }
+    .fc-event.event-pending {
+        background-color: #fcebd9 !important; /* amber-100 */
+        border-color: #f59e0b !important;
+        color: #92400e !important;
+    }
+
+    .fc-event.event-confirmed {
+        background-color: #d1fae5 !important; /* emerald-100 */
+        border-color: #10b981 !important;
+        color: #065f46 !important;
+    }
+
+    .fc-event.event-in-house {
+        background-color: #dbeafe !important; /* blue-100 */
+        border-color: #3b82f6 !important;
+        color: #1e40af !important;
+    }
+
+    .fc-event.event-checked-out {
+        background-color: #f3f4f6 !important; /* gray-100 */
+        border-color: #9ca3af !important;
+        color: #374151 !important;
+    }
+
+    .fc-event.event-cancelled {
+        background-color: #fee2e2 !important; /* red-100 */
+        border-color: #ef4444 !important;
+        color: #991b1b !important;
+        text-decoration: line-through;
+        opacity: 0.7;
+    }
+
+    .fc-event.event-no-show {
+        background-color: #581c87 !important; /* purple-900 */
+        border-color: #a855f7 !important;
+        color: #ffffff !important;
+    }
+
+    /* General Event Styling */
+    .fc-event {
+        border-radius: 4px;
+        padding: 2px 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .fc-event:hover {
+        opacity: 0.9;
+        transform: scale(1.02);
+    }
+</style>

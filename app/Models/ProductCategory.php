@@ -18,7 +18,6 @@ class ProductCategory extends Model
         'tenant_id',
         'hotel_id',
         'name',
-        'code',
         'description',
         'is_active',
     ];

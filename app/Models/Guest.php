@@ -2,21 +2,13 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Guest extends Model
 {
-    use HasFactory;
-
-    /**
-     * @var list<string>
-     */
     protected $fillable = [
         'tenant_id',
-        'hotel_id',
         'first_name',
         'last_name',
         'email',
@@ -29,23 +21,36 @@ class Guest extends Model
         'notes',
     ];
 
+    protected $appends = [
+        'full_name',
+    ];
+
     public function getFullNameAttribute(): string
     {
         return trim($this->first_name.' '.$this->last_name);
     }
 
-    public function hotel(): BelongsTo
+    /**
+     * @todo Add reservations relationship when Reservation model exists.
+     */
+    public function scopeForTenant(Builder $query, string $tenantId): Builder
     {
-        return $this->belongsTo(Hotel::class);
+        return $query->where('tenant_id', $tenantId);
     }
 
-    public function reservations(): HasMany
+    public function scopeSearch(Builder $query, ?string $term): Builder
     {
-        return $this->hasMany(Reservation::class);
-    }
+        if ($term === null || trim($term) === '') {
+            return $query;
+        }
 
-    public function folios(): HasMany
-    {
-        return $this->hasMany(Folio::class);
+        $term = trim($term);
+
+        return $query->where(function (Builder $q) use ($term): void {
+            $q->where('first_name', 'like', "%{$term}%")
+                ->orWhere('last_name', 'like', "%{$term}%")
+                ->orWhere('email', 'like', "%{$term}%")
+                ->orWhere('phone', 'like', "%{$term}%");
+        });
     }
 }

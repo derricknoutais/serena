@@ -12,7 +12,7 @@ class CreateActivityLogTable extends Migration
             $table->bigIncrements('id');
             $table->string('log_name')->nullable();
             $table->text('description');
-            $table->string('tenant_id')->nullable()->index();
+            $table->foreignUuid('tenant_id')->nullable()->index();
             $table->string('subject_type')->nullable()->index();
             $table->string('subject_id')->nullable()->index();
             $table->string('causer_type')->nullable()->index();

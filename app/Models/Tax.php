@@ -17,7 +17,6 @@ class Tax extends Model
         'tenant_id',
         'hotel_id',
         'name',
-        'code',
         'rate',
         'type',
         'is_city_tax',

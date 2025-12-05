@@ -14,7 +14,9 @@ use Inertia\Response;
 
 class FolioController extends Controller
 {
-    public function __construct(private readonly FolioPayloadService $folioPayloads) {}
+    public function __construct(private readonly FolioPayloadService $folioPayloads)
+    {
+    }
 
     public function show(Request $request, Folio $folio): Response|JsonResponse
     {
@@ -92,6 +94,25 @@ class FolioController extends Controller
             'notes' => ['nullable', 'string'],
         ]);
 
+        $paymentMethod = \App\Models\PaymentMethod::where('tenant_id', $folio->tenant_id)->findOrFail($data['payment_method_id']);
+        $cashSessionId = null;
+
+        if ($paymentMethod->type === 'cash') {
+            $activeSession = \App\Models\CashSession::query()
+                ->where('tenant_id', $folio->tenant_id)
+                ->where('hotel_id', $folio->hotel_id)
+                ->where('type', 'frontdesk')
+                ->where('status', 'open')
+                ->first();
+
+            if (!$activeSession) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'payment_method_id' => 'Aucune caisse réception ouverte. Veuillez ouvrir une session de caisse.',
+                ]);
+            }
+            $cashSessionId = $activeSession->id;
+        }
+
         $folio->addPayment([
             'amount' => $data['amount'],
             'currency' => $data['currency'] ?? $folio->currency,
@@ -100,9 +121,10 @@ class FolioController extends Controller
             'reference' => $data['reference'] ?? null,
             'notes' => $data['note'] ?? $data['notes'] ?? null,
             'created_by_user_id' => $request->user()->id,
+            'cash_session_id' => $cashSessionId,
         ]);
 
-        if (! $request->wantsJson()) {
+        if (!$request->wantsJson()) {
             return back()->with('success', 'Paiement enregistré.');
         }
 
@@ -120,7 +142,7 @@ class FolioController extends Controller
         $payment->delete();
         $folio->recalculateTotals();
 
-        if (! $request->wantsJson()) {
+        if (!$request->wantsJson()) {
             return back()->with('success', 'Paiement supprimé.');
         }
 

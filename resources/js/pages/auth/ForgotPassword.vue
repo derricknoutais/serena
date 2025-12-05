@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
+import PrimaryButton from '@/components/PrimaryButton.vue';
+import TextInput from '@/components/TextInput.vue';
 import TextLink from '@/components/TextLink.vue';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { login } from '@/routes';
@@ -46,10 +45,10 @@ const isInvalid = computed(() => localErrors.email !== '');
         <div class="space-y-6">
             <Form v-bind="email.form()" v-slot="{ errors, processing }">
                 <div class="grid gap-2">
-                    <Label for="email">Adresse e-mail</Label>
-                    <Input
+                    <TextInput
                         id="email"
                         v-model="emailValue"
+                        label="Adresse e-mail"
                         type="email"
                         name="email"
                         autocomplete="off"
@@ -60,14 +59,14 @@ const isInvalid = computed(() => localErrors.email !== '');
                 </div>
 
                 <div class="my-6 flex items-center justify-start">
-                    <Button
-                        class="w-full"
+                    <PrimaryButton
+                        class="w-full justify-center"
                         :disabled="processing || isInvalid"
                         data-test="email-password-reset-link-button"
                     >
                         <Spinner v-if="processing" />
                         Envoyer le lien de réinitialisation
-                    </Button>
+                    </PrimaryButton>
                 </div>
             </Form>
 

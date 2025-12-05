@@ -13,20 +13,15 @@ return new class extends Migration
     {
         Schema::create('taxes', function (Blueprint $table) {
             $table->id();
-            $table->string('tenant_id')->index();
+            $table->foreignUuid('tenant_id')->index();
             $table->foreignId('hotel_id')->constrained('hotels')->cascadeOnDelete();
             $table->string('name');
-            $table->string('code')->nullable();
             $table->decimal('rate', 5, 2);
             $table->string('type');
             $table->boolean('is_city_tax')->default(false);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 
-            $table->foreign('tenant_id')
-                ->references('id')
-                ->on('tenants')
-                ->cascadeOnDelete();
         });
     }
 

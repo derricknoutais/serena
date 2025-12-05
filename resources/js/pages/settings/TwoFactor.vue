@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import HeadingSmall from '@/components/HeadingSmall.vue';
+import PrimaryButton from '@/components/PrimaryButton.vue';
 import TwoFactorRecoveryCodes from '@/components/TwoFactorRecoveryCodes.vue';
 import TwoFactorSetupModal from '@/components/TwoFactorSetupModal.vue';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { useTwoFactorAuth } from '@/composables/useTwoFactorAuth';
 import AppLayout from '@/layouts/AppLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
@@ -25,7 +25,7 @@ withDefaults(defineProps<Props>(), {
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
-        title: 'Two-Factor Authentication',
+        title: 'Authentification à deux facteurs',
         href: show.url(),
     },
 ];
@@ -40,44 +40,46 @@ onUnmounted(() => {
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbs">
-        <Head title="Two-Factor Authentication" />
+        <Head title="Authentification à deux facteurs" />
         <SettingsLayout>
             <div class="space-y-6">
                 <HeadingSmall
-                    title="Two-Factor Authentication"
-                    description="Manage your two-factor authentication settings"
+                    title="Authentification à deux facteurs"
+                    description="Gérez vos paramètres d'authentification à deux facteurs"
                 />
 
                 <div
                     v-if="!twoFactorEnabled"
                     class="flex flex-col items-start justify-start space-y-4"
                 >
-                    <Badge variant="destructive">Disabled</Badge>
+                    <Badge variant="destructive">Désactivée</Badge>
 
-                    <p class="text-muted-foreground">
-                        When you enable two-factor authentication, you will be
-                        prompted for a secure pin during login. This pin can be
-                        retrieved from a TOTP-supported application on your
-                        phone.
+                    <p class="text-serena-text-muted">
+                        Une fois l’authentification à deux facteurs activée, vous serez invité à saisir un code sécurisé pendant la connexion, récupérable depuis une application compatible TOTP sur votre téléphone.
                     </p>
 
                     <div>
-                        <Button
+                        <PrimaryButton
                             v-if="hasSetupData"
+                            class="gap-2"
                             @click="showSetupModal = true"
                         >
-                            <ShieldCheck />Continue Setup
-                        </Button>
+                            <ShieldCheck class="h-4 w-4" />Continuer la configuration
+                        </PrimaryButton>
                         <Form
                             v-else
                             v-bind="enable.form()"
                             @success="showSetupModal = true"
                             #default="{ processing }"
                         >
-                            <Button type="submit" :disabled="processing">
-                                <ShieldCheck />Enable 2FA</Button
-                            ></Form
-                        >
+                            <PrimaryButton
+                                type="submit"
+                                class="gap-2"
+                                :disabled="processing"
+                            >
+                                <ShieldCheck class="h-4 w-4" />Activer la 2FA
+                            </PrimaryButton>
+                        </Form>
                     </div>
                 </div>
 
@@ -85,27 +87,25 @@ onUnmounted(() => {
                     v-else
                     class="flex flex-col items-start justify-start space-y-4"
                 >
-                    <Badge variant="default">Enabled</Badge>
+                    <Badge variant="default">Activée</Badge>
 
-                    <p class="text-muted-foreground">
-                        With two-factor authentication enabled, you will be
-                        prompted for a secure, random pin during login, which
-                        you can retrieve from the TOTP-supported application on
-                        your phone.
+                    <p class="text-serena-text-muted">
+                        Lorsque l’authentification à deux facteurs est activée, un code unique vous sera demandé à chaque connexion, disponible dans votre application d’authentification.
                     </p>
 
                     <TwoFactorRecoveryCodes />
 
                     <div class="relative inline">
                         <Form v-bind="disable.form()" #default="{ processing }">
-                            <Button
-                                variant="destructive"
+                            <PrimaryButton
+                                variant="danger"
+                                class="gap-2"
                                 type="submit"
                                 :disabled="processing"
                             >
-                                <ShieldBan />
-                                Disable 2FA
-                            </Button>
+                                <ShieldBan class="h-4 w-4" />
+                                Désactiver la 2FA
+                            </PrimaryButton>
                         </Form>
                     </div>
                 </div>

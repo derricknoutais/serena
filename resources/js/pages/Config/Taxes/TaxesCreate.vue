@@ -8,7 +8,7 @@
             <Link href="/ressources/taxes" class="text-sm text-indigo-600 hover:underline">Retour</Link>
         </div>
 
-        <Form @submit="handleSubmit" class="space-y-4">
+        <Form :key="formKey" :initial-values="form" @submit="handleSubmit" class="space-y-4">
             <div class="grid gap-4 md:grid-cols-2">
                 <Field name="name" rules="required" v-slot="{ field }">
                     <div>
@@ -52,13 +52,14 @@
                     <div>
                         <label class="text-sm font-medium text-gray-700">Type</label>
                         <Multiselect
-                            :model-value="field.value"
-                            @update:modelValue="field.onChange"
+                            :model-value="field.value ?? form.type"
+                            @update:modelValue="(val) => { field.onChange(val); form.type = val; }"
                             :options="typeOptions"
                             :close-on-select="true"
                             :allow-empty="false"
                             label="label"
                             track-by="value"
+                            :reduce="(option) => option.value"
                             placeholder="Sélectionner un type"
                             class="mt-1"
                         />
@@ -84,14 +85,10 @@
             </div>
 
             <div class="flex justify-end">
-                <button
-                    type="submit"
-                    class="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    :disabled="submitting"
-                >
+                <PrimaryButton type="submit" class="px-4 py-2 text-sm" :disabled="submitting">
                     <span v-if="submitting">Enregistrement…</span>
                     <span v-else>Enregistrer</span>
-                </button>
+                </PrimaryButton>
             </div>
         </Form>
     </ConfigLayout>
@@ -101,6 +98,7 @@
 import { Link, router } from '@inertiajs/vue3';
 import { ErrorMessage, Field, Form, configure, defineRule } from 'vee-validate';
 import ConfigLayout from '@/layouts/ConfigLayout.vue';
+import PrimaryButton from '@/components/PrimaryButton.vue';
 
 defineRule('required', (value) => {
     if (value === undefined || value === null || value === '') {
@@ -142,16 +140,30 @@ export default {
     data() {
         return {
             submitting: false,
+            formKey: 0,
             typeOptions: [
                 { label: 'Pourcentage', value: 'percentage' },
                 { label: 'Montant fixe', value: 'fixed' },
             ],
+            form: {
+                name: '',
+                code: '',
+                rate: '',
+                type: null,
+                is_city_tax: false,
+                is_active: true,
+            },
         };
     },
     methods: {
         handleSubmit(values) {
             this.submitting = true;
-            router.post('/ressources/taxes', values, {
+            const payload = {
+                ...values,
+                type: values.type ? String(values.type) : '',
+            };
+
+            router.post('/ressources/taxes', payload, {
                 onFinish: () => {
                     this.submitting = false;
                 },

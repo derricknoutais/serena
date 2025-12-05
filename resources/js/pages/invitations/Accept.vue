@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
+import PrimaryButton from '@/components/PrimaryButton.vue';
+import TextInput from '@/components/TextInput.vue';
 import TextLink from '@/components/TextLink.vue';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import AuthBase from '@/layouts/AuthLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 
@@ -39,10 +38,10 @@ const submit = () => {
 
         <form class="space-y-6" @submit.prevent="submit">
             <div class="space-y-2">
-                <Label for="name">Nom complet</Label>
-                <Input
+                <TextInput
                     id="name"
                     v-model="form.name"
+                    label="Nom complet"
                     type="text"
                     name="name"
                     required
@@ -53,25 +52,25 @@ const submit = () => {
             </div>
 
             <div class="space-y-2">
-                <Label for="email">Email</Label>
-                <Input
+                <TextInput
                     id="email"
                     v-model="form.email"
+                    label="Email"
                     type="email"
                     name="email"
                     required
                     autocomplete="email"
                     readonly
-                    class="bg-muted/50"
+                    class="bg-serena-primary-soft/40"
                 />
                 <InputError :message="form.errors.email" />
             </div>
 
             <div class="space-y-2">
-                <Label for="password">Mot de passe</Label>
-                <Input
+                <TextInput
                     id="password"
                     v-model="form.password"
+                    label="Mot de passe"
                     type="password"
                     name="password"
                     required
@@ -82,10 +81,10 @@ const submit = () => {
             </div>
 
             <div class="space-y-2">
-                <Label for="password_confirmation">Confirmez le mot de passe</Label>
-                <Input
+                <TextInput
                     id="password_confirmation"
                     v-model="form.password_confirmation"
+                    label="Confirmez le mot de passe"
                     type="password"
                     name="password_confirmation"
                     required
@@ -95,12 +94,12 @@ const submit = () => {
                 <InputError :message="form.errors.password_confirmation" />
             </div>
 
-            <Input type="hidden" name="token" :value="form.token" />
+            <input type="hidden" name="token" :value="form.token" />
 
             <div class="space-y-3">
-                <Button class="w-full" type="submit" :disabled="form.processing">
+                <PrimaryButton class="w-full" type="submit" :disabled="form.processing">
                     Accepter l'invitation
-                </Button>
+                </PrimaryButton>
                 <p class="text-center text-sm text-muted-foreground">
                     Vous avez deja un compte ?
                     <TextLink href="/login">Connectez-vous</TextLink>

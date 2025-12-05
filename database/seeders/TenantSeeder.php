@@ -28,6 +28,13 @@ class TenantSeeder extends Seeder
                 'plan' => 'standard',
                 'domain' => 'demo-hotel.serena.test',
             ],
+            [
+                'name' => 'Pacific Resort',
+                'slug' => 'pacific-resort',
+                'contact_email' => 'owner@pacific-resort.test',
+                'plan' => 'premium',
+                'domain' => 'pacific-resort.serena.test',
+            ],
         ];
 
         foreach ($tenants as $tenantData) {

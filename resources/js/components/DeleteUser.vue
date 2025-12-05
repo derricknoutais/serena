@@ -6,7 +6,9 @@ import { useTemplateRef } from 'vue';
 // Components
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import InputError from '@/components/InputError.vue';
-import { Button } from '@/components/ui/button';
+import PrimaryButton from '@/components/PrimaryButton.vue';
+import SecondaryButton from '@/components/SecondaryButton.vue';
+import TextInput from '@/components/TextInput.vue';
 import {
     Dialog,
     DialogClose,
@@ -17,8 +19,6 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 
 const passwordInput = useTemplateRef('passwordInput');
 </script>
@@ -26,23 +26,21 @@ const passwordInput = useTemplateRef('passwordInput');
 <template>
     <div class="space-y-6">
         <HeadingSmall
-            title="Delete account"
-            description="Delete your account and all of its resources"
+            title="Supprimer le compte"
+            description="Supprimez votre compte et toutes ses ressources"
         />
-        <div
-            class="space-y-4 rounded-lg border border-red-100 bg-red-50 p-4 dark:border-red-200/10 dark:bg-red-700/10"
-        >
-            <div class="relative space-y-0.5 text-red-600 dark:text-red-100">
-                <p class="font-medium">Warning</p>
+        <div class="space-y-4 rounded-lg border border-red-100 bg-red-50 p-4">
+            <div class="relative space-y-0.5 text-red-600">
+                <p class="font-medium">Attention</p>
                 <p class="text-sm">
-                    Please proceed with caution, this cannot be undone.
+                    Cette action est irréversible. Pensez à sauvegarder vos données avant de continuer.
                 </p>
             </div>
             <Dialog>
                 <DialogTrigger as-child>
-                    <Button variant="destructive" data-test="delete-user-button"
-                        >Delete account</Button
-                    >
+                    <PrimaryButton variant="danger" data-test="delete-user-button">
+                        Supprimer le compte
+                    </PrimaryButton>
                 </DialogTrigger>
                 <DialogContent>
                     <Form
@@ -56,37 +54,32 @@ const passwordInput = useTemplateRef('passwordInput');
                         v-slot="{ errors, processing, reset, clearErrors }"
                     >
                         <DialogHeader class="space-y-3">
-                            <DialogTitle
-                                >Are you sure you want to delete your
-                                account?</DialogTitle
-                            >
+                            <DialogTitle>
+                                Souhaitez-vous vraiment supprimer ce compte ?
+                            </DialogTitle>
                             <DialogDescription>
-                                Once your account is deleted, all of its
-                                resources and data will also be permanently
-                                deleted. Please enter your password to confirm
-                                you would like to permanently delete your
-                                account.
+                                Une fois supprimé, toutes les données associées seront définitivement perdues. Confirmez avec votre mot de passe pour continuer.
                             </DialogDescription>
                         </DialogHeader>
 
                         <div class="grid gap-2">
-                            <Label for="password" class="sr-only"
-                                >Password</Label
-                            >
-                            <Input
+                            <TextInput
                                 id="password"
                                 type="password"
                                 name="password"
                                 ref="passwordInput"
-                                placeholder="Password"
-                            />
+                                placeholder="Mot de passe"
+                            >
+                                <template #label>
+                                    <span class="sr-only">Mot de passe</span>
+                                </template>
+                            </TextInput>
                             <InputError :message="errors.password" />
                         </div>
 
                         <DialogFooter class="gap-2">
                             <DialogClose as-child>
-                                <Button
-                                    variant="secondary"
+                                <SecondaryButton
                                     @click="
                                         () => {
                                             clearErrors();
@@ -94,18 +87,18 @@ const passwordInput = useTemplateRef('passwordInput');
                                         }
                                     "
                                 >
-                                    Cancel
-                                </Button>
+                                    Annuler
+                                </SecondaryButton>
                             </DialogClose>
 
-                            <Button
+                            <PrimaryButton
                                 type="submit"
-                                variant="destructive"
+                                variant="danger"
                                 :disabled="processing"
                                 data-test="confirm-delete-user-button"
                             >
-                                Delete account
-                            </Button>
+                                Supprimer le compte
+                            </PrimaryButton>
                         </DialogFooter>
                     </Form>
                 </DialogContent>

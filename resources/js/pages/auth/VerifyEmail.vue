@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import PrimaryButton from '@/components/PrimaryButton.vue';
 import TextLink from '@/components/TextLink.vue';
-import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { logout } from '@/routes';
@@ -32,10 +32,10 @@ defineProps<{
             class="space-y-6 text-center"
             v-slot="{ processing }"
         >
-            <Button :disabled="processing" variant="secondary">
+            <PrimaryButton type="submit" class="justify-center" :disabled="processing">
                 <Spinner v-if="processing" />
                 Renvoyer l’e-mail de vérification
-            </Button>
+            </PrimaryButton>
 
             <TextLink
                 :href="logout()"

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import PrimaryButton from '@/components/PrimaryButton.vue';
+import TextInput from '@/components/TextInput.vue';
 import {
     PinInput,
     PinInputGroup,
@@ -89,9 +89,13 @@ const codeValue = computed<string>(() => code.value.join(''));
                         </div>
                         <InputError :message="errors.code" />
                     </div>
-                    <Button type="submit" class="w-full" :disabled="processing"
-                        >Continuer</Button
+                    <PrimaryButton
+                        type="submit"
+                        class="w-full justify-center"
+                        :disabled="processing"
                     >
+                        Continuer
+                    </PrimaryButton>
                     <div class="text-center text-sm text-muted-foreground">
                         <span>ou </span>
                         <button
@@ -112,17 +116,22 @@ const codeValue = computed<string>(() => code.value.join(''));
                     reset-on-error
                     #default="{ errors, processing, clearErrors }"
                 >
-                    <Input
+                    <TextInput
                         name="recovery_code"
+                        label="Code de récupération"
                         type="text"
                         placeholder="Code de récupération"
                         :autofocus="showRecoveryInput"
                         required
                     />
                     <InputError :message="errors.recovery_code" />
-                    <Button type="submit" class="w-full" :disabled="processing"
-                        >Continuer</Button
+                    <PrimaryButton
+                        type="submit"
+                        class="w-full justify-center"
+                        :disabled="processing"
                     >
+                        Continuer
+                    </PrimaryButton>
 
                     <div class="text-center text-sm text-muted-foreground">
                         <span>ou </span>

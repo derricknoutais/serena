@@ -1,13 +1,8 @@
 <script setup lang="ts">
 import AlertError from '@/components/AlertError.vue';
-import { Button } from '@/components/ui/button';
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from '@/components/ui/card';
+import Card from '@/components/Card.vue';
+import PrimaryButton from '@/components/PrimaryButton.vue';
+import SecondaryButton from '@/components/SecondaryButton.vue';
 import { useTwoFactorAuth } from '@/composables/useTwoFactorAuth';
 import { regenerateRecoveryCodes } from '@/routes/two-factor';
 import { Form } from '@inertiajs/vue3';
@@ -40,44 +35,42 @@ onMounted(async () => {
 
 <template>
     <Card class="w-full">
-        <CardHeader>
-            <CardTitle class="flex gap-3">
-                <LockKeyhole class="size-4" />2FA Recovery Codes
-            </CardTitle>
-            <CardDescription>
-                Recovery codes let you regain access if you lose your 2FA
-                device. Store them in a secure password manager.
-            </CardDescription>
-        </CardHeader>
-        <CardContent>
-            <div
-                class="flex flex-col gap-3 select-none sm:flex-row sm:items-center sm:justify-between"
-            >
-                <Button @click="toggleRecoveryCodesVisibility" class="w-fit">
-                    <component
-                        :is="isRecoveryCodesVisible ? EyeOff : Eye"
-                        class="size-4"
-                    />
-                    {{ isRecoveryCodesVisible ? 'Hide' : 'View' }} Recovery
-                    Codes
-                </Button>
-
-                <Form
-                    v-if="isRecoveryCodesVisible && recoveryCodesList.length"
-                    v-bind="regenerateRecoveryCodes.form()"
-                    method="post"
-                    :options="{ preserveScroll: true }"
-                    @success="fetchRecoveryCodes"
-                    #default="{ processing }"
+        <div class="space-y-1 border-b border-serena-border/60 pb-4">
+            <h3 class="flex items-center gap-2 text-lg font-semibold text-serena-text-main">
+                <LockKeyhole class="h-4 w-4" />Codes de récupération 2FA
+            </h3>
+            <p class="text-sm text-serena-text-muted">
+                Ces codes vous permettent de récupérer l'accès si vous perdez votre appareil 2FA. Conservez-les dans un gestionnaire de mots de passe sécurisé.
+            </p>
+        </div>
+        <div class="pt-4">
+                <div
+                    class="flex flex-col gap-3 select-none sm:flex-row sm:items-center sm:justify-between"
                 >
-                    <Button
-                        variant="secondary"
-                        type="submit"
-                        :disabled="processing"
+                    <PrimaryButton @click="toggleRecoveryCodesVisibility" type="button" class="w-fit gap-2">
+                        <component
+                            :is="isRecoveryCodesVisible ? EyeOff : Eye"
+                            class="h-4 w-4"
+                        />
+                        {{ isRecoveryCodesVisible ? 'Masquer' : 'Afficher' }} les codes de récupération
+                    </PrimaryButton>
+
+                    <Form
+                        v-if="isRecoveryCodesVisible && recoveryCodesList.length"
+                        v-bind="regenerateRecoveryCodes.form()"
+                        method="post"
+                        :options="{ preserveScroll: true }"
+                        @success="fetchRecoveryCodes"
+                        #default="{ processing }"
                     >
-                        <RefreshCw /> Regenerate Codes
-                    </Button>
-                </Form>
+                        <SecondaryButton
+                            type="submit"
+                            class="gap-2"
+                            :disabled="processing"
+                        >
+                            <RefreshCw class="h-4 w-4" /> Régénérer les codes
+                        </SecondaryButton>
+                    </Form>
             </div>
             <div
                 :class="[
@@ -93,13 +86,13 @@ onMounted(async () => {
                 <div v-else class="mt-3 space-y-3">
                     <div
                         ref="recoveryCodeSectionRef"
-                        class="grid gap-1 rounded-lg bg-muted p-4 font-mono text-sm"
+                        class="grid gap-1 rounded-lg bg-serena-primary-soft p-4 font-mono text-sm"
                     >
                         <div v-if="!recoveryCodesList.length" class="space-y-2">
                             <div
                                 v-for="n in 8"
                                 :key="n"
-                                class="h-4 animate-pulse rounded bg-muted-foreground/20"
+                                class="h-4 animate-pulse rounded bg-serena-primary/10"
                             ></div>
                         </div>
                         <div
@@ -110,14 +103,11 @@ onMounted(async () => {
                             {{ code }}
                         </div>
                     </div>
-                    <p class="text-xs text-muted-foreground select-none">
-                        Each recovery code can be used once to access your
-                        account and will be removed after use. If you need more,
-                        click
-                        <span class="font-bold">Regenerate Codes</span> above.
+                    <p class="text-xs text-serena-text-muted select-none">
+                        Chaque code est utilisable une seule fois pour accéder à votre compte. S'ils sont épuisés, cliquez sur <span class="font-bold">Régénérer les codes</span> ci-dessus.
                     </p>
                 </div>
             </div>
-        </CardContent>
+        </div>
     </Card>
 </template>

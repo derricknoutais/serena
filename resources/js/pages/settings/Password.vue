@@ -7,14 +7,13 @@ import { edit } from '@/routes/user-password';
 import { Form, Head } from '@inertiajs/vue3';
 
 import HeadingSmall from '@/components/HeadingSmall.vue';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import PrimaryButton from '@/components/PrimaryButton.vue';
+import TextInput from '@/components/TextInput.vue';
 import { type BreadcrumbItem } from '@/types';
 
 const breadcrumbItems: BreadcrumbItem[] = [
     {
-        title: 'Password settings',
+        title: 'Paramètres du mot de passe',
         href: edit().url,
     },
 ];
@@ -22,13 +21,13 @@ const breadcrumbItems: BreadcrumbItem[] = [
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbItems">
-        <Head title="Password settings" />
+        <Head title="Paramètres du mot de passe" />
 
         <SettingsLayout>
             <div class="space-y-6">
                 <HeadingSmall
-                    title="Update password"
-                    description="Ensure your account is using a long, random password to stay secure"
+                    title="Modifier le mot de passe"
+                    description="Assurez-vous que votre compte utilise un mot de passe long et aléatoire pour rester sécurisé"
                 />
 
                 <Form
@@ -46,51 +45,46 @@ const breadcrumbItems: BreadcrumbItem[] = [
                     v-slot="{ errors, processing, recentlySuccessful }"
                 >
                     <div class="grid gap-2">
-                        <Label for="current_password">Current password</Label>
-                        <Input
+                        <TextInput
                             id="current_password"
                             name="current_password"
+                            label="Mot de passe actuel"
                             type="password"
-                            class="mt-1 block w-full"
                             autocomplete="current-password"
-                            placeholder="Current password"
+                            placeholder="Mot de passe actuel"
                         />
                         <InputError :message="errors.current_password" />
                     </div>
 
                     <div class="grid gap-2">
-                        <Label for="password">New password</Label>
-                        <Input
+                        <TextInput
                             id="password"
                             name="password"
+                            label="Nouveau mot de passe"
                             type="password"
-                            class="mt-1 block w-full"
                             autocomplete="new-password"
-                            placeholder="New password"
+                            placeholder="Nouveau mot de passe"
                         />
                         <InputError :message="errors.password" />
                     </div>
 
                     <div class="grid gap-2">
-                        <Label for="password_confirmation"
-                            >Confirm password</Label
-                        >
-                        <Input
+                        <TextInput
                             id="password_confirmation"
                             name="password_confirmation"
+                            label="Confirmer le mot de passe"
                             type="password"
-                            class="mt-1 block w-full"
                             autocomplete="new-password"
-                            placeholder="Confirm password"
+                            placeholder="Confirmer le mot de passe"
                         />
                         <InputError :message="errors.password_confirmation" />
                     </div>
 
                     <div class="flex items-center gap-4">
-                        <Button
+                        <PrimaryButton
                             :disabled="processing"
                             data-test="update-password-button"
-                            >Save password</Button
+                            >Enregistrer le mot de passe</PrimaryButton
                         >
 
                         <Transition
@@ -101,9 +95,9 @@ const breadcrumbItems: BreadcrumbItem[] = [
                         >
                             <p
                                 v-show="recentlySuccessful"
-                                class="text-sm text-neutral-600"
+                                class="text-sm text-serena-text-muted"
                             >
-                                Saved.
+                                Enregistré.
                             </p>
                         </Transition>
                     </div>

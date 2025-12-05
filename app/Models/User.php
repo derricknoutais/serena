@@ -8,6 +8,7 @@ use Filament\Panel;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Lab404\Impersonate\Models\Impersonate;
@@ -54,6 +55,16 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
         return $this->belongsTo(Tenant::class, 'tenant_id');
     }
 
+    public function hotels(): BelongsToMany
+    {
+        return $this->belongsToMany(Hotel::class)->withTimestamps();
+    }
+
+    public function activeHotel(): BelongsTo
+    {
+        return $this->belongsTo(Hotel::class, 'active_hotel_id');
+    }
+
     public function canAccessPanel(Panel $panel): bool
     {
         if ($panel->getId() === 'superadmin') {
@@ -70,6 +81,13 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
 
     public function canBeImpersonated(): bool
     {
-        return ! $this->is_superadmin;
+        return !$this->is_superadmin;
+    }
+
+    public function activeCashSession(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(CashSession::class, 'opened_by_user_id')
+            ->where('status', 'open')
+            ->latestOfMany();
     }
 }

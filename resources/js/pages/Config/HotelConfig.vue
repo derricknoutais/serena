@@ -60,14 +60,10 @@
             </div>
 
             <div class="flex justify-end">
-                <button
-                    type="submit"
-                    class="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    :disabled="processing"
-                >
+                <PrimaryButton type="submit" class="px-4 py-2 text-sm" :disabled="processing">
                     <span v-if="processing">Enregistrement…</span>
                     <span v-else>Enregistrer</span>
-                </button>
+                </PrimaryButton>
             </div>
         </form>
     </ConfigLayout>
@@ -76,10 +72,11 @@
 <script>
 import { router } from '@inertiajs/vue3';
 import ConfigLayout from '@/layouts/ConfigLayout.vue';
+import PrimaryButton from '@/components/PrimaryButton.vue';
 
 export default {
     name: 'HotelConfigPage',
-    components: { ConfigLayout },
+    components: { ConfigLayout, PrimaryButton },
     props: {
         hotel: {
             type: Object,

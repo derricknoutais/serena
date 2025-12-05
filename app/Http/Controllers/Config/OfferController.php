@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers\Config;
 
+use App\Http\Controllers\Config\Concerns\ResolvesActiveHotel;
 use App\Http\Controllers\Controller;
 use App\Models\Hotel;
 use App\Models\Offer;
+use App\Models\OfferRoomTypePrice;
+use App\Models\RoomType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -12,22 +15,50 @@ use Inertia\Response;
 
 class OfferController extends Controller
 {
+    use ResolvesActiveHotel;
+
     public function index(Request $request): Response
     {
         $offers = Offer::query()
+            ->when($this->activeHotelId($request), fn ($q) => $q->where('hotel_id', $this->activeHotelId($request)))
             ->where('tenant_id', $request->user()->tenant_id)
             ->orderBy('name')
             ->paginate(15)
-            ->through(fn (Offer $offer) => [
-                'id' => $offer->id,
-                'name' => $offer->name,
-                'kind' => $offer->kind,
-                'billing_mode' => $offer->billing_mode,
-                'is_active' => $offer->is_active,
-            ]);
+            ->through(function (Offer $offer) use ($request) {
+                $prices = OfferRoomTypePrice::query()
+                    ->where('tenant_id', $request->user()->tenant_id)
+                    ->where('offer_id', $offer->id)
+                    ->get(['room_type_id', 'price']);
+
+                return [
+                    'id' => $offer->id,
+                    'name' => $offer->name,
+                    'kind' => $offer->kind,
+                    'billing_mode' => $offer->billing_mode,
+                    'fixed_duration_hours' => $offer->fixed_duration_hours,
+                    'check_in_from' => $offer->check_in_from,
+                    'check_out_until' => $offer->check_out_until,
+                    'valid_from' => $offer->valid_from,
+                    'valid_to' => $offer->valid_to,
+                    'valid_days_of_week' => $offer->valid_days_of_week,
+                    'description' => $offer->description,
+                    'is_active' => $offer->is_active,
+                    'prices' => $prices,
+                ];
+            });
+
+        $roomTypes = RoomType::query()
+            ->when($this->activeHotelId($request), fn ($q) => $q->where('hotel_id', $this->activeHotelId($request)))
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         return Inertia::render('Config/Offers/OffersIndex', [
             'offers' => $offers,
+            'kindOptions' => ['hourly', 'night', 'day', 'package'],
+            'billingModes' => ['fixed', 'per_night', 'per_hour'],
+            'dayOptions' => ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
+            'roomTypes' => $roomTypes,
         ]);
     }
 
@@ -40,19 +71,48 @@ class OfferController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string'],
-            'code' => ['required', 'string'],
-            'kind' => ['required', 'string'],
-            'billing_mode' => ['required', 'string'],
+            'kind' => ['required', 'string', 'in:hourly,night,day,package'],
+            'billing_mode' => ['required', 'string', 'in:fixed,per_night,per_hour'],
+            'fixed_duration_hours' => ['nullable', 'integer', 'min:1'],
+            'check_in_from' => ['nullable', 'date_format:H:i'],
+            'check_out_until' => ['nullable', 'date_format:H:i'],
+            'valid_days_of_week' => ['nullable', 'array'],
+            'valid_days_of_week.*' => ['string'],
+            'valid_from' => ['nullable', 'date'],
+            'valid_to' => ['nullable', 'date', 'after_or_equal:valid_from'],
+            'description' => ['nullable', 'string'],
             'is_active' => ['sometimes', 'boolean'],
+            'prices' => ['nullable', 'array'],
+            'prices.*.room_type_id' => ['required_with:prices', 'integer', 'exists:room_types,id'],
+            'prices.*.price' => ['required_with:prices', 'numeric', 'min:0'],
         ]);
 
-        $hotel = Hotel::query()->where('tenant_id', $request->user()->tenant_id)->firstOrFail();
+        $hotel = Hotel::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->when($this->activeHotelId($request), fn ($q) => $q->where('id', $this->activeHotelId($request)))
+            ->firstOrFail();
 
-        Offer::query()->create([
+        $offer = Offer::query()->create([
             ...$data,
             'tenant_id' => $request->user()->tenant_id,
             'hotel_id' => $hotel->id,
         ]);
+
+        foreach ($data['prices'] ?? [] as $price) {
+            OfferRoomTypePrice::query()->updateOrCreate(
+                [
+                    'tenant_id' => $offer->tenant_id,
+                    'hotel_id' => $offer->hotel_id,
+                    'offer_id' => $offer->id,
+                    'room_type_id' => $price['room_type_id'],
+                ],
+                [
+                    'currency' => $hotel->currency ?? 'XAF',
+                    'price' => $price['price'],
+                    'is_active' => true,
+                ],
+            );
+        }
 
         return redirect()->route('ressources.offers.index')->with('success', 'Offre créée.');
     }
@@ -60,6 +120,7 @@ class OfferController extends Controller
     public function edit(Request $request, int $id): Response
     {
         $offer = Offer::query()
+            ->where('hotel_id', $this->activeHotelId($request))
             ->where('tenant_id', $request->user()->tenant_id)
             ->findOrFail($id);
 
@@ -72,13 +133,21 @@ class OfferController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string'],
-            'code' => ['required', 'string'],
-            'kind' => ['required', 'string'],
-            'billing_mode' => ['required', 'string'],
+            'kind' => ['required', 'string', 'in:hourly,night,day,package'],
+            'billing_mode' => ['required', 'string', 'in:fixed,per_night,per_hour'],
+            'fixed_duration_hours' => ['nullable', 'integer', 'min:1'],
+            'check_in_from' => ['nullable', 'date_format:H:i'],
+            'check_out_until' => ['nullable', 'date_format:H:i'],
+            'valid_days_of_week' => ['nullable', 'array'],
+            'valid_days_of_week.*' => ['string'],
+            'valid_from' => ['nullable', 'date'],
+            'valid_to' => ['nullable', 'date', 'after_or_equal:valid_from'],
+            'description' => ['nullable', 'string'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
 
         $offer = Offer::query()
+            ->where('hotel_id', $this->activeHotelId($request))
             ->where('tenant_id', $request->user()->tenant_id)
             ->findOrFail($id);
 

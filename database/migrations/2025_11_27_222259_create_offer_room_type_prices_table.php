@@ -13,10 +13,11 @@ return new class extends Migration
     {
         Schema::create('offer_room_type_prices', function (Blueprint $table) {
             $table->id();
-            $table->string('tenant_id')->index();
+            $table->foreignUuid('tenant_id')->index();
             $table->foreignId('hotel_id')->constrained('hotels')->cascadeOnDelete();
             $table->foreignId('offer_id')->constrained('offers')->cascadeOnDelete();
             $table->foreignId('room_type_id')->constrained('room_types')->cascadeOnDelete();
+            $table->string('currency', 3);
             $table->decimal('price', 10, 2);
             $table->decimal('extra_adult_price', 10, 2)->nullable();
             $table->decimal('extra_child_price', 10, 2)->nullable();

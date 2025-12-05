@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import PrimaryButton from '@/components/PrimaryButton.vue';
+import TextInput from '@/components/TextInput.vue';
 import { Spinner } from '@/components/ui/spinner';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { update } from '@/routes/password';
@@ -46,28 +45,26 @@ const isInvalid = computed(() => Object.values(localErrors).some((message) => me
         >
             <div class="grid gap-6">
                 <div class="grid gap-2">
-                    <Label for="email">Email</Label>
-                    <Input
+                    <TextInput
                         id="email"
                         type="email"
                         name="email"
+                        label="Email"
                         autocomplete="email"
                         v-model="inputEmail"
-                        class="mt-1 block w-full"
                         readonly
                     />
                     <InputError :message="errors.email" class="mt-2" />
                 </div>
 
                 <div class="grid gap-2">
-                    <Label for="password">Nouveau mot de passe</Label>
-                    <Input
+                    <TextInput
                         id="password"
                         v-model="password"
+                        label="Nouveau mot de passe"
                         type="password"
                         name="password"
                         autocomplete="new-password"
-                        class="mt-1 block w-full"
                         autofocus
                         placeholder="Au moins 8 caractères"
                     />
@@ -75,30 +72,27 @@ const isInvalid = computed(() => Object.values(localErrors).some((message) => me
                 </div>
 
                 <div class="grid gap-2">
-                    <Label for="password_confirmation">
-                        Confirmer le mot de passe
-                    </Label>
-                    <Input
+                    <TextInput
                         id="password_confirmation"
                         v-model="passwordConfirmation"
+                        label="Confirmer le mot de passe"
                         type="password"
                         name="password_confirmation"
                         autocomplete="new-password"
-                        class="mt-1 block w-full"
                         placeholder="Répétez le mot de passe"
                     />
                     <InputError :message="errors.password_confirmation || localErrors.password_confirmation" />
                 </div>
 
-                <Button
+                <PrimaryButton
                     type="submit"
-                    class="mt-4 w-full"
+                    class="mt-4 w-full justify-center"
                     :disabled="processing || isInvalid"
                     data-test="reset-password-button"
                 >
                     <Spinner v-if="processing" />
                     Réinitialiser le mot de passe
-                </Button>
+                </PrimaryButton>
             </div>
         </Form>
     </AuthLayout>

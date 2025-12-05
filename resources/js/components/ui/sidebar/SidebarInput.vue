@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from 'vue'
 import { cn } from '@/lib/utils'
-import { Input } from '@/components/ui/input'
 
 const props = defineProps<{
   class?: HTMLAttributes['class']
@@ -9,14 +8,13 @@ const props = defineProps<{
 </script>
 
 <template>
-  <Input
+  <input
+    type="text"
     data-slot="sidebar-input"
     data-sidebar="input"
     :class="cn(
-      'bg-background h-8 w-full shadow-none',
+      'h-8 w-full rounded-lg border border-serena-border bg-white px-3 text-sm text-serena-text-main outline-none transition placeholder:text-serena-text-muted/70 focus:border-serena-primary focus:ring-2 focus:ring-serena-primary-soft',
       props.class,
     )"
-  >
-    <slot />
-  </Input>
+  />
 </template>

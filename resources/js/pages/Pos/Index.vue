@@ -10,6 +10,7 @@
                     </p>
                 </div>
                 <div class="flex rounded-full bg-white p-1 shadow-sm">
+                    <CashIndicator type="bar" class="mr-4" />
                     <button
                         v-for="tab in modes"
                         :key="tab.value"
@@ -241,10 +242,11 @@
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import AppLayout from '@/layouts/AppLayout.vue';
+import CashIndicator from '@/Components/CashIndicator.vue';
 
 export default {
     name: 'PosIndexPage',
-    components: { AppLayout },
+    components: { AppLayout, CashIndicator },
     props: {
         categories: {
             type: Array,

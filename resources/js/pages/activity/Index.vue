@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import Card from '@/components/Card.vue';
+import PrimaryButton from '@/components/PrimaryButton.vue';
+import SecondaryButton from '@/components/SecondaryButton.vue';
+import TextInput from '@/components/TextInput.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, router } from '@inertiajs/vue3';
 import { computed, reactive } from 'vue';
@@ -54,29 +54,29 @@ const hasFilters = computed(() => Boolean(filterState.event || filterState.user_
 
         <div class="space-y-6 px-4 pb-8">
             <Card>
-                <CardHeader>
-                    <CardTitle>Activités</CardTitle>
-                    <CardDescription>Historique des actions avec filtres</CardDescription>
-                </CardHeader>
-                <CardContent class="space-y-4">
+                <div class="space-y-1 border-b border-serena-border/60 pb-4">
+                    <h3 class="text-lg font-semibold text-serena-text-main">Activités</h3>
+                    <p class="text-sm text-serena-text-muted">Historique des actions avec filtres</p>
+                </div>
+                <div class="space-y-4 pt-4">
                     <div class="grid gap-4 md:grid-cols-3">
                         <div class="space-y-2">
-                            <Label for="event">Type d'action</Label>
+                            <label for="event" class="text-xs font-medium text-serena-text-muted">Type d'action</label>
                             <select
                                 id="event"
                                 v-model="filterState.event"
-                                class="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                                class="w-full rounded-lg border border-serena-border bg-white px-3 py-2 text-sm text-serena-text-main focus:border-serena-primary focus:ring-2 focus:ring-serena-primary-soft"
                             >
                                 <option value="">Toutes</option>
                                 <option v-for="event in events" :key="event" :value="event">{{ event }}</option>
                             </select>
                         </div>
                         <div class="space-y-2">
-                            <Label for="user">Utilisateur</Label>
+                            <label for="user" class="text-xs font-medium text-serena-text-muted">Utilisateur</label>
                             <select
                                 id="user"
                                 v-model="filterState.user_id"
-                                class="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                                class="w-full rounded-lg border border-serena-border bg-white px-3 py-2 text-sm text-serena-text-main focus:border-serena-primary focus:ring-2 focus:ring-serena-primary-soft"
                             >
                                 <option value="">Tous</option>
                                 <option
@@ -89,57 +89,57 @@ const hasFilters = computed(() => Boolean(filterState.event || filterState.user_
                             </select>
                         </div>
                         <div class="space-y-2">
-                            <Label for="search">Recherche</Label>
-                            <Input
+                            <TextInput
                                 id="search"
                                 v-model="filterState.search"
+                                label="Recherche"
                                 type="text"
                                 placeholder="Description, détails…"
                             />
                         </div>
                     </div>
                     <div class="flex items-center gap-2">
-                        <Button size="sm" @click="submitFilters">Filtrer</Button>
-                        <Button
-                            size="sm"
-                            variant="secondary"
+                        <PrimaryButton type="button" class="px-4 py-2 text-sm" @click="submitFilters">Filtrer</PrimaryButton>
+                        <SecondaryButton
                             v-if="hasFilters"
+                            type="button"
+                            class="px-4 py-2 text-sm"
                             @click="() => { filterState.event=''; filterState.user_id=''; filterState.search=''; submitFilters(); }"
                         >
                             Réinitialiser
-                        </Button>
+                        </SecondaryButton>
                     </div>
-                </CardContent>
+                </div>
             </Card>
 
             <Card>
-                <CardContent class="divide-y divide-border p-0">
+                <div class="divide-y divide-serena-border/60">
                     <div
                         v-for="activity in activities.data"
                         :key="activity.id"
                         class="grid gap-2 px-4 py-3 md:grid-cols-5 md:items-center"
                     >
                         <div class="md:col-span-2">
-                            <p class="font-medium">{{ activity.description }}</p>
-                            <p class="text-xs text-muted-foreground" v-if="activity.properties">
+                            <p class="font-medium text-serena-text-main">{{ activity.description }}</p>
+                            <p class="text-xs text-serena-text-muted" v-if="activity.properties">
                                 {{ activity.properties }}
                             </p>
                         </div>
-                        <div class="text-sm text-muted-foreground capitalize">
+                        <div class="text-sm capitalize text-serena-text-muted">
                             {{ activity.event || 'non défini' }}
                         </div>
-                        <div class="text-sm text-muted-foreground">
+                        <div class="text-sm text-serena-text-muted">
                             <div v-if="activity.causer">
                                 {{ activity.causer.name }}
-                                <span class="text-xs">({{ activity.causer.email }})</span>
+                                <span class="text-xs text-serena-text-muted/80">({{ activity.causer.email }})</span>
                             </div>
                             <div v-else class="text-xs">Système</div>
                         </div>
-                        <div class="text-sm text-muted-foreground">
+                        <div class="text-sm text-serena-text-muted">
                             {{ activity.created_at }}
                         </div>
                     </div>
-                </CardContent>
+                </div>
             </Card>
         </div>
     </AppLayout>

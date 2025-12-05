@@ -164,6 +164,13 @@ export default defineComponent({
                     >
                         Point de Vente
                     </Link>
+                    <Link
+                        v-if="maintenanceLinkVisible"
+                        href="/cash"
+                        class="rounded-full px-3 py-1 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
+                    >
+                        Caisse
+                    </Link>
 
                     <slot name="user-menu">
                         <HeaderUserMenu />

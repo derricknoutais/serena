@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import PrimaryButton from '@/components/PrimaryButton.vue';
+import TextInput from '@/components/TextInput.vue';
 import { Spinner } from '@/components/ui/spinner';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { store } from '@/routes/password/confirm';
@@ -35,13 +34,12 @@ const isInvalid = computed(() => localErrors.password !== '');
         >
             <div class="space-y-6">
                 <div class="grid gap-2">
-                    <Label htmlFor="password">Mot de passe</Label>
-                    <Input
+                    <TextInput
                         id="password"
                         v-model="passwordValue"
+                        label="Mot de passe"
                         type="password"
                         name="password"
-                        class="mt-1 block w-full"
                         required
                         autocomplete="current-password"
                         autofocus
@@ -51,14 +49,14 @@ const isInvalid = computed(() => localErrors.password !== '');
                 </div>
 
                 <div class="flex items-center">
-                    <Button
-                        class="w-full"
+                    <PrimaryButton
+                        class="w-full justify-center"
                         :disabled="processing || isInvalid"
                         data-test="confirm-password-button"
                     >
                         <Spinner v-if="processing" />
                         Confirmer
-                    </Button>
+                    </PrimaryButton>
                 </div>
             </div>
         </Form>

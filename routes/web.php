@@ -63,7 +63,7 @@ Route::middleware([
 
         if ($user !== null && $activeHotelId !== null) {
             $belongs = $user->hotels()->where('hotels.id', $activeHotelId)->exists();
-            if (! $belongs) {
+            if (!$belongs) {
                 $activeHotelId = null;
             }
         }
@@ -92,7 +92,7 @@ Route::middleware([
                 ->with(['roles'])
                 ->get()
                 ->map(
-                    fn ($user) => [
+                    fn($user) => [
                         'id' => $user->id,
                         'name' => $user->name,
                         'email' => $user->email,
@@ -100,7 +100,7 @@ Route::middleware([
                     ],
                 ),
             'roles' => \Spatie\Permission\Models\Role::query()->orderBy('name')->get()->map(
-                fn ($role) => [
+                fn($role) => [
                     'name' => $role->name,
                 ],
             ),
@@ -145,6 +145,16 @@ Route::middleware([
                 ->name('pos.sales.counter');
             Route::post('/pos/sales/room', [PosController::class, 'storeRoomSale'])
                 ->name('pos.sales.room');
+        });
+
+        // Cash Management
+        Route::group(['prefix' => 'cash', 'as' => 'cash.'], function () {
+            Route::get('/', [\App\Http\Controllers\CashSessionController::class, 'index'])->name('index');
+            Route::get('/status', [\App\Http\Controllers\CashSessionController::class, 'status'])->name('status');
+            Route::post('/', [\App\Http\Controllers\CashSessionController::class, 'store'])->name('store');
+            Route::post('{cashSession}/close', [\App\Http\Controllers\CashSessionController::class, 'close'])->name('close');
+            Route::post('{cashSession}/transaction', [\App\Http\Controllers\CashSessionController::class, 'transaction'])->name('transaction');
+            Route::post('{cashSession}/validate', [\App\Http\Controllers\CashSessionController::class, 'validateSession'])->name('validate');
         });
 
         Route::get('/housekeeping', [HousekeepingController::class, 'index'])
@@ -267,10 +277,10 @@ Route::middleware('web')->group(function () {
         $baseDomain = config('app.url_host', 'saas-template.test');
 
         $input = trim((string) $request->input('tenant'));
-        $host = parse_url(Str::startsWith($input, ['http://', 'https://']) ? $input : 'http://'.$input, PHP_URL_HOST) ?? $input;
+        $host = parse_url(Str::startsWith($input, ['http://', 'https://']) ? $input : 'http://' . $input, PHP_URL_HOST) ?? $input;
 
         $slug = Str::of($host)
-            ->replace('.'.$baseDomain, '')
+            ->replace('.' . $baseDomain, '')
             ->replace($baseDomain, '')
             ->trim('.')
             ->slug()
@@ -284,7 +294,7 @@ Route::middleware('web')->group(function () {
 
         $tenant = $tenantId ? Tenant::find($tenantId) : null;
 
-        if (! $tenant) {
+        if (!$tenant) {
             return back()->withErrors(['tenant' => 'We could not find that tenant.']);
         }
 
@@ -316,4 +326,4 @@ Route::middleware('web')->group(function () {
 |--------------------------------------------------------------------------
 */
 
-require __DIR__.'/settings.php';
+require __DIR__ . '/settings.php';

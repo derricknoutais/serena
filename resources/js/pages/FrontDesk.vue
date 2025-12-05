@@ -1,28 +1,38 @@
 <template>
     <AppLayout title="Frontdesk">
         <div class="space-y-6">
+            <div class="mb-4 flex w-full items-center justify-between rounded-lg bg-white p-3 shadow-sm border border-gray-100">
+                <div class="text-sm font-semibold text-gray-700">
+                    Caisse FrontDesk
+                </div>
+                <CashIndicator type="frontdesk" />
+            </div>
+
             <div class="flex flex-wrap items-center gap-2 rounded-xl bg-white p-2 shadow-sm">
                 <button
                     v-for="tab in tabs"
                     :key="tab.value"
                     type="button"
-                    class="rounded-lg px-4 py-2 text-sm font-semibold transition"
-                    :class="activeTab === tab.value ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
+                    class="rounded-lg px-4 py-2 text-sm font-semibold transition cursor-pointer"
+                    :class="activeTab === tab.value ? 'bg-serena-primary text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
                     @click="activeTab = tab.value"
                 >
                     {{ tab.label }}
                 </button>
             </div>
 
-            <ReservationsPlanner
-                v-if="activeTab === 'planning'"
-                v-bind="reservationsData"
-            />
-            <RoomBoard
-                v-else-if="activeTab === 'rooms'"
-                v-bind="roomBoardData"
-            />
-            <OperationsBoard v-else />
+            <div class="space-y-6">
+                <ReservationsPlanner
+                    v-if="activeTab === 'planning'"
+                    v-bind="reservationsData"
+                />
+                <RoomBoard
+                    v-else-if="activeTab === 'rooms'"
+                    v-bind="roomBoardData"
+                    :can-manage-housekeeping="roomBoardData.canManageHousekeeping"
+                />
+                <OperationsBoard v-else />
+            </div>
         </div>
     </AppLayout>
 </template>
@@ -32,6 +42,7 @@
     import ReservationsPlanner from '@/components/Frontdesk/ReservationsPlanner.vue';
     import RoomBoard from '@/components/Frontdesk/RoomBoard.vue';
     import OperationsBoard from '@/components/Frontdesk/OperationsBoard.vue';
+    import CashIndicator from '@/Components/CashIndicator.vue';
 
     export default {
         name: 'FrontDesk',
@@ -40,6 +51,7 @@
             ReservationsPlanner,
             RoomBoard,
             OperationsBoard,
+            CashIndicator,
         },
         props: {
             reservationsData: {

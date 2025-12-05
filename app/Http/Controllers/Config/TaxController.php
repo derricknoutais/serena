@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Config;
 
+use App\Http\Controllers\Config\Concerns\ResolvesActiveHotel;
 use App\Http\Controllers\Controller;
 use App\Models\Hotel;
 use App\Models\Tax;
@@ -12,9 +13,12 @@ use Inertia\Response;
 
 class TaxController extends Controller
 {
+    use ResolvesActiveHotel;
+
     public function index(Request $request): Response
     {
         $taxes = Tax::query()
+            ->when($this->activeHotelId($request), fn ($q) => $q->where('hotel_id', $this->activeHotelId($request)))
             ->where('tenant_id', $request->user()->tenant_id)
             ->orderBy('name')
             ->paginate(15)
@@ -40,14 +44,16 @@ class TaxController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string'],
-            'code' => ['nullable', 'string'],
             'rate' => ['required', 'numeric', 'min:0'],
             'type' => ['required', 'string'],
             'is_city_tax' => ['sometimes', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
 
-        $hotel = Hotel::query()->where('tenant_id', $request->user()->tenant_id)->firstOrFail();
+        $hotel = Hotel::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->when($this->activeHotelId($request), fn ($q) => $q->where('id', $this->activeHotelId($request)))
+            ->firstOrFail();
 
         Tax::query()->create([
             ...$data,
@@ -61,6 +67,7 @@ class TaxController extends Controller
     public function edit(Request $request, int $id): Response
     {
         $tax = Tax::query()
+            ->where('hotel_id', $this->activeHotelId($request))
             ->where('tenant_id', $request->user()->tenant_id)
             ->findOrFail($id);
 
@@ -73,7 +80,6 @@ class TaxController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string'],
-            'code' => ['nullable', 'string'],
             'rate' => ['required', 'numeric', 'min:0'],
             'type' => ['required', 'string'],
             'is_city_tax' => ['sometimes', 'boolean'],

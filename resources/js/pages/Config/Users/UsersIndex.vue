@@ -5,11 +5,10 @@
                 <h1 class="text-xl font-semibold">Utilisateurs</h1>
                 <p class="text-sm text-gray-500">Gestion des membres du tenant.</p>
             </div>
-            <Link
-                href="/ressources/users/create"
-                class="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
-            >
-                Nouvel utilisateur
+            <Link href="/ressources/users/create">
+                <PrimaryButton type="button" class="px-4 py-2 text-sm">
+                    Nouvel utilisateur
+                </PrimaryButton>
             </Link>
         </div>
 
@@ -29,8 +28,16 @@
                         <td class="px-4 py-3 text-sm text-gray-600">{{ user.email }}</td>
                         <td class="px-4 py-3 text-sm text-gray-600">{{ user.role || '—' }}</td>
                         <td class="px-4 py-3 text-sm text-gray-600 space-x-3">
-                            <Link :href="`/ressources/users/${user.id}/edit`" class="text-indigo-600 hover:underline">Éditer</Link>
-                            <button type="button" class="text-red-600 hover:underline" @click="destroy(user.id)">Supprimer</button>
+                            <Link :href="`/ressources/users/${user.id}/edit`" class="text-indigo-600 hover:underline">
+                                Éditer
+                            </Link>
+                            <button
+                                type="button"
+                                class="cursor-pointer text-sm font-medium text-red-600 hover:text-red-700"
+                                @click="destroy(user.id)"
+                            >
+                                Supprimer
+                            </button>
                         </td>
                     </tr>
                 </tbody>
@@ -45,10 +52,11 @@
 <script>
 import { Link, router } from '@inertiajs/vue3';
 import ConfigLayout from '@/layouts/ConfigLayout.vue';
+import PrimaryButton from '@/components/PrimaryButton.vue';
 
 export default {
     name: 'UsersIndex',
-    components: { ConfigLayout, Link },
+    components: { ConfigLayout, Link, PrimaryButton },
     props: {
         users: {
             type: Object,

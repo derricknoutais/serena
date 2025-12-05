@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
+import PrimaryButton from '@/components/PrimaryButton.vue';
+import TextInput from '@/components/TextInput.vue';
 import TextLink from '@/components/TextLink.vue';
-import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import AuthBase from '@/layouts/AuthLayout.vue';
 import { register } from '@/routes';
@@ -91,10 +90,10 @@ const isLoginInvalid = computed(() => Object.values(localErrors).some((message) 
         >
             <div class="grid gap-6">
                 <div class="grid gap-2">
-                    <Label for="email">Adresse e-mail</Label>
-                    <Input
+                    <TextInput
                         id="email"
                         v-model="emailValue"
+                        label="Adresse e-mail"
                         type="email"
                         name="email"
                         required
@@ -108,20 +107,10 @@ const isLoginInvalid = computed(() => Object.values(localErrors).some((message) 
                 </div>
 
                 <div class="grid gap-2">
-                    <div class="flex items-center justify-between">
-                        <Label for="password">Mot de passe</Label>
-                        <TextLink
-                            v-if="canResetPassword"
-                            :href="request()"
-                            class="text-sm"
-                            :tabindex="5"
-                        >
-                            Mot de passe oublié ?
-                        </TextLink>
-                    </div>
-                    <Input
+                    <TextInput
                         id="password"
                         v-model="passwordValue"
+                        label="Mot de passe"
                         type="password"
                         name="password"
                         required
@@ -129,27 +118,37 @@ const isLoginInvalid = computed(() => Object.values(localErrors).some((message) 
                         autocomplete="current-password"
                         placeholder="Mot de passe"
                         @focus="touched.password = true"
-                    />
+                    >
+                        <template #label-action v-if="canResetPassword">
+                            <TextLink
+                                :href="request()"
+                                class="text-xs"
+                                :tabindex="5"
+                            >
+                                Mot de passe oublié ?
+                            </TextLink>
+                        </template>
+                    </TextInput>
                     <InputError :message="errors.password || (touched.password ? localErrors.password : '')" />
                 </div>
 
                 <div class="flex items-center justify-between">
-                    <Label for="remember" class="flex items-center space-x-3">
+                    <label for="remember" class="flex items-center space-x-3 text-sm text-serena-text-muted">
                         <Checkbox id="remember" name="remember" :tabindex="3" />
                         <span>Se souvenir de moi</span>
-                    </Label>
+                    </label>
                 </div>
 
-                <Button
+                <PrimaryButton
                     type="submit"
-                    class="mt-4 w-full"
+                    class="mt-4 w-full justify-center"
                     :tabindex="4"
                     :disabled="processing || isLoginInvalid"
                     data-test="login-button"
                 >
                     <Spinner v-if="processing" />
                     Se connecter
-                </Button>
+                </PrimaryButton>
             </div>
 
             <div

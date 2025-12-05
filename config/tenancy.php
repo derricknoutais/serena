@@ -18,6 +18,7 @@ return [
      */
     'central_domains' => array_values(array_filter([
         env('CENTRAL_DOMAIN', config('app.url_host')),
+        'serena.test',
         '127.0.0.1',
         'localhost',
     ])),

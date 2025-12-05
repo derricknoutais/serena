@@ -5,7 +5,6 @@ namespace Database\Seeders;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
-//
 class DatabaseSeeder extends Seeder
 {
     /**
@@ -17,6 +16,15 @@ class DatabaseSeeder extends Seeder
             RoleSeeder::class,
             TenantSeeder::class,
             UserSeeder::class,
+            HotelUserSeeder::class,
+            PaymentMethodSeeder::class,
+            ProductCategorySeeder::class,
+            ProductSeeder::class,
+            RoomTypeSeeder::class,
+            RoomSeeder::class,
+            OfferSeeder::class,
+            OfferRoomTypePriceSeeder::class,
+            GuestSeeder::class,
             SuperAdminSeeder::class,
         ]);
     }

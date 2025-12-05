@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import Card from '@/components/Card.vue';
 import { Badge } from '@/components/ui/badge';
 import PlaceholderPattern from './PlaceholderPattern.vue';
 import { usePage } from '@inertiajs/vue3';
@@ -28,13 +28,13 @@ const roles = computed<Role[]>(() => page.props.auth.user.roles ?? []);
 
 <template>
     <Card class="flex flex-col">
-        <CardHeader>
-            <CardTitle>Rôles & permissions</CardTitle>
-            <CardDescription>
+        <div class="space-y-1 border-b border-serena-border/60 pb-3">
+            <h3 class="text-lg font-semibold text-serena-text-main">Rôles & permissions</h3>
+            <p class="text-sm text-serena-text-muted">
                 Consultez vos rôles et les permissions associées.
-            </CardDescription>
-        </CardHeader>
-        <CardContent class="flex-1 space-y-3">
+            </p>
+        </div>
+        <div class="flex-1 space-y-3 pt-4">
             <template v-if="roles.length">
                 <div v-for="role in roles" :key="role.name" class="space-y-2">
                     <div class="flex items-center justify-between gap-2">
@@ -61,6 +61,6 @@ const roles = computed<Role[]>(() => page.props.auth.user.roles ?? []);
                     </div>
                 </div>
             </template>
-        </CardContent>
+        </div>
     </Card>
 </template>

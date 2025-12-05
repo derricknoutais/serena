@@ -19,7 +19,6 @@ class Offer extends Model
         'tenant_id',
         'hotel_id',
         'name',
-        'code',
         'kind',
         'fixed_duration_hours',
         'billing_mode',
