@@ -42,13 +42,17 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'name' => config('app.name'),
             'quote' => ['message' => trim($message), 'author' => trim($author)],
+            'isTenantDomain' => function_exists('tenant') && tenant() !== null,
             'auth' => [
                 'user' => $request->user()
-                    ? ($request->user()->relationLoaded('roles') ? $request->user() : $request->user()->load('roles'))
+                    ? $request->user()->loadMissing(['roles', 'activeHotel', 'hotels:id,name'])
                     : null,
                 'can' => [
                     'activity.view' => $request->user()?->hasAnyRole(['owner', 'manager', 'superadmin']) ?? false,
                 ],
+                'hotels' => $request->user()?->hotels()->select('hotels.id', 'hotels.name')->get() ?? collect(),
+                'activeHotel' => $request->user()?->activeHotel,
+                'hotelNotice' => $request->session()->get('hotel_notice'),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];

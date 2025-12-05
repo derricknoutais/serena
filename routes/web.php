@@ -3,15 +3,31 @@
 use App\Http\Controllers\Activity\ActivityController;
 use App\Http\Controllers\Auth\CheckEmailAvailabilityController;
 use App\Http\Controllers\Auth\CheckTenantSlugController;
+use App\Http\Controllers\Config\ActiveHotelController;
 use App\Http\Controllers\Config\HotelConfigController;
 use App\Http\Controllers\Config\OfferController;
+use App\Http\Controllers\Config\ProductCategoryController;
 use App\Http\Controllers\Config\ProductController;
 use App\Http\Controllers\Config\RoomController;
 use App\Http\Controllers\Config\RoomTypeController;
 use App\Http\Controllers\Config\TaxController;
 use App\Http\Controllers\Config\UserConfigController;
+use App\Http\Controllers\FolioController;
+use App\Http\Controllers\Frontdesk\FrontdeskController;
+use App\Http\Controllers\Frontdesk\GuestController;
+use App\Http\Controllers\Frontdesk\ReservationController;
+use App\Http\Controllers\Frontdesk\ReservationStatusController;
+use App\Http\Controllers\Frontdesk\RoomBoardController;
+use App\Http\Controllers\Frontdesk\RoomHousekeepingController;
+use App\Http\Controllers\Frontdesk\WalkInReservationController;
+use App\Http\Controllers\HousekeepingController;
 use App\Http\Controllers\Invitations\AcceptInvitationController;
 use App\Http\Controllers\Invitations\InvitationController;
+use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\MaintenanceTicketController;
+use App\Http\Controllers\PosController;
+use App\Http\Controllers\ReservationFolioController;
+use App\Http\Controllers\ReservationStayController;
 use App\Http\Controllers\Users\UpdateUserRoleController;
 use App\Models\Tenant;
 use Illuminate\Http\Request;
@@ -24,6 +40,201 @@ use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
 
 /*
 |--------------------------------------------------------------------------
+| Tenant Routes
+|--------------------------------------------------------------------------
+|
+| These routes are accessible only from tenant domains (e.g. hotel1.app.test).
+| They are automatically scoped by stancl/tenancy.
+|
+*/
+Route::middleware([
+    'web',
+    InitializeTenancyByDomain::class,
+    PreventAccessFromCentralDomains::class,
+    'ensure_user_tenant_matches_domain',
+    'auth',
+])->group(function () {
+
+    Route::get('/dashboard', function () {
+        /** @var \App\Models\User $user */
+        $user = request()->user();
+
+        $activeHotelId = session('active_hotel_id', $user?->active_hotel_id);
+
+        if ($user !== null && $activeHotelId !== null) {
+            $belongs = $user->hotels()->where('hotels.id', $activeHotelId)->exists();
+            if (! $belongs) {
+                $activeHotelId = null;
+            }
+        }
+
+        if ($user !== null && $activeHotelId === null) {
+            $firstHotel = $user->hotels()->first();
+            if ($firstHotel) {
+                $activeHotelId = $firstHotel->id;
+                $user->forceFill(['active_hotel_id' => $activeHotelId])->save();
+                session()->put('active_hotel_id', $activeHotelId);
+            }
+        }
+
+        $hotel = null;
+
+        if ($activeHotelId !== null) {
+            $hotel = \App\Models\Hotel::query()
+                ->where('tenant_id', $user->tenant_id)
+                ->where('id', $activeHotelId)
+                ->first();
+        }
+
+        return Inertia::render('Dashboard', [
+            'users' => \App\Models\User::query()
+                ->orderBy('name')
+                ->with(['roles'])
+                ->get()
+                ->map(
+                    fn ($user) => [
+                        'id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'role' => $user->roles->first()?->name,
+                    ],
+                ),
+            'roles' => \Spatie\Permission\Models\Role::query()->orderBy('name')->get()->map(
+                fn ($role) => [
+                    'name' => $role->name,
+                ],
+            ),
+            'hotel' => $hotel?->only([
+                'id',
+                'name',
+                'code',
+                'currency',
+                'timezone',
+                'address',
+                'city',
+                'country',
+                'check_in_time',
+                'check_out_time',
+            ]),
+        ]);
+    })
+        ->middleware(['auth', 'verified'])
+        ->name('dashboard');
+
+    Route::post('/invitations', [InvitationController::class, 'store'])
+        ->middleware(['auth', 'verified'])
+        ->name('invitations.store');
+
+    Route::get('/invitations/accept', [AcceptInvitationController::class, 'show'])->name('invitations.accept.show');
+
+    Route::post('/invitations/accept', [AcceptInvitationController::class, 'store'])->name('invitations.accept.store');
+
+    Route::get('/resources/hotel', function () {
+        return redirect()->route('ressources.hotel.edit');
+    });
+
+    Route::patch('/users/{user}/role', UpdateUserRoleController::class)
+        ->middleware(['auth', 'verified', 'role:owner|manager|superadmin'])
+        ->name('users.role.update');
+
+    Route::middleware(['auth'])->group(function () {
+        Route::middleware('role:owner|manager|receptionist|accountant|superadmin')->group(function () {
+            Route::get('/pos', [PosController::class, 'index'])
+                ->name('pos.index');
+            Route::post('/pos/sales/counter', [PosController::class, 'storeCounterSale'])
+                ->name('pos.sales.counter');
+            Route::post('/pos/sales/room', [PosController::class, 'storeRoomSale'])
+                ->name('pos.sales.room');
+        });
+
+        Route::get('/housekeeping', [HousekeepingController::class, 'index'])
+            ->name('housekeeping.index');
+        Route::get('/hk/rooms/{room}', [HousekeepingController::class, 'show'])
+            ->name('housekeeping.rooms.show');
+        Route::patch('/hk/rooms/{room}/status', [HousekeepingController::class, 'updateStatus'])
+            ->name('housekeeping.rooms.update');
+
+        Route::get('/rooms/board', [RoomBoardController::class, 'index'])
+            ->name('rooms.board');
+
+        Route::patch('/frontdesk/rooms/{room}/hk-status', [RoomHousekeepingController::class, 'updateStatus'])
+            ->name('frontdesk.rooms.hk-status');
+        Route::get('/maintenance', [MaintenanceTicketController::class, 'index'])
+            ->middleware('role:owner|manager|maintenance|superadmin')
+            ->name('maintenance.index');
+        Route::post('/maintenance-tickets', [MaintenanceTicketController::class, 'store'])
+            ->name('maintenance-tickets.store');
+        Route::patch('/maintenance-tickets/{maintenanceTicket}', [MaintenanceTicketController::class, 'update'])
+            ->name('maintenance-tickets.update');
+
+        Route::get('/reservations/walk-in/create', [WalkInReservationController::class, 'create'])
+            ->name('reservations.walk_in.create');
+
+        Route::post('/reservations/walk-in', [WalkInReservationController::class, 'store'])
+            ->name('reservations.walk_in.store');
+
+        Route::get('/guests', [GuestController::class, 'index'])->name('guests.index');
+        Route::get('/guests/create', [GuestController::class, 'create'])->name('guests.create');
+        Route::post('/guests', [GuestController::class, 'store'])->name('guests.store');
+        Route::get('/guests/search', [GuestController::class, 'search'])->name('guests.search');
+        Route::get('/guests/{guest}', [GuestController::class, 'show'])->name('guests.show');
+        Route::get('/guests/{guest}/edit', [GuestController::class, 'edit'])->name('guests.edit');
+        Route::put('/guests/{guest}', [GuestController::class, 'update'])->name('guests.update');
+        Route::delete('/guests/{guest}', [GuestController::class, 'destroy'])->name('guests.destroy');
+
+        Route::get('/reservations', [ReservationController::class, 'index'])->name('reservations.index');
+        Route::get('/frontdesk/dashboard', [FrontdeskController::class, 'dashboard'])->name('frontdesk.dashboard');
+        Route::post('/reservations', [ReservationController::class, 'store'])->name('reservations.store');
+        Route::get('/reservations/{reservation}', [ReservationController::class, 'show'])->name('reservations.show');
+        Route::put('/reservations/{reservation}', [ReservationController::class, 'update'])->name('reservations.update');
+        Route::patch('/reservations/{reservation}/status', [ReservationStatusController::class, 'update'])->name('reservations.status');
+        Route::patch('/reservations/{reservation}/stay/dates', [ReservationStayController::class, 'updateDates'])
+            ->name('reservations.stay.dates');
+        Route::patch('/reservations/{reservation}/stay/room', [ReservationStayController::class, 'changeRoom'])
+            ->name('reservations.stay.room');
+
+        Route::prefix('frontdesk')->group(function () {
+            Route::get('/arrivals', [FrontdeskController::class, 'arrivals'])->name('frontdesk.arrivals');
+            Route::get('/departures', [FrontdeskController::class, 'departures'])->name('frontdesk.departures');
+            Route::get('/in-house', [FrontdeskController::class, 'inHouse'])->name('frontdesk.in_house');
+        });
+
+        Route::get('/reservations/{reservation}/folio', [ReservationFolioController::class, 'show'])
+            ->name('reservations.folio.show');
+
+        Route::get('/folios/{folio}', [FolioController::class, 'show'])->name('folios.show');
+        Route::post('/folios/{folio}/items', [FolioController::class, 'storeItem'])->name('folios.items.store');
+        Route::post('/folios/{folio}/payments', [FolioController::class, 'storePayment'])->name('folios.payments.store');
+        Route::delete('/folios/{folio}/payments/{payment}', [FolioController::class, 'destroyPayment'])->name('folios.payments.destroy');
+        Route::post('/folios/{folio}/invoices', [InvoiceController::class, 'storeFromFolio'])->name('folios.invoices.store');
+        Route::get('/invoices/{invoice}/print', [InvoiceController::class, 'pdf'])->name('invoices.pdf');
+    });
+
+    Route::get('/activity', [ActivityController::class, 'index'])
+        ->middleware(['auth', 'verified'])
+        ->name('activity.index');
+
+    Route::prefix('ressources')
+        ->name('ressources.')
+        ->middleware(['auth'])
+        ->group(function () {
+            Route::post('/active-hotel', ActiveHotelController::class)->name('active-hotel');
+            Route::get('/hotel', [HotelConfigController::class, 'edit'])->name('hotel.edit');
+            Route::put('/hotel', [HotelConfigController::class, 'update'])->name('hotel.update');
+
+            Route::resource('room-types', RoomTypeController::class);
+            Route::post('room-types/{roomType}/prices', [RoomTypeController::class, 'storePrice'])->name('room-types.prices.store');
+            Route::resource('rooms', RoomController::class)->except(['show']);
+            Route::resource('offers', OfferController::class)->except(['show']);
+            Route::resource('taxes', TaxController::class)->except(['show']);
+            Route::resource('products', ProductController::class)->except(['show']);
+            Route::resource('product-categories', ProductCategoryController::class)->only(['index', 'store', 'update', 'destroy']);
+            Route::resource('users', UserConfigController::class)->except(['show']);
+        });
+});
+
+/*
+|--------------------------------------------------------------------------
 | Central (Landlord) Routes
 |--------------------------------------------------------------------------
 |
@@ -31,13 +242,22 @@ use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
 | They do NOT have tenant context.
 |
 */
-
 Route::middleware('web')->group(function () {
     Route::get('/', function () {
-        return Inertia::render('Welcome', [
+        if (auth()->check()) {
+            return redirect()->route('dashboard');
+        }
+
+        return Inertia::render('Landing/Index', [
             'canRegister' => Features::enabled(Features::registration()),
         ]);
     })->name('home');
+
+    Route::get('/login/tenant', function () {
+        return Inertia::render('Auth/TenantLogin', [
+            'canRegister' => Features::enabled(Features::registration()),
+        ]);
+    })->name('tenant.login.form');
 
     Route::post('/login/tenant', function (Request $request) {
         $request->validate([
@@ -68,6 +288,14 @@ Route::middleware('web')->group(function () {
             return back()->withErrors(['tenant' => 'We could not find that tenant.']);
         }
 
+        $user = $request->user();
+
+        if ($user && (string) $user->tenant_id !== (string) $tenant->id) {
+            return back()
+                ->withErrors(['tenant' => 'You are not allowed to access this tenant.'])
+                ->setStatusCode(403);
+        }
+
         $target = sprintf('%s://%s/login', config('app.url_scheme', 'http'), $tenant->domains()->value('domain') ?? sprintf('%s.%s', $slug, $baseDomain));
 
         if ($request->header('X-Inertia')) {
@@ -80,73 +308,6 @@ Route::middleware('web')->group(function () {
     Route::get('/register/check-slug', CheckTenantSlugController::class)->name('register.slug.check');
 
     Route::get('/register/check-email', CheckEmailAvailabilityController::class)->name('register.email.check');
-});
-
-/*
-|--------------------------------------------------------------------------
-| Tenant Routes
-|--------------------------------------------------------------------------
-|
-| These routes are accessible only from tenant domains (e.g. hotel1.app.test).
-| They are automatically scoped by stancl/tenancy.
-|
-*/
-
-Route::middleware(['web', InitializeTenancyByDomain::class, PreventAccessFromCentralDomains::class])->group(function () {
-    Route::get('/dashboard', function () {
-        return Inertia::render('Dashboard', [
-            'users' => \App\Models\User::query()
-                ->orderBy('name')
-                ->with(['roles'])
-                ->get()
-                ->map(
-                    fn ($user) => [
-                        'id' => $user->id,
-                        'name' => $user->name,
-                        'email' => $user->email,
-                        'role' => $user->roles->first()?->name,
-                    ],
-                ),
-            'roles' => \Spatie\Permission\Models\Role::query()->orderBy('name')->get()->map(
-                fn ($role) => [
-                    'name' => $role->name,
-                ],
-            ),
-        ]);
-    })
-        ->middleware(['auth', 'verified'])
-        ->name('dashboard');
-
-    Route::post('/invitations', [InvitationController::class, 'store'])
-        ->middleware(['auth', 'verified'])
-        ->name('invitations.store');
-
-    Route::get('/invitations/accept', [AcceptInvitationController::class, 'show'])->name('invitations.accept.show');
-
-    Route::post('/invitations/accept', [AcceptInvitationController::class, 'store'])->name('invitations.accept.store');
-
-    Route::patch('/users/{user}/role', UpdateUserRoleController::class)
-        ->middleware(['auth', 'verified', 'role:owner|manager|superadmin'])
-        ->name('users.role.update');
-
-    Route::get('/activity', [ActivityController::class, 'index'])
-        ->middleware(['auth', 'verified'])
-        ->name('activity.index');
-
-    Route::prefix('ressources')
-        ->name('ressources.')
-        ->middleware(['auth'])
-        ->group(function () {
-            Route::get('/hotel', [HotelConfigController::class, 'edit'])->name('hotel.edit');
-            Route::put('/hotel', [HotelConfigController::class, 'update'])->name('hotel.update');
-
-            Route::resource('room-types', RoomTypeController::class)->except(['show']);
-            Route::resource('rooms', RoomController::class)->except(['show']);
-            Route::resource('offers', OfferController::class)->except(['show']);
-            Route::resource('taxes', TaxController::class)->except(['show']);
-            Route::resource('products', ProductController::class)->except(['show']);
-            Route::resource('users', UserConfigController::class)->except(['show']);
-        });
 });
 
 /*

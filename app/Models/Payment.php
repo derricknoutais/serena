@@ -5,23 +5,27 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Payment extends Model
 {
     use HasFactory;
+    use SoftDeletes;
 
     /**
      * @var list<string>
      */
     protected $fillable = [
         'tenant_id',
+        'hotel_id',
         'folio_id',
-        'date',
-        'method',
+        'payment_method_id',
         'amount',
         'currency',
+        'paid_at',
         'reference',
-        'received_by_user_id',
+        'notes',
+        'created_by_user_id',
     ];
 
     /**
@@ -30,7 +34,8 @@ class Payment extends Model
     protected function casts(): array
     {
         return [
-            'date' => 'date',
+            'amount' => 'float',
+            'paid_at' => 'datetime',
         ];
     }
 
@@ -39,8 +44,13 @@ class Payment extends Model
         return $this->belongsTo(Folio::class);
     }
 
-    public function receivedBy(): BelongsTo
+    public function paymentMethod(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'received_by_user_id');
+        return $this->belongsTo(PaymentMethod::class);
+    }
+
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by_user_id');
     }
 }
