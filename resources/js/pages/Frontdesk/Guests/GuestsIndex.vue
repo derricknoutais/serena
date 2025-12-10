@@ -5,13 +5,11 @@
                 <h1 class="text-xl font-semibold">Clients</h1>
                 <p class="text-sm text-gray-500">Base client commune au tenant.</p>
             </div>
-            <button
-                type="button"
-                class="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+            <PrimaryButton
                 @click="openCreateModal"
             >
                 Nouveau client
-            </button>
+            </PrimaryButton>
         </div>
 
         <div class="mb-4 flex gap-3">
@@ -47,8 +45,8 @@
                         <td class="px-4 py-3 text-sm text-gray-600">{{ guest.email || '—' }}</td>
                         <td class="px-4 py-3 text-sm text-gray-600">{{ guest.phone || '—' }}</td>
                         <td class="px-4 py-3 text-sm text-gray-600 space-x-3">
-                            <button class="text-indigo-600 hover:underline" @click="openEditModal(guest)">Éditer</button>
-                            <button class="text-red-600 hover:underline" @click="destroy(guest.id)">Supprimer</button>
+                            <button class="text-indigo-600 hover:underline cursor-pointer" @click="openEditModal(guest)">Éditer</button>
+                            <button class="text-red-600 hover:underline cursor-pointer" @click="destroy(guest.id)">Supprimer</button>
                         </td>
                     </tr>
                 </tbody>
@@ -69,7 +67,8 @@
                         <h2 class="text-lg font-semibold">{{ isEditing ? 'Modifier le client' : 'Nouveau client' }}</h2>
                         <p class="text-sm text-gray-500">Renseignez les informations principales.</p>
                     </div>
-                    <button type="button" class="text-sm text-gray-500 hover:text-gray-700" @click="closeModal">Fermer</button>
+                    
+                    <button type="button" class=" text-sm text-gray-500 hover:text-gray-700 cursor-pointer " @click="closeModal">Fermer</button>
                 </div>
 
                 <Form :key="formKey" :initial-values="form" @submit="handleSubmit" class="space-y-4">
@@ -216,15 +215,15 @@
                     </div>
 
                     <div class="flex items-center justify-end gap-3">
-                        <button type="button" class="text-sm text-gray-600 hover:text-gray-800" @click="closeModal">Annuler</button>
-                        <button
+                        <button type="button" class="text-sm text-gray-600 hover:text-gray-800 cursor-pointer" @click="closeModal">Annuler</button>
+                        <PrimaryButton
                             type="submit"
                             class="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
                             :disabled="submitting"
                         >
                             <span v-if="submitting">Enregistrement…</span>
                             <span v-else>{{ isEditing ? 'Mettre à jour' : 'Enregistrer' }}</span>
-                        </button>
+                        </PrimaryButton>
                     </div>
                 </Form>
             </div>
@@ -237,10 +236,11 @@ import Swal from 'sweetalert2';
 import { router } from '@inertiajs/vue3';
 import { ErrorMessage, Field, Form, configure, defineRule } from 'vee-validate';
 import ConfigLayout from '@/layouts/ConfigLayout.vue';
+import PrimaryButton from '@/components/PrimaryButton.vue';
 
 export default {
     name: 'GuestsIndex',
-    components: { ConfigLayout, Form, Field, ErrorMessage },
+    components: { ConfigLayout, Form, Field, ErrorMessage, PrimaryButton },
     props: {
         guests: {
             type: Object,

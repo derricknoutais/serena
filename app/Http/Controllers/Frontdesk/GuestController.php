@@ -38,7 +38,7 @@ class GuestController extends Controller
         return Inertia::render('Frontdesk/Guests/Create');
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request): RedirectResponse|JsonResponse
     {
         $tenantId = $request->user()->tenant_id;
 
@@ -57,7 +57,22 @@ class GuestController extends Controller
 
         $data['tenant_id'] = $tenantId;
 
-        Guest::query()->create($data);
+        /** @var Guest $guest */
+        $guest = Guest::query()->create($data);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'guest' => [
+                    'id' => $guest->id,
+                    'first_name' => $guest->first_name,
+                    'last_name' => $guest->last_name,
+                    'email' => $guest->email,
+                    'phone' => $guest->phone,
+                    'full_name' => $guest->full_name ?? trim(($guest->last_name ?? '').' '.($guest->first_name ?? '')),
+                    'name' => $guest->full_name ?? trim(($guest->last_name ?? '').' '.($guest->first_name ?? '')),
+                ],
+            ]);
+        }
 
         return redirect()
             ->route('guests.index')

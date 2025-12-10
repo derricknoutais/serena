@@ -152,7 +152,7 @@ class MaintenanceTicketController extends Controller
         ]);
 
         if ($room->status === Room::STATUS_AVAILABLE) {
-            $this->roomStateMachine->markOutOfOrder($room);
+            $this->roomStateMachine->markOutOfService($room);
         }
 
         return response()->json([
@@ -204,7 +204,7 @@ class MaintenanceTicketController extends Controller
                 }
             } elseif (in_array($data['status'], [MaintenanceTicket::STATUS_OPEN, MaintenanceTicket::STATUS_IN_PROGRESS], true)) {
                 if ($room->status === Room::STATUS_AVAILABLE) {
-                    $this->roomStateMachine->markOutOfOrder($room);
+                    $this->roomStateMachine->markOutOfService($room);
                 }
             }
         }

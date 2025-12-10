@@ -1699,20 +1699,15 @@
             sendStatusRequest(action, reservationId, payload) {
                 this.statusSubmitting = true;
 
-                const endpointMap = {
-                    confirm: 'confirm',
-                    check_in: 'check-in',
-                    check_out: 'check-out',
-                    cancel: 'cancel',
-                    no_show: 'no-show',
+                const url = `/reservations/${reservationId}/status`;
+                const data = {
+                    action,
+                    ...(payload || {}),
                 };
-
-                const slug = endpointMap[action] || action;
-                const url = `/reservations/${reservationId}/${slug}`;
 
                 router.patch(
                     url,
-                    payload || {},
+                    data,
                     {
                         preserveScroll: true,
                         onSuccess: () => {
@@ -1947,11 +1942,12 @@
                 }
 
                 this.submitting = true;
-                const payload = {
-                    ...this.form,
-                };
 
                 if (this.editingId) {
+                    const payload = {
+                        ...this.form,
+                    };
+
                     router.put(`/reservations/${this.editingId}`, payload, {
                         preserveScroll: true,
                         onSuccess: () => {
@@ -1967,20 +1963,111 @@
                         },
                     });
                 } else {
-                    router.post('/reservations', payload, {
-                        preserveScroll: true,
-                        onSuccess: () => {
-                            this.refreshReservationsData();
+                    const offerId = this.form.offer_id || this.selectedOffer?.id;
+                    const roomId = this.form.room_id || this.selectedRoom?.id;
+                    const guestId = this.form.guest_id || this.selectedGuest?.id;
+
+                    if (!offerId || !roomId || !guestId) {
+                        this.submitting = false;
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Erreur',
+                            text: 'Veuillez sélectionner un client, une chambre et une offre.',
+                        });
+
+                        return;
+                    }
+
+                    const startAt = this.form.check_in_date;
+                    const endAt = this.form.check_out_date;
+
+                    axios
+                        .post(
+                            '/frontdesk/reservations/from-offer',
+                            {
+                                offer_id: offerId,
+                                room_id: roomId,
+                                guest_id: guestId,
+                                start_at: startAt,
+                                end_at: endAt,
+                                status: this.form.status,
+                                code: this.form.code,
+                                notes: this.form.notes ?? null,
+                            },
+                            {
+                                headers: {
+                                    Accept: 'application/json',
+                                },
+                            },
+                        )
+                        .then((response) => {
+                            const reservation = response.data?.reservation;
+
+                            if (!reservation || !reservation.id) {
+                                return;
+                            }
+
+                            const event = {
+                                id: reservation.id,
+                                title: this.form.code,
+                                allDay: true,
+                                start: reservation.check_in_date,
+                                end: this.addOneDay(reservation.check_out_date),
+                                status: reservation.status,
+                                code: this.form.code,
+                                guest_id: guestId,
+                                room_id: roomId,
+                                room_type_id: this.form.room_type_id,
+                                offer_id: offerId,
+                                currency: this.form.currency,
+                                unit_price: this.form.unit_price,
+                                base_amount: this.form.base_amount,
+                                tax_amount: this.form.tax_amount,
+                                total_amount: this.form.total_amount,
+                                adults: this.form.adults,
+                                children: this.form.children,
+                                notes: this.form.notes,
+                                source: this.form.source,
+                                expected_arrival_time: this.form.expected_arrival_time,
+                                check_in_date: this.form.check_in_date,
+                                check_out_date: this.form.check_out_date,
+                            };
+
+                            this.eventsLocal = [...this.eventsLocal, event];
+                            this.calendarOptions = {
+                                ...this.calendarOptions,
+                                events: this.eventsLocal,
+                            };
+
                             this.closeModal();
                             this.notifyBookingSuccess('Réservation enregistrée avec succès.');
-                        },
-                        onError: (errors) => {
-                            this.handleAvailabilityErrors(errors);
-                        },
-                        onFinish: () => {
+                        })
+                        .catch((error) => {
+                            const errors = error.response?.data?.errors || null;
+
+                            if (errors) {
+                                this.handleAvailabilityErrors(errors);
+
+                                const offerError = errors.offer_id && (Array.isArray(errors.offer_id) ? errors.offer_id[0] : errors.offer_id);
+
+                                if (offerError) {
+                                    Swal.fire({
+                                        icon: 'error',
+                                        title: 'Offre invalide',
+                                        text: offerError,
+                                    });
+                                }
+                            } else {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Erreur',
+                                    text: error.response?.data?.message ?? 'Impossible de créer la réservation.',
+                                });
+                            }
+                        })
+                        .finally(() => {
                             this.submitting = false;
-                        },
-                    });
+                        });
                 }
             },
             formatDate(dateObj) {

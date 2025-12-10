@@ -61,21 +61,6 @@
                             </div>
                         </Field>
 
-                        <Field name="code" rules="required" v-slot="{ field, meta }">
-                            <div>
-                                <label class="text-sm font-medium text-gray-700">
-                                    Code <span class="text-red-600">*</span>
-                                </label>
-                                <input
-                                    v-bind="field"
-                                    type="text"
-                                    class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                                />
-                                <ErrorMessage name="code" class="mt-1 text-xs text-red-600" />
-                                <p v-if="!meta.valid && meta.touched" class="mt-1 text-xs text-red-600">Champ requis.</p>
-                            </div>
-                        </Field>
-
                         <Field name="currency" rules="required" v-slot="{ field, meta }">
                             <div>
                                 <label class="text-sm font-medium text-gray-700">
@@ -88,22 +73,6 @@
                                     class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm uppercase focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                                 />
                                 <ErrorMessage name="currency" class="mt-1 text-xs text-red-600" />
-                                <p v-if="!meta.valid && meta.touched" class="mt-1 text-xs text-red-600">Champ requis.</p>
-                            </div>
-                        </Field>
-
-                        <Field name="timezone" rules="required" v-slot="{ field, meta }">
-                            <div>
-                                <label class="text-sm font-medium text-gray-700">
-                                    Fuseau horaire <span class="text-red-600">*</span>
-                                </label>
-                                <input
-                                    v-bind="field"
-                                    type="text"
-                                    placeholder="ex: Africa/Libreville"
-                                    class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                                />
-                                <ErrorMessage name="timezone" class="mt-1 text-xs text-red-600" />
                                 <p v-if="!meta.valid && meta.touched" class="mt-1 text-xs text-red-600">Champ requis.</p>
                             </div>
                         </Field>
@@ -133,6 +102,22 @@
                                     class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                                 />
                                 <ErrorMessage name="check_out_time" class="mt-1 text-xs text-red-600" />
+                            </div>
+                        </Field>
+
+                        <Field name="timezone" v-slot="{ field, meta }">
+                            <div class="md:col-span-2">
+                                <label class="text-sm font-medium text-gray-700">
+                                    Fuseau horaire
+                                </label>
+                                <input
+                                    v-bind="field"
+                                    type="text"
+                                    placeholder="ex: Africa/Libreville"
+                                    class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                />
+                                <ErrorMessage name="timezone" class="mt-1 text-xs text-red-600" />
+                                <p v-if="!meta.valid && meta.touched" class="mt-1 text-xs text-red-600">Champ requis.</p>
                             </div>
                         </Field>
 
@@ -198,6 +183,7 @@ import { ErrorMessage, Field, Form, configure, defineRule } from 'vee-validate';
 import ConfigLayout from '@/layouts/ConfigLayout.vue';
 import PrimaryButton from '@/components/PrimaryButton.vue';
 import SecondaryButton from '@/components/SecondaryButton.vue';
+import Swal from 'sweetalert2'
 
 export default {
     name: 'HotelIndex',
@@ -215,7 +201,6 @@ export default {
             formKey: 0,
             form: {
                 name: this.hotel?.name || '',
-                code: this.hotel?.code || '',
                 currency: this.hotel?.currency || 'XAF',
                 timezone: this.hotel?.timezone || '',
                 check_in_time: this.hotel?.check_in_time || '14:00',
@@ -252,7 +237,6 @@ export default {
             if (!this.hasHotel) {
                 this.form = {
                     name: '',
-                    code: '',
                     currency: 'XAF',
                     timezone: '',
                     check_in_time: '14:00',
@@ -276,7 +260,20 @@ export default {
                 {
                     preserveScroll: true,
                     onSuccess: () => {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Succès',
+                            text: 'Votre hôtel a été enregistré',
+                            timer : 1500
+                        })
                         this.closeModal();
+                    },
+                    onError: (error) => {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Erreur',
+                        });
+                        console.log(error)
                     },
                     onFinish: () => {
                         this.submitting = false;

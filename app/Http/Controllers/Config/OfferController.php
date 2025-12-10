@@ -77,7 +77,7 @@ class OfferController extends Controller
             'check_in_from' => ['nullable', 'date_format:H:i'],
             'check_out_until' => ['nullable', 'date_format:H:i'],
             'valid_days_of_week' => ['nullable', 'array'],
-            'valid_days_of_week.*' => ['string'],
+            'valid_days_of_week.*' => ['integer', 'between:1,7'],
             'valid_from' => ['nullable', 'date'],
             'valid_to' => ['nullable', 'date', 'after_or_equal:valid_from'],
             'description' => ['nullable', 'string'],
@@ -139,11 +139,14 @@ class OfferController extends Controller
             'check_in_from' => ['nullable', 'date_format:H:i'],
             'check_out_until' => ['nullable', 'date_format:H:i'],
             'valid_days_of_week' => ['nullable', 'array'],
-            'valid_days_of_week.*' => ['string'],
+            'valid_days_of_week.*' => ['integer', 'between:1,7'],
             'valid_from' => ['nullable', 'date'],
             'valid_to' => ['nullable', 'date', 'after_or_equal:valid_from'],
             'description' => ['nullable', 'string'],
             'is_active' => ['sometimes', 'boolean'],
+            'prices' => ['nullable', 'array'],
+            'prices.*.room_type_id' => ['required_with:prices', 'integer', 'exists:room_types,id'],
+            'prices.*.price' => ['required_with:prices', 'numeric', 'min:0'],
         ]);
 
         $offer = Offer::query()
@@ -152,6 +155,29 @@ class OfferController extends Controller
             ->findOrFail($id);
 
         $offer->update($data);
+
+        if (! empty($data['prices'])) {
+            $hotel = Hotel::query()
+                ->where('tenant_id', $request->user()->tenant_id)
+                ->when($this->activeHotelId($request), fn ($q) => $q->where('id', $this->activeHotelId($request)))
+                ->firstOrFail();
+
+            foreach ($data['prices'] as $price) {
+                OfferRoomTypePrice::query()->updateOrCreate(
+                    [
+                        'tenant_id' => $offer->tenant_id,
+                        'hotel_id' => $offer->hotel_id,
+                        'offer_id' => $offer->id,
+                        'room_type_id' => $price['room_type_id'],
+                    ],
+                    [
+                        'currency' => $hotel->currency ?? 'XAF',
+                        'price' => $price['price'],
+                        'is_active' => true,
+                    ],
+                );
+            }
+        }
 
         return redirect()->route('ressources.offers.index')->with('success', 'Offre mise à jour.');
     }

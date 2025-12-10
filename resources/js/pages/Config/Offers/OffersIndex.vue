@@ -372,7 +372,20 @@ export default {
             return this.billingModes.map((k) => ({ label: k, value: k }));
         },
         dayOptionsNormalized() {
-            return this.dayOptions.map((k) => ({ label: k, value: k }));
+            const mapDayToNumber = {
+                mon: 1,
+                tue: 2,
+                wed: 3,
+                thu: 4,
+                fri: 5,
+                sat: 6,
+                sun: 7,
+            };
+
+            return this.dayOptions.map((k) => ({
+                label: k,
+                value: mapDayToNumber[k] ?? k,
+            }));
         },
         errors() {
             return this.$page.props.errors || {};
@@ -401,8 +414,12 @@ export default {
                 valid_to: offer.valid_to || '',
                 valid_days_of_week: Array.isArray(offer.valid_days_of_week)
                     ? offer.valid_days_of_week
-                        .map((d) => this.dayOptionsNormalized.find((opt) => opt.value === d) ?? null)
-                        .filter(Boolean)
+                        .map((d) => {
+                            const match = this.dayOptionsNormalized.find((opt) => opt.value === d);
+
+                            return match ?? null;
+                        })
+                        .filter((opt) => opt !== null)
                     : [],
                 is_active: !!offer.is_active,
             };
@@ -461,14 +478,12 @@ export default {
                     ? values.valid_days_of_week.map((d) => d?.value ?? d)
                     : [],
                 is_active: !!values.is_active,
-                prices: this.isEditing
-                    ? undefined
-                    : this.roomTypePrices
-                        .filter((p) => p.price !== '' && !Number.isNaN(Number(p.price)))
-                        .map((p) => ({
-                            room_type_id: p.room_type_id,
-                            price: Number(p.price),
-                        })),
+                prices: this.roomTypePrices
+                    .filter((p) => p.price !== '' && !Number.isNaN(Number(p.price)))
+                    .map((p) => ({
+                        room_type_id: p.room_type_id,
+                        price: Number(p.price),
+                    })),
             };
             const url = this.isEditing ? `/ressources/offers/${this.editId}` : '/ressources/offers';
 

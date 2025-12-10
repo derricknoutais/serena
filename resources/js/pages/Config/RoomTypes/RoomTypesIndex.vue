@@ -263,7 +263,14 @@ export default {
                 router.put(url, values, {
                     preserveScroll: true,
                     onSuccess: () => {
+                        Swal.fire({
+                            icon : 'success',
+                            title : 'Succès',
+                            text : 'Votre Type de Chambre a été mis à jour',
+                            timer : 1500
+                        })
                         this.closeModal();
+
                     },
                     onError: () => {
                         this.submitting = false;
@@ -276,6 +283,12 @@ export default {
                 router.post(url, values, {
                     preserveScroll: true,
                     onSuccess: () => {
+                        Swal.fire({
+                            icon : 'success',
+                            title : 'Succès',
+                            text : 'Votre Type de Chambre a été enregistré',
+                            timer : 1500
+                        })
                         this.closeModal();
                     },
                     onError: () => {

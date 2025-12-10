@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\ReservationStateMachine;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -98,36 +99,9 @@ class Reservation extends Model
         ];
     }
 
-    private const STATUS_TRANSITIONS = [
-        self::STATUS_PENDING => [
-            self::STATUS_CONFIRMED,
-            self::STATUS_CANCELLED,
-            self::STATUS_NO_SHOW,
-        ],
-        self::STATUS_CONFIRMED => [
-            self::STATUS_IN_HOUSE,
-            self::STATUS_CANCELLED,
-            self::STATUS_NO_SHOW,
-        ],
-        self::STATUS_IN_HOUSE => [
-            self::STATUS_CHECKED_OUT,
-        ],
-        self::STATUS_CHECKED_OUT => [],
-        self::STATUS_CANCELLED => [],
-        self::STATUS_NO_SHOW => [],
-    ];
-
-    public static function allowedStatusTransitions(): array
-    {
-        return self::STATUS_TRANSITIONS;
-    }
-
     public function canTransition(string $to): bool
     {
-        $from = $this->status;
-        $allowed = self::allowedStatusTransitions();
-
-        return in_array($to, $allowed[$from] ?? [], true);
+        return app(ReservationStateMachine::class)->canTransition($this->status, $to);
     }
 
     public function validateOfferDates(): void

@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\Offer;
 use App\Models\Reservation;
 use App\Services\FolioBillingService;
+use App\Services\Offers\OfferReservationService;
 use App\Services\ReservationAvailabilityService;
 use App\Support\Frontdesk\ReservationsIndexData;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -39,8 +41,11 @@ class ReservationController extends Controller
         ]);
     }
 
-    public function store(Request $request, ReservationAvailabilityService $availability)
-    {
+    public function store(
+        Request $request,
+        ReservationAvailabilityService $availability,
+        OfferReservationService $offerReservationService,
+    ) {
         $tenantId = $request->user()->tenant_id;
         $hotelId = $request->user()->active_hotel_id ?? $request->session()->get('active_hotel_id');
 
@@ -73,7 +78,46 @@ class ReservationController extends Controller
                 ->find($data['offer_id']);
         }
 
-        if ($offer) {
+        if ($offer && $data['room_id']) {
+            $startAt = Carbon::parse($data['check_in_date']);
+            $endAt = Carbon::parse($data['check_out_date']);
+
+            try {
+                $draftFromOffer = $offerReservationService->buildReservationFromOffer(
+                    $offer,
+                    $startAt,
+                    $data['room_id'],
+                    $endAt,
+                    [
+                        'tenant_id' => $tenantId,
+                        'hotel_id' => $hotelId,
+                        'guest_id' => $data['guest_id'],
+                        'code' => $data['code'],
+                        'status' => $data['status'],
+                        'notes' => $data['notes'] ?? null,
+                        'booked_by_user_id' => $request->user()->id,
+                        'currency' => $data['currency'],
+                        'unit_price' => $data['unit_price'],
+                        'base_amount' => $data['base_amount'],
+                        'tax_amount' => $data['tax_amount'],
+                        'total_amount' => $data['total_amount'],
+                        'adults' => $data['adults'] ?? 1,
+                        'children' => $data['children'] ?? 0,
+                        'source' => $data['source'] ?? null,
+                        'expected_arrival_time' => $data['expected_arrival_time'] ?? null,
+                    ],
+                );
+
+                $data['check_in_date'] = $draftFromOffer->check_in_date;
+                $data['check_out_date'] = $draftFromOffer->check_out_date;
+                $data['offer_name'] = $draftFromOffer->offer_name;
+                $data['offer_kind'] = $draftFromOffer->offer_kind;
+            } catch (\App\Exceptions\OfferNotValidForDateTimeException $e) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'offer_id' => $e->getMessage(),
+                ]);
+            }
+        } elseif ($offer) {
             $data['offer_name'] = $offer->name;
             $data['offer_kind'] = $offer->kind;
         }
@@ -105,6 +149,7 @@ class ReservationController extends Controller
         Reservation $reservation,
         FolioBillingService $billingService,
         ReservationAvailabilityService $availability,
+        OfferReservationService $offerReservationService,
     ) {
         $tenantId = $request->user()->tenant_id;
 
@@ -139,7 +184,46 @@ class ReservationController extends Controller
                 ->find($data['offer_id']);
         }
 
-        if ($offer) {
+        if ($offer && $data['room_id']) {
+            $startAt = Carbon::parse($data['check_in_date']);
+            $endAt = Carbon::parse($data['check_out_date']);
+
+            try {
+                $draftFromOffer = $offerReservationService->buildReservationFromOffer(
+                    $offer,
+                    $startAt,
+                    $data['room_id'],
+                    $endAt,
+                    [
+                        'tenant_id' => $reservation->tenant_id,
+                        'hotel_id' => $reservation->hotel_id,
+                        'guest_id' => $data['guest_id'],
+                        'code' => $data['code'],
+                        'status' => $data['status'],
+                        'notes' => $data['notes'] ?? null,
+                        'booked_by_user_id' => $reservation->booked_by_user_id ?? $request->user()->id,
+                        'currency' => $data['currency'],
+                        'unit_price' => $data['unit_price'],
+                        'base_amount' => $data['base_amount'],
+                        'tax_amount' => $data['tax_amount'],
+                        'total_amount' => $data['total_amount'],
+                        'adults' => $data['adults'] ?? 1,
+                        'children' => $data['children'] ?? 0,
+                        'source' => $data['source'] ?? null,
+                        'expected_arrival_time' => $data['expected_arrival_time'] ?? null,
+                    ],
+                );
+
+                $data['check_in_date'] = $draftFromOffer->check_in_date;
+                $data['check_out_date'] = $draftFromOffer->check_out_date;
+                $data['offer_name'] = $draftFromOffer->offer_name;
+                $data['offer_kind'] = $draftFromOffer->offer_kind;
+            } catch (\App\Exceptions\OfferNotValidForDateTimeException $e) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'offer_id' => $e->getMessage(),
+                ]);
+            }
+        } elseif ($offer) {
             $data['offer_name'] = $offer->name;
             $data['offer_kind'] = $offer->kind;
         }

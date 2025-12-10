@@ -10,6 +10,28 @@ use Illuminate\Validation\ValidationException;
 
 class ReservationStateMachine
 {
+    /**
+     * @var array<string, list<string>>
+     */
+    private const ALLOWED_TRANSITIONS = [
+        Reservation::STATUS_PENDING => [
+            Reservation::STATUS_CONFIRMED,
+            Reservation::STATUS_CANCELLED,
+            Reservation::STATUS_NO_SHOW,
+        ],
+        Reservation::STATUS_CONFIRMED => [
+            Reservation::STATUS_IN_HOUSE,
+            Reservation::STATUS_CANCELLED,
+            Reservation::STATUS_NO_SHOW,
+        ],
+        Reservation::STATUS_IN_HOUSE => [
+            Reservation::STATUS_CHECKED_OUT,
+        ],
+        Reservation::STATUS_CHECKED_OUT => [],
+        Reservation::STATUS_CANCELLED => [],
+        Reservation::STATUS_NO_SHOW => [],
+    ];
+
     public function __construct(
         private readonly ReservationAvailabilityService $availability,
         private readonly FolioBillingService $billing,
@@ -18,7 +40,7 @@ class ReservationStateMachine
 
     public function canTransition(string $from, string $to): bool
     {
-        return in_array($to, Reservation::allowedStatusTransitions()[$from] ?? [], true);
+        return in_array($to, self::ALLOWED_TRANSITIONS[$from] ?? [], true);
     }
 
     public function confirm(Reservation $reservation): Reservation

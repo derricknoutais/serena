@@ -2,6 +2,7 @@
 
 require_once __DIR__.'/FolioTestHelpers.php';
 
+use App\Models\CashSession;
 use App\Models\Reservation;
 
 beforeEach(function (): void {
@@ -52,10 +53,7 @@ it('rejects an invalid status transition', function (): void {
         'check_out_date' => '2025-05-02',
     ]);
 
-    $response = $this->actingAs($user)->from(sprintf(
-        'http://%s/reservations',
-        tenantDomain($tenant),
-    ))->patch(sprintf(
+    $response = $this->actingAs($user)->patch(sprintf(
         'http://%s/reservations/%s/status',
         tenantDomain($tenant),
         $reservation->id,
@@ -65,4 +63,58 @@ it('rejects an invalid status transition', function (): void {
 
     $response->assertSessionHasErrors('status');
     expect($reservation->fresh()->status)->toBe(Reservation::STATUS_PENDING);
+});
+
+it('requires an open frontdesk cash session when applying a cancellation penalty', function (): void {
+    [
+        'tenant' => $tenant,
+        'hotel' => $hotel,
+        'user' => $user,
+        'reservation' => $reservation,
+    ] = setupReservationEnvironment('status-penalty');
+
+    $reservation->update([
+        'status' => Reservation::STATUS_CONFIRMED,
+        'check_in_date' => '2025-06-01',
+        'check_out_date' => '2025-06-02',
+    ]);
+
+    $response = $this->actingAs($user)->from(sprintf(
+        'http://%s/reservations',
+        tenantDomain($tenant),
+    ))->patch(sprintf(
+        'http://%s/reservations/%s/status',
+        tenantDomain($tenant),
+        $reservation->id,
+    ), [
+        'action' => 'cancel',
+        'penalty_amount' => 5000,
+    ]);
+
+    $response->assertSessionHasErrors('penalty_amount');
+    expect($reservation->fresh()->status)->toBe(Reservation::STATUS_CONFIRMED);
+
+    CashSession::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'opened_by_user_id' => $user->id,
+        'type' => 'frontdesk',
+        'started_at' => now(),
+        'starting_amount' => 0,
+        'status' => 'open',
+    ]);
+
+    $response = $this->actingAs($user)->from(sprintf(
+        'http://%s/reservations',
+        tenantDomain($tenant),
+    ))->patch(sprintf(
+        'http://%s/reservations/%s/status',
+        tenantDomain($tenant),
+        $reservation->id,
+    ), [
+        'action' => 'cancel',
+        'penalty_amount' => 5000,
+    ]);
+
+    $response->assertRedirect();
 });

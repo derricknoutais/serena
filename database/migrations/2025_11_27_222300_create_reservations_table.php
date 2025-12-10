@@ -17,7 +17,7 @@ return new class extends Migration
             $table->uuid('room_id')->nullable()->index();
             $table->unsignedBigInteger('offer_id')->nullable()->index();
 
-            $table->string('code')->index();
+            $table->string('code')->nullable()->index();
             $table->string('status');
             $table->string('source')->nullable();
 

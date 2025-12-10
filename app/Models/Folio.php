@@ -176,6 +176,12 @@ class Folio extends Model
         if ($this->isClosed()) {
             throw new LogicException('Cannot add payments to a closed folio.');
         }
+        if ($this->reservation->status === Reservation::STATUS_CANCELLED) {
+            throw new LogicException('Cannot add payments to a cancelled reservation.');
+        }
+        if ($this->reservation->status === Reservation::STATUS_NO_SHOW) {
+            throw new LogicException('Cannot add payments to a no show reservation.');
+        }
 
         $payload = $data;
         $payload['tenant_id'] = $this->tenant_id;

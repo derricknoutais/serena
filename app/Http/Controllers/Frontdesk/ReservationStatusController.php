@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Frontdesk;
 
 use App\Http\Controllers\Controller;
+use App\Models\CashSession;
+use App\Models\PaymentMethod;
 use App\Models\Reservation;
 use App\Services\FolioBillingService;
 use App\Services\ReservationStateMachine;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -20,6 +23,7 @@ class ReservationStatusController extends Controller
 
     public function update(Request $request, Reservation $reservation): RedirectResponse
     {
+
         $tenantId = $request->user()->tenant_id;
 
         abort_unless($reservation->tenant_id === $tenantId, 404);
@@ -44,18 +48,25 @@ class ReservationStatusController extends Controller
 
         $targetStatus = $map[$action];
 
-        $reservation = match ($action) {
-            'confirm' => $this->reservationStateMachine->confirm($reservation),
-            'check_in' => $this->reservationStateMachine->checkIn($reservation),
-            'check_out' => $this->reservationStateMachine->checkOut($reservation),
-            'cancel' => $this->reservationStateMachine->cancel($reservation),
-            'no_show' => $this->reservationStateMachine->markNoShow($reservation),
-            default => throw ValidationException::withMessages([
-                'status' => 'Action non supportée.',
-            ]),
-        };
+        DB::transaction(function () use ($action, $reservation, $targetStatus, $validated): void {
+            $updatedReservation = match ($action) {
+                'confirm' => $this->reservationStateMachine->confirm($reservation),
+                'check_in' => $this->reservationStateMachine->checkIn($reservation),
+                'check_out' => $this->reservationStateMachine->checkOut($reservation),
+                'cancel' => $this->reservationStateMachine->cancel($reservation),
+                'no_show' => $this->reservationStateMachine->markNoShow($reservation),
+                default => throw ValidationException::withMessages([
+                    'status' => 'Action non supportée.',
+                ]),
+            };
 
-        $this->applyPenalty($reservation, $targetStatus, (float) ($validated['penalty_amount'] ?? 0), $validated['penalty_note'] ?? null);
+            $this->applyPenalty(
+                $updatedReservation,
+                $targetStatus,
+                (float) ($validated['penalty_amount'] ?? 0),
+                $validated['penalty_note'] ?? null
+            );
+        });
 
         return back()->with('success', 'Statut mis à jour.');
     }
@@ -79,5 +90,38 @@ class ReservationStatusController extends Controller
                 'penalty_note' => $note,
             ],
         ]);
+
+        $user = request()->user();
+
+        if (! $user) {
+            return;
+        }
+
+        $paymentMethod = PaymentMethod::query()
+            ->where('tenant_id', $reservation->tenant_id)
+            ->where(function ($query) use ($reservation): void {
+                $query->whereNull('hotel_id')->orWhere('hotel_id', $reservation->hotel_id);
+            })
+            ->where('type', 'cash')
+            ->first();
+
+        if (! $paymentMethod) {
+            throw ValidationException::withMessages([
+                'penalty_amount' => 'Aucun mode de paiement cash disponible.',
+            ]);
+        }
+
+        $activeSession = CashSession::query()
+            ->where('tenant_id', $reservation->tenant_id)
+            ->where('hotel_id', $reservation->hotel_id)
+            ->where('type', 'frontdesk')
+            ->where('status', 'open')
+            ->first();
+
+        if (! $activeSession) {
+            throw ValidationException::withMessages([
+                'penalty_amount' => 'Aucune caisse réception ouverte. Veuillez ouvrir une session de caisse.',
+            ]);
+        }
     }
 }

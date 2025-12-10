@@ -18,6 +18,7 @@ use App\Http\Controllers\Frontdesk\GuestController;
 use App\Http\Controllers\Frontdesk\ReservationController;
 use App\Http\Controllers\Frontdesk\ReservationStatusController;
 use App\Http\Controllers\Frontdesk\RoomBoardController;
+use App\Http\Controllers\Frontdesk\RoomBoardWalkInController;
 use App\Http\Controllers\Frontdesk\RoomHousekeepingController;
 use App\Http\Controllers\Frontdesk\WalkInReservationController;
 use App\Http\Controllers\HousekeepingController;
@@ -63,7 +64,7 @@ Route::middleware([
 
         if ($user !== null && $activeHotelId !== null) {
             $belongs = $user->hotels()->where('hotels.id', $activeHotelId)->exists();
-            if (!$belongs) {
+            if (! $belongs) {
                 $activeHotelId = null;
             }
         }
@@ -92,7 +93,7 @@ Route::middleware([
                 ->with(['roles'])
                 ->get()
                 ->map(
-                    fn($user) => [
+                    fn ($user) => [
                         'id' => $user->id,
                         'name' => $user->name,
                         'email' => $user->email,
@@ -100,7 +101,7 @@ Route::middleware([
                     ],
                 ),
             'roles' => \Spatie\Permission\Models\Role::query()->orderBy('name')->get()->map(
-                fn($role) => [
+                fn ($role) => [
                     'name' => $role->name,
                 ],
             ),
@@ -194,6 +195,8 @@ Route::middleware([
 
         Route::get('/reservations', [ReservationController::class, 'index'])->name('reservations.index');
         Route::get('/frontdesk/dashboard', [FrontdeskController::class, 'dashboard'])->name('frontdesk.dashboard');
+        Route::post('/frontdesk/room-board/walk-in', [RoomBoardWalkInController::class, 'store'])
+            ->name('frontdesk.room_board.walk_in');
         Route::post('/reservations', [ReservationController::class, 'store'])->name('reservations.store');
         Route::get('/reservations/{reservation}', [ReservationController::class, 'show'])->name('reservations.show');
         Route::put('/reservations/{reservation}', [ReservationController::class, 'update'])->name('reservations.update');
@@ -211,6 +214,9 @@ Route::middleware([
 
         Route::get('/reservations/{reservation}/folio', [ReservationFolioController::class, 'show'])
             ->name('reservations.folio.show');
+
+        Route::post('/frontdesk/reservations/from-offer', [\App\Http\Controllers\Api\ReservationFromOfferController::class, 'store'])
+            ->name('frontdesk.reservations.from_offer');
 
         Route::get('/folios/{folio}', [FolioController::class, 'show'])->name('folios.show');
         Route::post('/folios/{folio}/items', [FolioController::class, 'storeItem'])->name('folios.items.store');
@@ -277,10 +283,10 @@ Route::middleware('web')->group(function () {
         $baseDomain = config('app.url_host', 'saas-template.test');
 
         $input = trim((string) $request->input('tenant'));
-        $host = parse_url(Str::startsWith($input, ['http://', 'https://']) ? $input : 'http://' . $input, PHP_URL_HOST) ?? $input;
+        $host = parse_url(Str::startsWith($input, ['http://', 'https://']) ? $input : 'http://'.$input, PHP_URL_HOST) ?? $input;
 
         $slug = Str::of($host)
-            ->replace('.' . $baseDomain, '')
+            ->replace('.'.$baseDomain, '')
             ->replace($baseDomain, '')
             ->trim('.')
             ->slug()
@@ -294,7 +300,7 @@ Route::middleware('web')->group(function () {
 
         $tenant = $tenantId ? Tenant::find($tenantId) : null;
 
-        if (!$tenant) {
+        if (! $tenant) {
             return back()->withErrors(['tenant' => 'We could not find that tenant.']);
         }
 
@@ -326,4 +332,4 @@ Route::middleware('web')->group(function () {
 |--------------------------------------------------------------------------
 */
 
-require __DIR__ . '/settings.php';
+require __DIR__.'/settings.php';

@@ -448,6 +448,8 @@
 
 <script>
 import axios from 'axios';
+import Swal from 'sweetalert2';
+
 export default {
     name: 'FolioModal',
     props: {
@@ -574,6 +576,15 @@ export default {
                 });
                 this.paymentForm = this.defaultPaymentForm();
                 this.$emit('updated');
+                window.dispatchEvent(new CustomEvent('cash-session-updated', {
+                    detail: { type: 'frontdesk' },
+                }));
+            } catch (error) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erreur',
+                    text: error.response.data.message,
+                });
             } finally {
                 this.isSubmitting = false;
             }

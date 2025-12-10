@@ -501,59 +501,20 @@
                                 >
                                     Client
                                 </label>
-                <Multiselect
-                    id="walk_in_guest"
-                    v-model="selectedWalkInGuest"
-                    :options="localGuests"
-                    track-by="id"
-                    label="full_name"
-                    placeholder="Sélectionner ou saisir un client"
-                    :taggable="true"
-                    @search-change="onWalkInGuestSearchChange"
-                    @tag="onWalkInGuestTag"
-                    class="mt-1"
-                />
+                                <Multiselect
+                                    id="walk_in_guest"
+                                    v-model="selectedWalkInGuest"
+                                    :options="localGuests"
+                                    track-by="id"
+                                    label="full_name"
+                                    placeholder="Sélectionner ou saisir un client"
+                                    :taggable="true"
+                                    @search-change="onWalkInGuestSearchChange"
+                                    @tag="onWalkInGuestTag"
+                                    class="mt-1"
+                                />
                             </div>
                             <div />
-                            <div>
-                                <TextInput
-                                    id="guest_first_name"
-                                    v-model="form.guest_first_name"
-                                    label="Prénom"
-                                />
-                                <p
-                                    v-if="form.errors.guest_first_name"
-                                    class="mt-1 text-xs text-serena-danger"
-                                >
-                                    {{ form.errors.guest_first_name }}
-                                </p>
-                            </div>
-                            <div>
-                                <TextInput
-                                    id="guest_last_name"
-                                    v-model="form.guest_last_name"
-                                    label="Nom"
-                                />
-                                <p
-                                    v-if="form.errors.guest_last_name"
-                                    class="mt-1 text-xs text-serena-danger"
-                                >
-                                    {{ form.errors.guest_last_name }}
-                                </p>
-                            </div>
-                            <div>
-                                <TextInput
-                                    id="guest_phone"
-                                    v-model="form.guest_phone"
-                                    label="Téléphone"
-                                />
-                                <p
-                                    v-if="form.errors.guest_phone"
-                                    class="mt-1 text-xs text-serena-danger"
-                                >
-                                    {{ form.errors.guest_phone }}
-                                </p>
-                            </div>
                         </div>
                     </section>
 
@@ -562,34 +523,6 @@
                             Séjour
                         </h3>
                         <div class="grid gap-4 md:grid-cols-2">
-                            <div>
-                                <TextInput
-                                    id="check_in_date"
-                                    v-model="form.check_in_date"
-                                    type="date"
-                                    label="Arrivée"
-                                />
-                                <p
-                                    v-if="form.errors.check_in_date"
-                                    class="mt-1 text-xs text-serena-danger"
-                                >
-                                    {{ form.errors.check_in_date }}
-                                </p>
-                            </div>
-                            <div>
-                                <TextInput
-                                    id="check_out_date"
-                                    v-model="form.check_out_date"
-                                    type="date"
-                                    label="Départ"
-                                />
-                                <p
-                                    v-if="form.errors.check_out_date"
-                                    class="mt-1 text-xs text-serena-danger"
-                                >
-                                    {{ form.errors.check_out_date }}
-                                </p>
-                            </div>
                             <div>
                                 <label
                                     for="offer_id"
@@ -617,6 +550,34 @@
                                 >
                                     {{ form.errors.offer_id }}
                                 </p>
+                            </div>
+                            <div>
+                                <label
+                                    for="check_in_at"
+                                    class="mb-1 block text-xs font-medium text-serena-text-muted"
+                                >
+                                    Arrivée
+                                </label>
+                                <input
+                                    id="check_in_at"
+                                    v-model="form.check_in_at"
+                                    type="datetime-local"
+                                    class="w-full rounded-lg border border-serena-border bg-white px-3 py-2 text-sm text-serena-text-main shadow-sm focus:border-serena-primary focus:outline-none focus:ring-2 focus:ring-serena-primary-soft"
+                                />
+                            </div>
+                            <div>
+                                <label
+                                    for="check_out_at"
+                                    class="mb-1 block text-xs font-medium text-serena-text-muted"
+                                >
+                                    Départ
+                                </label>
+                                <input
+                                    id="check_out_at"
+                                    v-model="form.check_out_at"
+                                    type="datetime-local"
+                                    class="w-full rounded-lg border border-serena-border bg-white px-3 py-2 text-sm text-serena-text-main shadow-sm focus:border-serena-primary focus:outline-none focus:ring-2 focus:ring-serena-primary-soft"
+                                />
                             </div>
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
@@ -649,6 +610,22 @@
                                         {{ form.errors.children }}
                                     </p>
                                 </div>
+                            </div>
+                            <div>
+                                <TextInput
+                                    id="amount_received"
+                                    v-model="form.amount_received"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    label="Montant perçu"
+                                />
+                                <p
+                                    v-if="form.errors.amount_received"
+                                    class="mt-1 text-xs text-serena-danger"
+                                >
+                                    {{ form.errors.amount_received }}
+                                </p>
                             </div>
                         </div>
                     </section>
@@ -1137,19 +1114,17 @@ export default {
 
                     this.form = useForm({
                         guest_id: null,
-                        guest_first_name: '',
-                        guest_last_name: '',
-                        guest_phone: '',
                         room_id: newRoom.id,
                         room_type_id: newRoom.room_type_id,
                         offer_id: initialOffer ? initialOffer.id : null,
                         offer_price_id: initialOffer
                             ? initialOffer.offer_price_id
                             : null,
-                        check_in_date: this.walkInDefaultDates.check_in_date,
-                        check_out_date: this.walkInDefaultDates.check_out_date,
+                        check_in_at: this.toDateTimeLocal(new Date()),
+                        check_out_at: this.toDateTimeLocal(this.computeWalkInEndDate(new Date(), initialOffer)),
                         adults: 1,
                         children: 0,
+                        amount_received: '',
                     });
 
                     this.isWalkInOpen = true;
@@ -1165,8 +1140,87 @@ export default {
                 this.localGuests = [...(newGuests || [])];
             },
         },
+        selectedWalkInGuest(newGuest) {
+            if (!this.form) {
+                return;
+            }
+
+            if (!newGuest) {
+                this.form.guest_id = null;
+
+                return;
+            }
+
+            this.form.guest_id = newGuest.id ?? null;
+        },
     },
     methods: {
+        toDateTimeLocal(date) {
+            const d = date instanceof Date ? date : new Date(date);
+
+            if (Number.isNaN(d.getTime())) {
+                return '';
+            }
+
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const hours = String(d.getHours()).padStart(2, '0');
+            const minutes = String(d.getMinutes()).padStart(2, '0');
+
+            return `${year}-${month}-${day}T${hours}:${minutes}`;
+        },
+        computeWalkInEndDate(startDate, offer) {
+            const start = startDate instanceof Date ? new Date(startDate) : new Date();
+
+            if (Number.isNaN(start.getTime())) {
+                return new Date();
+            }
+
+            const effectiveOffer = offer
+                || this.walkInOffers.find((o) => o.id === this.form?.offer_id)
+                || null;
+
+            let end = new Date(start.getTime());
+
+            if (!effectiveOffer) {
+                end.setHours(end.getHours() + 24);
+
+                return end;
+            }
+
+            const kind = effectiveOffer.kind ?? 'night';
+            const fixedHours = Number(effectiveOffer.fixed_duration_hours || 0);
+
+            if (fixedHours > 0) {
+                end = new Date(start.getTime() + fixedHours * 60 * 60 * 1000);
+            } else if (effectiveOffer.check_out_until) {
+                const [hStr, mStr] = effectiveOffer.check_out_until.split(':');
+                const h = Number(hStr) || 0;
+                const m = Number(mStr) || 0;
+                end.setHours(h, m, 0, 0);
+
+                if (end.getTime() <= start.getTime()) {
+                    end.setDate(end.getDate() + 1);
+                }
+            } else {
+                let durationHours = 0;
+
+                if (kind === 'short_stay') {
+                    durationHours = 3;
+                } else if (kind === 'weekend') {
+                    durationHours = 48;
+                } else if (kind === 'full_day' || kind === 'night') {
+                    durationHours = 24;
+                } else {
+                    durationHours = 24;
+                }
+
+                end = new Date(start.getTime() + durationHours * 60 * 60 * 1000);
+            }
+
+            return end;
+        },
         async onWalkInGuestSearchChange(query) {
             if (this.guestSearchTimeout) {
                 clearTimeout(this.guestSearchTimeout);
@@ -1304,10 +1358,6 @@ export default {
 
                 this.localGuests.push(guestWithName);
                 this.selectedWalkInGuest = guestWithName;
-                this.form.guest_id = guestWithName.id;
-                this.form.guest_first_name = guestWithName.first_name ?? '';
-                this.form.guest_last_name = guestWithName.last_name ?? '';
-                this.form.guest_phone = guestWithName.phone ?? '';
             } catch (error) {
                 const message =
                     error.response?.data?.message
@@ -1753,6 +1803,13 @@ export default {
 
             if (selected) {
                 this.form.offer_price_id = selected.offer_price_id;
+                const start = this.form.check_in_at
+                    ? new Date(this.form.check_in_at)
+                    : new Date();
+
+                const end = this.computeWalkInEndDate(start, selected);
+                this.form.check_in_at = this.toDateTimeLocal(start);
+                this.form.check_out_at = this.toDateTimeLocal(end);
             }
         },
         submitWalkIn() {
@@ -1760,7 +1817,7 @@ export default {
                 return;
             }
 
-            this.form.post('/reservations/walk-in', {
+            this.form.post('/frontdesk/room-board/walk-in', {
                 onSuccess: () => {
                     this.isWalkInOpen = false;
                     Swal.fire({
@@ -1770,6 +1827,7 @@ export default {
                         timer: 2500,
                         showConfirmButton: false,
                     });
+                    this.reloadRoomBoard();
                 },
                 onError: (errors) => {
                     this.handleAvailabilityErrors(errors);

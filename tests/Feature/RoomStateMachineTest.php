@@ -23,7 +23,7 @@ it('marks a room as occupied and available again', function (): void {
     expect($room->fresh()->status)->toBe(Room::STATUS_AVAILABLE);
 });
 
-it('prevents marking out of order while occupied', function (): void {
+it('prevents marking out of service while occupied', function (): void {
     [
         'reservation' => $reservation,
         'room' => $room,
@@ -33,6 +33,6 @@ it('prevents marking out of order while occupied', function (): void {
 
     $roomStateMachine = app(RoomStateMachine::class);
 
-    expect(fn () => $roomStateMachine->markOutOfOrder($room->fresh()))
+    expect(fn () => $roomStateMachine->markOutOfService($room->fresh()))
         ->toThrow(ValidationException::class);
 });

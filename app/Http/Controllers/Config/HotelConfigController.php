@@ -42,9 +42,8 @@ class HotelConfigController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string'],
-            'code' => ['required', 'string', 'max:10'],
             'currency' => ['required', 'string', 'size:3'],
-            'timezone' => ['required', 'string'],
+            'timezone' => ['string', 'nullable'],
             'check_in_time' => ['required'],
             'check_out_time' => ['required'],
             'address' => ['nullable', 'string'],
@@ -59,7 +58,7 @@ class HotelConfigController extends Controller
                 ->where('tenant_id', $request->user()->tenant_id)
                 ->firstOrCreate([
                     'tenant_id' => $request->user()->tenant_id,
-                    'code' => $data['code'],
+                    'name' => $data['name'],
                 ], $data);
         } else {
             $hotel->update($data);

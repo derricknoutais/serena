@@ -204,8 +204,21 @@ export default {
     },
     mounted() {
         this.fetchSession();
+        window.addEventListener('cash-session-updated', this.handleExternalUpdate);
+    },
+    beforeUnmount() {
+        window.removeEventListener('cash-session-updated', this.handleExternalUpdate);
     },
     methods: {
+        handleExternalUpdate(event) {
+            const eventType = event?.detail?.type || 'frontdesk';
+
+            if (eventType !== this.type) {
+                return;
+            }
+
+            this.fetchSession();
+        },
         async fetchSession() {
             try {
                 this.isLoading = true;

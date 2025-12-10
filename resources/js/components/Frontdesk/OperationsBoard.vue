@@ -4,24 +4,24 @@
                 <div class="flex gap-2">
                     <button
                         type="button"
-                        class="rounded-lg px-4 py-2 text-sm font-semibold transition"
-                        :class="activeTab === 'arrivals' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 border border-gray-200'"
+                        class="hover:cursor-pointer rounded-lg px-4 py-2 text-sm font-semibold transition"
+                        :class="activeTab === 'arrivals' ? 'bg-serena-primary text-white' : 'bg-gray-100  text-gray-700 border border-gray-100 hover:bg-gray-200'"
                         @click="loadTab('arrivals')"
                     >
                         Arrivées du jour
                     </button>
                     <button
                         type="button"
-                        class="rounded-lg px-4 py-2 text-sm font-semibold transition"
-                        :class="activeTab === 'departures' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 border border-gray-200'"
+                        class="hover:cursor-pointer rounded-lg px-4 py-2 text-sm font-semibold transition"
+                        :class="activeTab === 'departures' ? 'bg-serena-primary text-white' : 'bg-gray-100  text-gray-700 border border-gray-100 hover:bg-gray-200'"
                         @click="loadTab('departures')"
                     >
                         Départs du jour
                     </button>
                     <button
                         type="button"
-                        class="rounded-lg px-4 py-2 text-sm font-semibold transition"
-                        :class="activeTab === 'inHouse' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 border border-gray-200'"
+                        class="hover:cursor-pointer rounded-lg px-4 py-2 text-sm font-semibold transition"
+                        :class="activeTab === 'inHouse' ? 'bg-serena-primary text-white' : 'bg-gray-100  text-gray-700 border border-gray-100 hover:bg-gray-200'"
                         @click="loadTab('inHouse')"
                     >
                         Clients en séjour
@@ -186,6 +186,12 @@ export default {
                 return;
             }
 
+            if (['check_in', 'check_out'].includes(action)) {
+                await this.promptActualDateTime(action, reservationId);
+
+                return;
+            }
+
             if (action === 'check_in') {
                 const reservation = this.findReservation(reservationId);
                 const hkStatus = reservation?.room?.hk_status ?? null;
@@ -219,7 +225,7 @@ export default {
                 return;
             }
 
-            this.sendStatusRequest(reservationId, { action });
+            this.sendStatusRequest(action, reservationId, {});
         },
         promptPenalty(action, reservationId) {
             const title = action === 'cancel' ? 'Annuler la réservation ?' : 'Marquer no-show ?';
@@ -262,17 +268,65 @@ export default {
                     return;
                 }
 
-                this.sendStatusRequest(reservationId, {
-                    action,
+                this.sendStatusRequest(action, reservationId, {
                     penalty_amount: result.value?.amount ?? 0,
                     penalty_note: result.value?.note ?? '',
                 });
             });
         },
-        sendStatusRequest(reservationId, payload) {
+        async promptActualDateTime(action, reservationId) {
+            const isCheckIn = action === 'check_in';
+            const title = isCheckIn ? 'Confirmer le check-in ?' : 'Confirmer le check-out ?';
+            const label = isCheckIn ? 'Date et heure de check-in' : 'Date et heure de check-out';
+
+            const defaultValue = new Date().toISOString().slice(0, 16);
+
+            const { value, isConfirmed } = await Swal.fire({
+                title,
+                html:
+                    '<div class="text-left">'
+                    + `<label class="block text-xs font-semibold text-gray-600">${label}</label>`
+                    + `<input id="swal-datetime" type="datetime-local" value="${defaultValue}" class="swal2-input" />`
+                    + '<p class="mt-1 text-[11px] text-gray-500">Vous pouvez ajuster la date/heure réelle du check-in/out.</p>'
+                    + '</div>',
+                showCancelButton: true,
+                confirmButtonText: 'Valider',
+                cancelButtonText: 'Annuler',
+                focusConfirm: false,
+                preConfirm: () => {
+                    const input = document.getElementById('swal-datetime');
+                    const datetime = (input?.value ?? '').toString();
+
+                    if (!datetime) {
+                        Swal.showValidationMessage('Veuillez saisir une date et heure valides.');
+
+                        return false;
+                    }
+
+                    return datetime;
+                },
+            });
+
+            if (!isConfirmed) {
+                return;
+            }
+
+            const payload = isCheckIn
+                ? { actual_check_in_at: value }
+                : { actual_check_out_at: value };
+
+            this.sendStatusRequest(action, reservationId, payload);
+        },
+        sendStatusRequest(action, reservationId, payload) {
+            const url = `/reservations/${reservationId}/status`;
+            const data = {
+                action,
+                ...(payload || {}),
+            };
+
             this.$inertia.patch(
-                `/reservations/${reservationId}/status`,
-                payload,
+                url,
+                data,
                 {
                     preserveScroll: true,
                     onSuccess: () => {
@@ -285,7 +339,11 @@ export default {
                         this.loadTab(this.activeTab);
                     },
                     onError: (errors) => {
-                        const message = Object.values(errors || {})[0] || 'Erreur lors de la mise à jour.';
+                        const message =
+                            (typeof errors === 'string'
+                                ? errors
+                                : Object.values(errors || {})[0])
+                            || 'Erreur lors de la mise à jour.';
                         Swal.fire({
                             icon: 'error',
                             title: 'Erreur',

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support\Frontdesk;
 
+use App\Models\Guest;
 use App\Models\MaintenanceTicket;
 use App\Models\OfferRoomTypePrice;
 use App\Models\Reservation;
@@ -206,6 +207,22 @@ class RoomBoardData
             ];
         }
 
+        $guests = Guest::query()
+            ->forTenant($tenantId)
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->limit(200)
+            ->get(['id', 'first_name', 'last_name', 'phone'])
+            ->map(static function (Guest $guest): array {
+                return [
+                    'id' => $guest->id,
+                    'first_name' => $guest->first_name,
+                    'last_name' => $guest->last_name,
+                    'phone' => $guest->phone,
+                    'full_name' => trim(($guest->last_name ?? '').' '.($guest->first_name ?? '')),
+                ];
+            });
+
         return [
             'date' => $dateString,
             'roomsByFloor' => $roomsByFloor,
@@ -230,6 +247,7 @@ class RoomBoardData
                 'id' => $user->id,
                 'name' => $user->name,
             ],
+            'guests' => $guests,
         ];
     }
 }

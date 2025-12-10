@@ -10,22 +10,25 @@ use Illuminate\Validation\ValidationException;
 
 class RoomStateMachine
 {
+    /**
+     * @var array<string, list<string>>
+     */
+    private const ALLOWED_TRANSITIONS = [
+        Room::STATUS_AVAILABLE => [
+            Room::STATUS_OCCUPIED,
+            Room::STATUS_OUT_OF_ORDER,
+        ],
+        Room::STATUS_OCCUPIED => [
+            Room::STATUS_AVAILABLE,
+        ],
+        Room::STATUS_OUT_OF_ORDER => [
+            Room::STATUS_AVAILABLE,
+        ],
+    ];
+
     public function canTransition(string $from, string $to): bool
     {
-        $map = [
-            Room::STATUS_AVAILABLE => [
-                Room::STATUS_OCCUPIED,
-                Room::STATUS_OUT_OF_ORDER,
-            ],
-            Room::STATUS_OCCUPIED => [
-                Room::STATUS_AVAILABLE,
-            ],
-            Room::STATUS_OUT_OF_ORDER => [
-                Room::STATUS_AVAILABLE,
-            ],
-        ];
-
-        return in_array($to, $map[$from] ?? [], true);
+        return in_array($to, self::ALLOWED_TRANSITIONS[$from] ?? [], true);
     }
 
     public function markOccupied(Room $room, Reservation $reservation): Room
@@ -56,7 +59,7 @@ class RoomStateMachine
         return $room;
     }
 
-    public function markOutOfOrder(Room $room): Room
+    public function markOutOfService(Room $room): Room
     {
         if ($room->status === Room::STATUS_OCCUPIED) {
             throw ValidationException::withMessages([

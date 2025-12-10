@@ -473,6 +473,9 @@ export default {
                 onSuccess: () => {
                     this.paymentForm.reset('amount', 'reference', 'notes');
                     this.paymentForm.amount = 0;
+                    window.dispatchEvent(new CustomEvent('cash-session-updated', {
+                        detail: { type: 'frontdesk' },
+                    }));
                 },
             });
         },
