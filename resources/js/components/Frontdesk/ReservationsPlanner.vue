@@ -211,9 +211,12 @@
                                 <label class="text-sm font-medium text-gray-700">Client *</label>
                                 <Multiselect
                                     v-model="selectedGuest"
-                                    :options="guests"
+                                    :options="localGuests"
                                     track-by="id"
                                     label="name"
+                                    :taggable="true"
+                                    @search-change="onGuestSearchChange"
+                                    @tag="onGuestTag"
                                     placeholder="Sélectionner un client"
                                     class="mt-1"
                                 />
@@ -723,10 +726,13 @@
                 showChangeRoomModal: false,
                 changeRoomSelection: null,
                 changeRoomSubmitting: false,
+                localGuests: [],
+                guestSearchTimeout: null,
             };
         },
         created() {
             this.buildPriceMatrix();
+            this.localGuests = [...this.guests];
         },
         watch: {
             events: {
@@ -750,6 +756,12 @@
                 immediate: true,
                 handler() {
                     this.buildPriceMatrix();
+                },
+            },
+            guests: {
+                immediate: true,
+                handler(newGuests) {
+                    this.localGuests = [...(newGuests || [])];
                 },
             },
             selectedGuest(newVal) {
@@ -973,6 +985,153 @@
             },
         },
         methods: {
+            async onGuestSearchChange(query) {
+                if (this.guestSearchTimeout) {
+                    clearTimeout(this.guestSearchTimeout);
+                }
+
+                const term = (query || '').trim();
+
+                if (term.length < 2) {
+                    this.localGuests = [...this.guests];
+
+                    return;
+                }
+
+                this.guestSearchTimeout = setTimeout(async () => {
+                    try {
+                        const response = await axios.get('/guests/search', {
+                            params: { search: term },
+                            headers: { Accept: 'application/json' },
+                        });
+
+                        const results = Array.isArray(response.data) ? response.data : [];
+
+                        this.localGuests = results.map((g) => ({
+                            ...g,
+                            name: g.full_name || `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim(),
+                        }));
+
+                        if (this.selectedGuest && !this.localGuests.find((g) => g.id === this.selectedGuest.id)) {
+                            this.localGuests.unshift(this.selectedGuest);
+                        }
+                    } catch {
+                        this.localGuests = [...this.guests];
+                    }
+                }, 250);
+            },
+            parseGuestName(input) {
+                if (!input || typeof input !== 'string') {
+                    return {
+                        last_name: '',
+                        first_name: '',
+                    };
+                }
+
+                const parts = input.trim().split(/\s+/);
+
+                if (parts.length === 0) {
+                    return {
+                        last_name: '',
+                        first_name: '',
+                    };
+                }
+
+                const last_name = parts[0];
+                const first_name = parts.slice(1).join(' ');
+
+                return {
+                    last_name,
+                    first_name,
+                };
+            },
+            async onGuestTag(inputValue) {
+                const parsed = this.parseGuestName(inputValue);
+
+                const { value: formValues, isConfirmed } = await Swal.fire({
+                    title: 'Créer un nouveau client',
+                    html:
+                        '<div class="text-left space-y-2">'
+                        + '<label class="block text-xs font-semibold text-gray-600">Nom</label>'
+                        + `<input id="swal-guest-last-name" type="text" class="swal2-input" value="${parsed.last_name ?? ''}">`
+                        + '<label class="block text-xs font-semibold text-gray-600">Prénom</label>'
+                        + `<input id="swal-guest-first-name" type="text" class="swal2-input" value="${parsed.first_name ?? ''}">`
+                        + '<label class="block text-xs font-semibold text-gray-600">Téléphone</label>'
+                        + '<input id="swal-guest-phone" type="text" class="swal2-input" value="">'
+                        + '</div>',
+                    focusConfirm: false,
+                    showCancelButton: true,
+                    confirmButtonText: 'Créer',
+                    cancelButtonText: 'Annuler',
+                    preConfirm: () => {
+                        const lastNameInput = document.getElementById('swal-guest-last-name');
+                        const firstNameInput = document.getElementById('swal-guest-first-name');
+                        const phoneInput = document.getElementById('swal-guest-phone');
+
+                        const last_name = (lastNameInput?.value ?? '').toString().trim();
+                        const first_name = (firstNameInput?.value ?? '').toString().trim();
+                        const phone = (phoneInput?.value ?? '').toString().trim();
+
+                        if (!last_name) {
+                            Swal.showValidationMessage('Le nom est obligatoire.');
+
+                            return false;
+                        }
+
+                        return {
+                            last_name,
+                            first_name,
+                            phone,
+                        };
+                    },
+                });
+
+                if (!isConfirmed || !formValues) {
+                    return;
+                }
+
+                try {
+                    const response = await axios.post(
+                        '/guests',
+                        {
+                            first_name: formValues.first_name,
+                            last_name: formValues.last_name,
+                            phone: formValues.phone || null,
+                        },
+                        {
+                            headers: {
+                                Accept: 'application/json',
+                            },
+                        },
+                    );
+
+                    const newGuest = response.data?.guest ?? response.data;
+
+                    if (!newGuest || !newGuest.id) {
+                        return;
+                    }
+
+                    const guestWithName = {
+                        ...newGuest,
+                        name:
+                            newGuest.name
+                            || `${newGuest.last_name ?? ''} ${newGuest.first_name ?? ''}`.trim(),
+                    };
+
+                    this.localGuests.push(guestWithName);
+                    this.selectedGuest = guestWithName;
+                } catch (error) {
+                    const message =
+                        error.response?.data?.message
+                        ?? 'Impossible de créer le client.';
+
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erreur',
+                        text: message,
+                    });
+                }
+            },
             refreshReservationsData() {
                 router.reload({ only: ['reservationsData'] });
             },
@@ -1406,6 +1565,11 @@
 
                     return;
                 }
+                if (['check_in', 'check_out'].includes(action)) {
+                    await this.promptActualDateTime(action, targetId);
+
+                    return;
+                }
 
                 this.simpleStatusConfirm(action, targetId);
             },
@@ -1422,7 +1586,7 @@
                         return;
                     }
 
-                    this.sendStatusRequest(reservationId, { action });
+                    this.sendStatusRequest(action, reservationId, {});
                 });
             },
             eventClassNames(arg) {
@@ -1483,24 +1647,77 @@
                         return;
                     }
 
-                    this.sendStatusRequest(reservationId, {
-                        action,
+                    this.sendStatusRequest(action, reservationId, {
                         penalty_amount: result.value?.amount ?? 0,
                         penalty_note: result.value?.note ?? '',
                     });
                 });
             },
-            sendStatusRequest(reservationId, payload) {
+            async promptActualDateTime(action, reservationId) {
+                const isCheckIn = action === 'check_in';
+                const title = isCheckIn ? 'Confirmer le check-in ?' : 'Confirmer le check-out ?';
+                const label = isCheckIn ? 'Date et heure de check-in' : 'Date et heure de check-out';
+
+                const defaultValue = new Date().toISOString().slice(0, 16);
+
+                const { value, isConfirmed } = await Swal.fire({
+                    title,
+                    html:
+                        '<div class="text-left">'
+                        + `<label class="block text-xs font-semibold text-gray-600">${label}</label>`
+                        + `<input id="swal-datetime" type="datetime-local" value="${defaultValue}" class="swal2-input" />`
+                        + '<p class="mt-1 text-[11px] text-gray-500">Vous pouvez ajuster la date/heure réelle du check-in/out.</p>'
+                        + '</div>',
+                    showCancelButton: true,
+                    confirmButtonText: 'Valider',
+                    cancelButtonText: 'Annuler',
+                    focusConfirm: false,
+                    preConfirm: () => {
+                        const input = document.getElementById('swal-datetime');
+                        const datetime = (input?.value ?? '').toString();
+
+                        if (!datetime) {
+                            Swal.showValidationMessage('Veuillez saisir une date et heure valides.');
+
+                            return false;
+                        }
+
+                        return datetime;
+                    },
+                });
+
+                if (!isConfirmed) {
+                    return;
+                }
+
+                const payload = isCheckIn
+                    ? { actual_check_in_at: value }
+                    : { actual_check_out_at: value };
+
+                this.sendStatusRequest(action, reservationId, payload);
+            },
+            sendStatusRequest(action, reservationId, payload) {
                 this.statusSubmitting = true;
 
+                const endpointMap = {
+                    confirm: 'confirm',
+                    check_in: 'check-in',
+                    check_out: 'check-out',
+                    cancel: 'cancel',
+                    no_show: 'no-show',
+                };
+
+                const slug = endpointMap[action] || action;
+                const url = `/reservations/${reservationId}/${slug}`;
+
                 router.patch(
-                    `/reservations/${reservationId}/status`,
-                    payload,
+                    url,
+                    payload || {},
                     {
                         preserveScroll: true,
                         onSuccess: () => {
                             this.refreshEvents();
-                                Swal.fire({
+                            Swal.fire({
                                 icon: 'success',
                                 title: 'Succès',
                                 text: 'Statut mis à jour.',
@@ -1510,7 +1727,10 @@
                         },
                         onError: (errors) => {
                             const firstError =
-                                Object.values(errors || {})[0] ?? 'Erreur lors de la mise à jour.';
+                                (typeof errors === 'string'
+                                    ? errors
+                                    : Object.values(errors || {})[0])
+                                ?? 'Erreur lors de la mise à jour.';
 
                             Swal.fire({
                                 icon: 'error',

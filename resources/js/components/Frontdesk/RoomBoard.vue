@@ -495,19 +495,24 @@
                         </h3>
                         <div class="grid gap-4 md:grid-cols-2">
                             <div>
-                                <TextInput
-                                    id="guest_id"
-                                    v-model="form.guest_id"
-                                    type="number"
-                                    label="ID client (optionnel)"
-                                    min="1"
-                                />
-                                <p
-                                    v-if="form.errors.guest_id"
-                                    class="mt-1 text-xs text-serena-danger"
+                                <label
+                                    for="walk_in_guest"
+                                    class="mb-1 block text-xs font-medium text-serena-text-muted"
                                 >
-                                    {{ form.errors.guest_id }}
-                                </p>
+                                    Client
+                                </label>
+                <Multiselect
+                    id="walk_in_guest"
+                    v-model="selectedWalkInGuest"
+                    :options="localGuests"
+                    track-by="id"
+                    label="full_name"
+                    placeholder="Sélectionner ou saisir un client"
+                    :taggable="true"
+                    @search-change="onWalkInGuestSearchChange"
+                    @tag="onWalkInGuestTag"
+                    class="mt-1"
+                />
                             </div>
                             <div />
                             <div>
@@ -896,6 +901,7 @@
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { router, useForm } from '@inertiajs/vue3';
+import Multiselect from 'vue-multiselect';
 import PrimaryButton from '@/components/PrimaryButton.vue';
 import SecondaryButton from '@/components/SecondaryButton.vue';
 import TextInput from '@/components/TextInput.vue';
@@ -909,6 +915,7 @@ export default {
         SecondaryButton,
         TextInput,
         FolioModal,
+        Multiselect,
     },
     props: {
         date: {
@@ -939,6 +946,10 @@ export default {
             type: String,
             default: 'walk_in',
         },
+        guests: {
+            type: Array,
+            default: () => [],
+        },
         canManageHousekeeping: {
             type: Boolean,
             default: false,
@@ -963,6 +974,9 @@ export default {
         return {
             currentDate: this.date,
             isWalkInOpen: !!this.walkInRoom,
+            selectedWalkInGuest: null,
+            localGuests: [],
+            guestSearchTimeout: null,
             form: null,
             selectedRoom: null,
             roomsByFloorLocal: this.roomsByFloor,
@@ -1145,8 +1159,167 @@ export default {
                 }
             },
         },
+        guests: {
+            immediate: true,
+            handler(newGuests) {
+                this.localGuests = [...(newGuests || [])];
+            },
+        },
     },
     methods: {
+        async onWalkInGuestSearchChange(query) {
+            if (this.guestSearchTimeout) {
+                clearTimeout(this.guestSearchTimeout);
+            }
+
+            const term = (query || '').trim();
+
+            if (term.length < 2) {
+                this.localGuests = [...this.guests];
+
+                return;
+            }
+
+            this.guestSearchTimeout = setTimeout(async () => {
+                try {
+                    const response = await axios.get('/guests/search', {
+                        params: { search: term },
+                        headers: { Accept: 'application/json' },
+                    });
+
+                    const results = Array.isArray(response.data) ? response.data : [];
+
+                    this.localGuests = results.map((g) => ({
+                        ...g,
+                        full_name:
+                            g.full_name
+                            || `${g.last_name ?? ''} ${g.first_name ?? ''}`.trim(),
+                    }));
+
+                    if (this.selectedWalkInGuest && !this.localGuests.find((g) => g.id === this.selectedWalkInGuest.id)) {
+                        this.localGuests.unshift(this.selectedWalkInGuest);
+                    }
+                } catch {
+                    this.localGuests = [...this.guests];
+                }
+            }, 250);
+        },
+        parseGuestName(input) {
+            if (!input || typeof input !== 'string') {
+                return {
+                    last_name: '',
+                    first_name: '',
+                };
+            }
+
+            const parts = input.trim().split(/\s+/);
+
+            if (parts.length === 0) {
+                return {
+                    last_name: '',
+                    first_name: '',
+                };
+            }
+
+            const last_name = parts[0];
+            const first_name = parts.slice(1).join(' ');
+
+            return {
+                last_name,
+                first_name,
+            };
+        },
+        async onWalkInGuestTag(inputValue) {
+            const parsed = this.parseGuestName(inputValue);
+
+            const { value: formValues, isConfirmed } = await Swal.fire({
+                title: 'Créer un nouveau client',
+                html:
+                    '<div class="text-left space-y-2">'
+                    + '<label class="block text-xs font-semibold text-gray-600">Nom</label>'
+                    + `<input id="swal-guest-last-name" type="text" class="swal2-input" value="${parsed.last_name ?? ''}">`
+                    + '<label class="block text-xs font-semibold text-gray-600">Prénom</label>'
+                    + `<input id="swal-guest-first-name" type="text" class="swal2-input" value="${parsed.first_name ?? ''}">`
+                    + '<label class="block text-xs font-semibold text-gray-600">Téléphone</label>'
+                    + '<input id="swal-guest-phone" type="text" class="swal2-input" value="">'
+                    + '</div>',
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: 'Créer',
+                cancelButtonText: 'Annuler',
+                preConfirm: () => {
+                    const lastNameInput = document.getElementById('swal-guest-last-name');
+                    const firstNameInput = document.getElementById('swal-guest-first-name');
+                    const phoneInput = document.getElementById('swal-guest-phone');
+
+                    const last_name = (lastNameInput?.value ?? '').toString().trim();
+                    const first_name = (firstNameInput?.value ?? '').toString().trim();
+                    const phone = (phoneInput?.value ?? '').toString().trim();
+
+                    if (!last_name) {
+                        Swal.showValidationMessage('Le nom est obligatoire.');
+
+                        return false;
+                    }
+
+                    return {
+                        last_name,
+                        first_name,
+                        phone,
+                    };
+                },
+            });
+
+            if (!isConfirmed || !formValues) {
+                return;
+            }
+
+            try {
+                const response = await axios.post(
+                    '/guests',
+                    {
+                        first_name: formValues.first_name,
+                        last_name: formValues.last_name,
+                        phone: formValues.phone || null,
+                    },
+                    {
+                        headers: {
+                            Accept: 'application/json',
+                        },
+                    },
+                );
+
+                const newGuest = response.data?.guest ?? response.data;
+
+                if (!newGuest || !newGuest.id) {
+                    return;
+                }
+
+                const guestWithName = {
+                    ...newGuest,
+                    full_name:
+                        newGuest.full_name
+                        || `${newGuest.last_name ?? ''} ${newGuest.first_name ?? ''}`.trim(),
+                };
+
+                this.localGuests.push(guestWithName);
+                this.selectedWalkInGuest = guestWithName;
+                this.form.guest_id = guestWithName.id;
+                this.form.guest_first_name = guestWithName.first_name ?? '';
+                this.form.guest_last_name = guestWithName.last_name ?? '';
+                this.form.guest_phone = guestWithName.phone ?? '';
+            } catch (error) {
+                const message =
+                    error.response?.data?.message
+                    ?? 'Impossible de créer le client.';
+
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erreur',
+                    text: message,
+                });
+            }
+        },
         syncSelectedRoom() {
             if (!this.selectedRoom) {
                 return;
