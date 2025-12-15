@@ -25,18 +25,19 @@ class MaintenanceTicketPolicy
 
     public function viewAny(User $user): bool
     {
-        return $this->hasActiveHotel($user);
+        return $this->hasActiveHotel($user) && $user->hasPermissionTo('maintenance_tickets.view');
     }
 
     public function view(User $user, MaintenanceTicket $maintenanceTicket): bool
     {
-        return $this->belongsToUserContext($user, $maintenanceTicket);
+        return $this->belongsToUserContext($user, $maintenanceTicket)
+            && $user->hasPermissionTo('maintenance_tickets.view');
     }
 
     public function create(User $user): bool
     {
         return $this->hasActiveHotel($user)
-            && $user->hasRole(self::REPORT_ROLES);
+            && $user->hasPermissionTo('maintenance_tickets.create');
     }
 
     public function update(User $user, MaintenanceTicket $maintenanceTicket): bool
@@ -45,9 +46,7 @@ class MaintenanceTicketPolicy
             return false;
         }
 
-        return $user->hasRole(array_unique(
-            array_merge(self::REPORT_ROLES, self::MANAGE_ROLES),
-        ));
+        return $user->hasPermissionTo('maintenance_tickets.update');
     }
 
     public function delete(User $user, MaintenanceTicket $maintenanceTicket): bool

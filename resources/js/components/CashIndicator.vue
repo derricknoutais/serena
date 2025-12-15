@@ -11,12 +11,14 @@
                 Caisse fermée
             </span>
             <PrimaryButton
+                v-if="canOpenCash"
                 @click="openingModal = true"
                 type="button"
                 class="px-3 py-1.5 text-xs"
             >
                 Ouvrir la caisse
             </PrimaryButton>
+            <span v-else class="text-xs text-gray-400">Ouverture non autorisée</span>
         </div>
 
         <!-- Open State -->
@@ -32,12 +34,14 @@
                 <span class="text-gray-500">Ouvert par {{ session.opened_by?.name || 'Moi' }}</span>
             </div>
             <button
+                v-if="canCloseCash"
                 @click="closingModal = true"
                 type="button"
                 class="text-xs font-medium text-gray-500 hover:text-gray-700"
             >
                 Fermer
             </button>
+            <span v-else class="text-xs text-gray-400">Fermeture non autorisée</span>
         </div>
 
         <!-- Opening Modal -->
@@ -164,6 +168,7 @@ import InputError from '@/components/InputError.vue';
 import PrimaryButton from '@/components/PrimaryButton.vue';
 import SecondaryButton from '@/components/SecondaryButton.vue';
 import axios from 'axios';
+import Swal from 'sweetalert2';
 
 export default {
     name: 'CashIndicator',
@@ -202,6 +207,17 @@ export default {
             }),
         };
     },
+    computed: {
+        permissions() {
+            return this.$page?.props?.auth?.can ?? {};
+        },
+        canOpenCash() {
+            return this.permissions.cash_sessions_open ?? false;
+        },
+        canCloseCash() {
+            return this.permissions.cash_sessions_close ?? false;
+        },
+    },
     mounted() {
         this.fetchSession();
         window.addEventListener('cash-session-updated', this.handleExternalUpdate);
@@ -210,6 +226,13 @@ export default {
         window.removeEventListener('cash-session-updated', this.handleExternalUpdate);
     },
     methods: {
+        showUnauthorizedAlert() {
+            Swal.fire({
+                icon: 'error',
+                title: 'Action non autorisée',
+                text: 'Vous ne disposez pas des droits suffisants.',
+            });
+        },
         handleExternalUpdate(event) {
             const eventType = event?.detail?.type || 'frontdesk';
 
@@ -234,6 +257,11 @@ export default {
             return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 0 }).format(num);
         },
         openSession() {
+            if (!this.canOpenCash) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
             this.openForm.type = this.type; // Ensure type is correct
             this.openForm.post('/cash', {
                 preserveScroll: true,
@@ -242,10 +270,21 @@ export default {
                     this.fetchSession(); 
                     this.openForm.reset();
                 },
+                onError: (errors) => {
+                    if (!errors || Object.keys(errors).length === 0) {
+                        this.showUnauthorizedAlert();
+                    }
+                },
             });
         },
         closeSession() {
             if (!this.session) return;
+            
+            if (!this.canCloseCash) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
             
             this.closeForm.post('/cash/' + this.session.id + '/close', {
                 preserveScroll: true,
@@ -253,6 +292,11 @@ export default {
                     this.closingModal = false;
                     this.fetchSession();
                     this.closeForm.reset();
+                },
+                onError: (errors) => {
+                    if (!errors || Object.keys(errors).length === 0) {
+                        this.showUnauthorizedAlert();
+                    }
                 },
             });
         },

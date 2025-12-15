@@ -58,14 +58,14 @@
                 </div>
 
                 <div
-                    v-if="canManageHousekeeping"
+                    v-if="canManageAnyHousekeeping"
                     class="mt-4 grid gap-2 sm:grid-cols-3"
                 >
                     <button
                         type="button"
                         class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700"
                         @click="updateStatus('dirty')"
-                        :disabled="loading || !canManageHousekeeping"
+                        :disabled="loading || !canMarkDirty"
                     >
                         Marquer sale
                     </button>
@@ -73,7 +73,7 @@
                         type="button"
                         class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700"
                         @click="updateStatus('clean')"
-                        :disabled="loading || !canManageHousekeeping"
+                        :disabled="loading || !canMarkClean"
                     >
                         Marquer propre
                     </button>
@@ -81,7 +81,7 @@
                         type="button"
                         class="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700"
                         @click="updateStatus('inspected')"
-                        :disabled="loading || !canManageHousekeeping"
+                        :disabled="loading || !canMarkInspected"
                     >
                         Inspectée
                     </button>
@@ -140,6 +140,23 @@
                 loading: false,
             };
         },
+        computed: {
+            permissionFlags() {
+                return this.$page?.props?.auth?.can ?? {};
+            },
+            canMarkClean() {
+                return this.permissionFlags.housekeeping_mark_clean ?? this.canManageHousekeeping;
+            },
+            canMarkDirty() {
+                return this.permissionFlags.housekeeping_mark_dirty ?? this.canManageHousekeeping;
+            },
+            canMarkInspected() {
+                return this.permissionFlags.housekeeping_mark_inspected ?? this.canManageHousekeeping;
+            },
+            canManageAnyHousekeeping() {
+                return this.canMarkClean || this.canMarkDirty || this.canMarkInspected;
+            },
+        },
         methods: {
             startScan() {
                 this.scanning = true;
@@ -190,7 +207,13 @@
                 }
             },
             async updateStatus(status) {
-                if (!this.canManageHousekeeping) {
+                const permissionMap = {
+                    dirty: this.canMarkDirty,
+                    clean: this.canMarkClean,
+                    inspected: this.canMarkInspected,
+                };
+
+                if (permissionMap[status] === false) {
                     this.notifyError('Vous n’avez pas les droits nécessaires.');
 
                     return;
@@ -210,7 +233,11 @@
                     this.currentRoom = response.data.room;
                     this.notifySuccess('Statut mis à jour.');
                 } catch (error) {
-                    this.notifyError("Impossible de mettre à jour le statut.");
+                    if (error?.response?.status === 403) {
+                        this.notifyError('Action non autorisée.');
+                    } else {
+                        this.notifyError("Impossible de mettre à jour le statut.");
+                    }
                 } finally {
                     this.loading = false;
                 }

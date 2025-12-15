@@ -102,8 +102,8 @@ class FolioPayloadService
             ])->values(),
             'paymentMethods' => $paymentMethods,
             'permissions' => [
-                'can_manage_payments' => $user?->hasRole(['owner', 'manager']) ?? false,
-                'can_manage_invoices' => $user?->hasRole(['owner', 'manager']) ?? false,
+                'can_manage_payments' => $user?->can('folio_items.void') ?? false,
+                'can_manage_invoices' => $user?->can('invoices.create') ?? false,
             ],
         ];
     }

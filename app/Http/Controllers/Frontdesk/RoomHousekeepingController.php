@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Room;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 class RoomHousekeepingController extends Controller
 {
@@ -26,8 +27,27 @@ class RoomHousekeepingController extends Controller
             abort(403);
         }
 
+        match ($data['hk_status']) {
+            'inspected' => Gate::authorize('housekeeping.mark_inspected'),
+            'clean' => Gate::authorize('housekeeping.mark_clean'),
+            'dirty' => Gate::authorize('housekeeping.mark_dirty'),
+            default => null,
+        };
+
+        $fromStatus = $room->hk_status;
         $room->hk_status = $data['hk_status'];
         $room->save();
+
+        activity('room')
+            ->performedOn($room)
+            ->causedBy($user)
+            ->withProperties([
+                'from_hk_status' => $fromStatus,
+                'to_hk_status' => $room->hk_status,
+                'room_number' => $room->number,
+            ])
+            ->event('hk_updated')
+            ->log('hk_updated');
 
         return response()->json([
             'success' => true,

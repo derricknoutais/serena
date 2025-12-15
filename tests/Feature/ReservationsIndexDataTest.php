@@ -64,6 +64,7 @@ it('returns consistent date strings for planner events', function (): void {
     ]);
 
     $checkIn = Carbon::create(2024, 5, 1, 15, 0, 0, 'UTC');
+    $actualCheckIn = Carbon::create(2024, 5, 1, 16, 30, 0, 'UTC');
     $checkOut = Carbon::create(2024, 5, 5, 11, 0, 0, 'UTC');
 
     Reservation::query()->create([
@@ -83,7 +84,7 @@ it('returns consistent date strings for planner events', function (): void {
         'check_in_date' => $checkIn,
         'check_out_date' => $checkOut,
         'expected_arrival_time' => null,
-        'actual_check_in_at' => null,
+        'actual_check_in_at' => $actualCheckIn,
         'actual_check_out_at' => null,
         'currency' => 'XAF',
         'unit_price' => 150000,
@@ -102,4 +103,5 @@ it('returns consistent date strings for planner events', function (): void {
 
     expect($event['check_in_date'])->toBe('2024-05-01T15:00:00');
     expect($event['check_out_date'])->toBe('2024-05-05T11:00:00');
+    expect($event['actual_check_in_at'])->toBe('2024-05-01T16:30:00');
 });

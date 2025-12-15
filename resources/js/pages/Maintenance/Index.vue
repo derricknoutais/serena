@@ -208,7 +208,7 @@
                             <select
                                 v-model="modalForm.status"
                                 class="mt-1 w-full rounded-xl border border-serena-border bg-white px-3 py-2 text-sm focus:border-serena-primary focus:outline-none focus:ring-2 focus:ring-serena-primary-soft disabled:bg-serena-bg-soft"
-                                :disabled="!permissions.canUpdateStatus"
+                                :disabled="!canUpdateStatus"
                             >
                                 <option value="open">Ouvert</option>
                                 <option value="in_progress">En cours</option>
@@ -226,7 +226,7 @@
                             <select
                                 v-model="modalForm.assigned_to_user_id"
                                 class="mt-1 w-full rounded-xl border border-serena-border bg-white px-3 py-2 text-sm focus:border-serena-primary focus:outline-none focus:ring-2 focus:ring-serena-primary-soft disabled:bg-serena-bg-soft"
-                                :disabled="!permissions.canAssign"
+                                :disabled="!canAssign"
                             >
                                 <option :value="null">Non assigné</option>
                                 <option
@@ -255,7 +255,7 @@
                     <button
                         type="button"
                         class="rounded-xl bg-serena-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-serena-primary-dark disabled:opacity-60"
-                        :disabled="updating || !permissions.canUpdateStatus"
+                        :disabled="updating || !canUpdateStatus"
                         @click="submitTicketUpdate"
                     >
                         {{ updating ? 'Mise à jour...' : 'Mettre à jour' }}
@@ -319,6 +319,18 @@ export default {
         hasTickets() {
             return Array.isArray(this.tickets?.data) && this.tickets.data.length > 0;
         },
+        permissionFlags() {
+            return this.$page?.props?.auth?.can ?? {};
+        },
+        canUpdateStatus() {
+            return this.permissionFlags.maintenance_tickets_update ?? this.permissions.canUpdateStatus;
+        },
+        canCloseStatus() {
+            return this.permissionFlags.maintenance_tickets_close ?? this.permissions.canClose ?? false;
+        },
+        canAssign() {
+            return this.permissionFlags.maintenance_tickets_close ?? this.permissions.canAssign;
+        },
     },
     watch: {
         filters: {
@@ -329,6 +341,13 @@ export default {
         },
     },
     methods: {
+        showUnauthorizedAlert() {
+            Swal.fire({
+                icon: 'error',
+                title: 'Action non autorisée',
+                text: 'Vous ne disposez pas des droits suffisants.',
+            });
+        },
         statusFilterLabel(option) {
             switch (option) {
                 case 'in_progress':
@@ -451,6 +470,12 @@ export default {
                 return;
             }
 
+            if (!this.canUpdateStatus) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
+
             this.updating = true;
             this.modalErrors = {};
 
@@ -458,11 +483,20 @@ export default {
                 description: this.modalForm.description || null,
             };
 
-            if (this.permissions.canUpdateStatus) {
+            if (this.canUpdateStatus) {
+                const isClosing = ['resolved', 'closed'].includes(this.modalForm.status);
+
+                if (isClosing && !this.canCloseStatus) {
+                    this.showUnauthorizedAlert();
+                    this.updating = false;
+
+                    return;
+                }
+
                 payload.status = this.modalForm.status;
             }
 
-            if (this.permissions.canAssign) {
+            if (this.canAssign) {
                 payload.assigned_to_user_id = this.modalForm.assigned_to_user_id;
             }
 
@@ -483,7 +517,9 @@ export default {
                     only: ['tickets'],
                 });
             } catch (error) {
-                if (error.response?.status === 422) {
+                if (error.response?.status === 403) {
+                    this.showUnauthorizedAlert();
+                } else if (error.response?.status === 422) {
                     this.modalErrors = Object.fromEntries(
                         Object.entries(error.response.data.errors || {}).map(([key, value]) => [
                             key,

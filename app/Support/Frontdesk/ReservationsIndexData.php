@@ -23,13 +23,13 @@ class ReservationsIndexData
 
         $hotelId = $user->active_hotel_id ?? $request->session()->get('active_hotel_id');
 
-        if (!$hotelId) {
+        if (! $hotelId) {
             $hotelId = Hotel::query()->where('tenant_id', $tenantId)->value('id');
         }
 
         $reservations = Reservation::query()
             ->forTenant($tenantId)
-            ->when($hotelId, fn($q) => $q->forHotel($hotelId))
+            ->when($hotelId, fn ($q) => $q->forHotel($hotelId))
             ->with(['room', 'roomType', 'offer'])
             ->orderBy('check_in_date')
             ->limit(200)
@@ -44,7 +44,7 @@ class ReservationsIndexData
 
                 // If actual times present, maybe use them? But for calendar "day grid", dates are safer.
                 // Let's stick to dates for the calendar view to ensure stability.
-    
+
                 return [
                     'id' => $reservation->id,
                     'title' => $reservation->code,
@@ -71,6 +71,7 @@ class ReservationsIndexData
                     'notes' => $reservation->notes,
                     'source' => $reservation->source,
                     'expected_arrival_time' => $reservation->expected_arrival_time,
+                    'actual_check_in_at' => self::formatDateTimeLocal($reservation->actual_check_in_at),
                     'check_in_date' => self::formatDateTimeLocal($reservation->check_in_date),
                     'check_out_date' => self::formatDateTimeLocal($reservation->check_out_date),
                     'room_hk_status' => $reservation->room?->hk_status,
@@ -83,32 +84,32 @@ class ReservationsIndexData
             ->orderBy('first_name')
             ->limit(200)
             ->get(['id', 'first_name', 'last_name'])
-            ->map(fn(Guest $g) => [
+            ->map(fn (Guest $g) => [
                 'id' => $g->id,
-                'name' => trim($g->first_name . ' ' . $g->last_name),
+                'name' => trim($g->first_name.' '.$g->last_name),
             ]);
 
         $roomTypes = RoomType::query()
-            ->when($hotelId, fn($q) => $q->where('hotel_id', $hotelId))
+            ->when($hotelId, fn ($q) => $q->where('hotel_id', $hotelId))
             ->orderBy('name')
             ->get(['id', 'name']);
 
         $rooms = Room::query()
             ->where('tenant_id', $tenantId)
-            ->when($hotelId, fn($q) => $q->where('hotel_id', $hotelId))
+            ->when($hotelId, fn ($q) => $q->where('hotel_id', $hotelId))
             ->with('roomType')
             ->orderBy('number')
             ->get();
 
         $offers = Offer::query()
             ->where('tenant_id', $tenantId)
-            ->when($hotelId, fn($q) => $q->where('hotel_id', $hotelId))
+            ->when($hotelId, fn ($q) => $q->where('hotel_id', $hotelId))
             ->orderBy('name')
-            ->get(['id', 'name', 'kind', 'fixed_duration_hours', 'check_in_from', 'check_out_until']);
+            ->get(['id', 'name', 'kind', 'time_rule', 'time_config']);
 
         $offerRoomTypePrices = OfferRoomTypePrice::query()
             ->where('tenant_id', $tenantId)
-            ->when($hotelId, fn($q) => $q->where('hotel_id', $hotelId))
+            ->when($hotelId, fn ($q) => $q->where('hotel_id', $hotelId))
             ->get(['room_type_id', 'offer_id', 'price', 'currency']);
 
         return [
@@ -116,7 +117,7 @@ class ReservationsIndexData
             'guests' => $guests,
             'roomTypes' => $roomTypes,
             'statusOptions' => Reservation::statusOptions(),
-            'rooms' => $rooms->map(fn(Room $room) => [
+            'rooms' => $rooms->map(fn (Room $room) => [
                 'id' => $room->id,
                 'number' => $room->number,
                 'room_type_id' => $room->room_type_id,
@@ -129,13 +130,13 @@ class ReservationsIndexData
                 'currency' => 'XAF',
                 'hotel_id' => $hotelId,
             ],
-            'canManageTimes' => $user->hasRole(['owner', 'manager']),
+            'canManageTimes' => $user->can('reservations.override_datetime'),
         ];
     }
 
     private static function formatDateTimeLocal(?Carbon $value): ?string
     {
-        if (!$value) {
+        if (! $value) {
             return null;
         }
 

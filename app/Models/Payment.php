@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+use function activity;
+
 class Payment extends Model
 {
     use HasFactory;
@@ -58,5 +60,24 @@ class Payment extends Model
     public function cashSession(): BelongsTo
     {
         return $this->belongsTo(CashSession::class);
+    }
+
+    protected static function booted(): void
+    {
+        static::deleting(function (Payment $payment): void {
+            if (! $payment->isForceDeleting()) {
+                activity('payment')
+                    ->performedOn($payment)
+                    ->causedBy(auth()->user())
+                    ->withProperties([
+                        'amount' => $payment->amount,
+                        'currency' => $payment->currency,
+                        'method' => $payment->paymentMethod?->name,
+                        'cash_session_id' => $payment->cash_session_id,
+                    ])
+                    ->event('voided')
+                    ->log('voided');
+            }
+        });
     }
 }

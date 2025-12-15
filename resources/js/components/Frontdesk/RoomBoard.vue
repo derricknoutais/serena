@@ -80,6 +80,12 @@
                                 >
                                     {{ hkBadge(room).label }}
                                 </span>
+                                <span
+                                    v-if="room.pending_sync"
+                                    class="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 font-semibold text-amber-700"
+                                >
+                                    Sync en attente
+                                </span>
                             </div>
 
                             <div
@@ -99,10 +105,11 @@
                             </div>
 
                             <div
-                                v-if="canManageHousekeeping"
+                                v-if="canManageHousekeepingActions"
                                 class="mt-2 flex flex-wrap gap-1 text-[10px]"
                             >
                                 <button
+                                    v-if="canMarkDirty"
                                     type="button"
                                     class="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-gray-600 shadow"
                                     @click.stop="updateRoomHkStatus(room.id, 'dirty')"
@@ -110,6 +117,7 @@
                                     Marquer sale
                                 </button>
                                 <button
+                                    v-if="canMarkClean"
                                     type="button"
                                     class="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-gray-600 shadow"
                                     @click.stop="updateRoomHkStatus(room.id, 'clean')"
@@ -117,6 +125,7 @@
                                     Marquer propre
                                 </button>
                                 <button
+                                    v-if="canMarkInspected"
                                     type="button"
                                     class="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-gray-600 shadow"
                                     @click.stop="updateRoomHkStatus(room.id, 'inspected')"
@@ -184,6 +193,12 @@
                                 >
                                     {{ maintenanceBadge(selectedRoom.maintenance_ticket).label }}
                                 </span>
+                                <span
+                                    v-if="selectedRoom.pending_sync"
+                                    class="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
+                                >
+                                    Sync en attente
+                                </span>
                             </div>
                         </div>
 
@@ -230,7 +245,7 @@
                         </div>
 
                         <div
-                            v-if="canManageHousekeeping"
+                            v-if="canManageHousekeepingActions"
                             class="space-y-2"
                         >
                             <h4 class="text-xs font-semibold text-gray-700">
@@ -267,6 +282,7 @@
 
                             <div class="mt-2 flex flex-wrap gap-2">
                                 <button
+                                    v-if="canMarkInspected"
                                     type="button"
                                     class="rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100"
                                     @click="updateRoomHkStatus(selectedRoom.id, 'inspected')"
@@ -275,6 +291,7 @@
                                 </button>
 
                                 <button
+                                    v-if="canMarkDirty"
                                     type="button"
                                     class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100"
                                     @click="updateRoomHkStatus(selectedRoom.id, 'dirty')"
@@ -403,10 +420,64 @@
                             class="space-y-2"
                         >
                             <h4 class="text-xs font-semibold text-gray-700">
-                                Gestion du séjour
+                                Statut & séjour
                             </h4>
 
                             <div class="flex flex-wrap gap-2">
+                                <button
+                                    v-if="selectedRoom.current_reservation.status === 'pending'"
+                                    type="button"
+                                    class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+                                    :disabled="statusSubmitting"
+                                    @click="changeStatus('confirm')"
+                                >
+                                    Confirmer
+                                </button>
+                                <button
+                                    v-if="selectedRoom.current_reservation.status === 'pending'"
+                                    type="button"
+                                    class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
+                                    :disabled="statusSubmitting"
+                                    @click="changeStatus('cancel')"
+                                >
+                                    Annuler
+                                </button>
+                                <button
+                                    v-if="selectedRoom.current_reservation.status === 'confirmed'"
+                                    type="button"
+                                    class="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-green-700 disabled:opacity-60"
+                                    :disabled="statusSubmitting"
+                                    @click="changeStatus('check_in')"
+                                >
+                                    Check-in
+                                </button>
+                                <button
+                                    v-if="selectedRoom.current_reservation.status === 'confirmed'"
+                                    type="button"
+                                    class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
+                                    :disabled="statusSubmitting"
+                                    @click="changeStatus('cancel')"
+                                >
+                                    Annuler
+                                </button>
+                                <button
+                                    v-if="selectedRoom.current_reservation.status === 'confirmed'"
+                                    type="button"
+                                    class="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-amber-700 disabled:opacity-60"
+                                    :disabled="statusSubmitting"
+                                    @click="changeStatus('no_show')"
+                                >
+                                    No-show
+                                </button>
+                                <button
+                                    v-if="selectedRoom.current_reservation.status === 'in_house'"
+                                    type="button"
+                                    class="rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-gray-900 disabled:opacity-60"
+                                    :disabled="statusSubmitting"
+                                    @click="changeStatus('check_out')"
+                                >
+                                    Check-out
+                                </button>
                                 <button
                                     type="button"
                                     class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
@@ -429,6 +500,55 @@
                                     Changer de chambre
                                 </button>
                             </div>
+                        </div>
+
+                        <div class="mt-3 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
+                            <div class="mb-2 flex items-center justify-between">
+                                <h4 class="text-xs font-semibold text-gray-700">
+                                    Historique de la chambre
+                                </h4>
+                                <button
+                                    type="button"
+                                    class="text-[11px] font-medium text-indigo-600 hover:text-indigo-700"
+                                    @click="loadRoomActivity"
+                                >
+                                    Actualiser
+                                </button>
+                            </div>
+                            <div v-if="roomActivityLoading" class="text-[11px] text-gray-500">
+                                Chargement de l’historique…
+                            </div>
+                            <div
+                                v-else-if="roomActivity.length === 0"
+                                class="text-[11px] text-gray-400"
+                            >
+                                Aucune activité récente sur cette chambre.
+                            </div>
+                            <ul
+                                v-else
+                                class="max-h-36 space-y-1 overflow-y-auto text-[11px] text-gray-700"
+                            >
+                                <li
+                                    v-for="entry in roomActivity"
+                                    :key="entry.id"
+                                    class="flex items-start justify-between gap-2"
+                                >
+                                    <div>
+                                        <p class="font-medium text-gray-800">
+                                            {{ roomActivityLabel(entry) }}
+                                        </p>
+                                        <p
+                                            v-if="entry.properties?.room_number"
+                                            class="text-[10px] text-gray-500"
+                                        >
+                                            Chambre {{ entry.properties.room_number }}
+                                        </p>
+                                    </div>
+                                    <span class="whitespace-nowrap text-[10px] text-gray-400">
+                                        {{ entry.created_at }}
+                                    </span>
+                                </li>
+                            </ul>
                         </div>
                     </div>
                 </div>
@@ -875,8 +995,8 @@
 </template>
 
 <script>
-import axios from 'axios';
 import Swal from 'sweetalert2';
+import axios from 'axios';
 import { router, useForm } from '@inertiajs/vue3';
 import Multiselect from 'vue-multiselect';
 import PrimaryButton from '@/components/PrimaryButton.vue';
@@ -884,6 +1004,7 @@ import SecondaryButton from '@/components/SecondaryButton.vue';
 import TextInput from '@/components/TextInput.vue';
 import FolioModal from '@/components/Frontdesk/FolioModal.vue';
 import { dashboard as frontdeskDashboard } from '@/routes/frontdesk';
+import { enqueue } from '@/offline/outbox';
 
 export default {
     name: 'RoomBoard',
@@ -989,7 +1110,23 @@ export default {
             ],
             maintenanceSubmitting: false,
             maintenanceStatusSubmitting: false,
+            roomActivityLoading: false,
+            roomActivity: [],
+            statusSubmitting: false,
+            pendingFeeOverrides: {
+                early: null,
+                late: null,
+            },
+            refreshTimer: null,
         };
+    },
+    mounted() {
+        this.localGuests = [...(this.guests || [])];
+        this.roomsByFloorLocal = this.roomsByFloor;
+        this.startPolling();
+    },
+    beforeUnmount() {
+        this.stopPolling();
     },
     computed: {
         filteredRoomsByFloor() {
@@ -1007,6 +1144,17 @@ export default {
             return this.stayModalMode === 'extend'
                 ? 'Prolonger le séjour'
                 : 'Raccourcir le séjour';
+        },
+        canOverrideTimes() {
+            const permissions = this.$page?.props?.auth?.can ?? {};
+
+            return permissions.reservations_override_datetime ?? false;
+        },
+        canOverrideFees() {
+            const roles = this.$page?.props?.auth?.user?.roles || [];
+            const hasRole = roles.some((role) => ['owner', 'manager'].includes(role.name));
+
+            return this.canOverrideTimes || hasRole;
         },
         stayModalMin() {
             if (!this.selectedRoom?.current_reservation) {
@@ -1051,6 +1199,30 @@ export default {
                 total: nights * unitPrice,
             };
         },
+        permissionFlags() {
+            return this.$page?.props?.auth?.can ?? {};
+        },
+        canMarkClean() {
+            return this.permissionFlags.housekeeping_mark_clean ?? this.canManageHousekeeping;
+        },
+        canMarkDirty() {
+            return this.permissionFlags.housekeeping_mark_dirty ?? this.canManageHousekeeping;
+        },
+        canMarkInspected() {
+            return this.permissionFlags.housekeeping_mark_inspected ?? this.canManageHousekeeping;
+        },
+        canManageHousekeepingActions() {
+            return this.canMarkClean || this.canMarkDirty || this.canMarkInspected;
+        },
+        canReportMaintenance() {
+            return (this.permissionFlags.maintenance_tickets_create ?? this.maintenancePermissions?.canReport) || false;
+        },
+        canHandleMaintenance() {
+            return (this.permissionFlags.maintenance_tickets_close ?? this.maintenancePermissions?.canHandle) || false;
+        },
+        canProgressMaintenance() {
+            return (this.permissionFlags.maintenance_tickets_update ?? this.maintenancePermissions?.canProgress) || false;
+        },
         changeRoomOptions() {
             if (!this.selectedRoom?.current_reservation) {
                 return [];
@@ -1083,15 +1255,6 @@ export default {
         selectedRoomMaintenance() {
             return this.selectedRoom?.maintenance_ticket ?? null;
         },
-        canReportMaintenance() {
-            return this.maintenancePermissions?.canReport ?? false;
-        },
-        canHandleMaintenance() {
-            return this.maintenancePermissions?.canHandle ?? false;
-        },
-        canProgressMaintenance() {
-            return this.maintenancePermissions?.canProgress ?? false;
-        },
         currentUserId() {
             return this.currentUser?.id ?? null;
         },
@@ -1106,11 +1269,18 @@ export default {
         },
         walkInRoom: {
             immediate: true,
-            handler(newRoom) {
+            async handler(newRoom) {
                 if (newRoom && this.walkInDefaultDates && this.walkInOffers) {
                     const initialOffer = this.walkInOffers.length
                         ? this.walkInOffers[0]
                         : null;
+
+                    const start = new Date();
+                    let end = await this.computeWalkInEndDate(start, initialOffer);
+
+                    if (!(end instanceof Date) || Number.isNaN(end.getTime())) {
+                        end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+                    }
 
                     this.form = useForm({
                         guest_id: null,
@@ -1120,8 +1290,8 @@ export default {
                         offer_price_id: initialOffer
                             ? initialOffer.offer_price_id
                             : null,
-                        check_in_at: this.toDateTimeLocal(new Date()),
-                        check_out_at: this.toDateTimeLocal(this.computeWalkInEndDate(new Date(), initialOffer)),
+                        check_in_at: this.toDateTimeLocal(start),
+                        check_out_at: this.toDateTimeLocal(end),
                         adults: 1,
                         children: 0,
                         amount_received: '',
@@ -1155,6 +1325,54 @@ export default {
         },
     },
     methods: {
+        startPolling() {
+            if (this.refreshTimer) {
+                window.clearInterval(this.refreshTimer);
+            }
+
+            this.refreshTimer = window.setInterval(() => {
+                if (navigator.onLine && !this.isWalkInOpen && !this.showStayModal && !this.showChangeRoomModal && !this.showMaintenanceModal) {
+                    this.reloadRoomBoard();
+                }
+            }, 60000);
+        },
+        stopPolling() {
+            if (this.refreshTimer) {
+                window.clearInterval(this.refreshTimer);
+                this.refreshTimer = null;
+            }
+        },
+        extractFirstError(errors, fallback = null) {
+            if (!errors) {
+                return fallback;
+            }
+
+            if (typeof errors === 'string') {
+                return errors;
+            }
+
+            if (Array.isArray(errors)) {
+                return errors[0] ?? fallback;
+            }
+
+            const firstKey = Object.keys(errors)[0] ?? null;
+
+            if (!firstKey) {
+                return fallback;
+            }
+
+            const value = errors[firstKey];
+
+            if (Array.isArray(value)) {
+                return value[0] ?? fallback;
+            }
+
+            if (typeof value === 'string') {
+                return value;
+            }
+
+            return fallback;
+        },
         toDateTimeLocal(date) {
             const d = date instanceof Date ? date : new Date(date);
 
@@ -1170,7 +1388,14 @@ export default {
 
             return `${year}-${month}-${day}T${hours}:${minutes}`;
         },
-        computeWalkInEndDate(startDate, offer) {
+        showUnauthorizedAlert() {
+            Swal.fire({
+                icon: 'error',
+                title: 'Action non autorisée',
+                text: 'Vous ne disposez pas des droits suffisants.',
+            });
+        },
+        async computeWalkInEndDate(startDate, offer) {
             const start = startDate instanceof Date ? new Date(startDate) : new Date();
 
             if (Number.isNaN(start.getTime())) {
@@ -1181,45 +1406,26 @@ export default {
                 || this.walkInOffers.find((o) => o.id === this.form?.offer_id)
                 || null;
 
-            let end = new Date(start.getTime());
-
             if (!effectiveOffer) {
-                end.setHours(end.getHours() + 24);
-
-                return end;
+                return new Date(start.getTime() + 24 * 60 * 60 * 1000);
             }
 
-            const kind = effectiveOffer.kind ?? 'night';
-            const fixedHours = Number(effectiveOffer.fixed_duration_hours || 0);
+            try {
+                const http = window.axios ?? axios;
+                const response = await http.post(`/api/offers/${effectiveOffer.id}/time-preview`, {
+                    arrival_at: start.toISOString(),
+                });
 
-            if (fixedHours > 0) {
-                end = new Date(start.getTime() + fixedHours * 60 * 60 * 1000);
-            } else if (effectiveOffer.check_out_until) {
-                const [hStr, mStr] = effectiveOffer.check_out_until.split(':');
-                const h = Number(hStr) || 0;
-                const m = Number(mStr) || 0;
-                end.setHours(h, m, 0, 0);
+                const departure = new Date(response.data?.departure_at);
 
-                if (end.getTime() <= start.getTime()) {
-                    end.setDate(end.getDate() + 1);
+                if (!Number.isNaN(departure.getTime())) {
+                    return departure;
                 }
-            } else {
-                let durationHours = 0;
-
-                if (kind === 'short_stay') {
-                    durationHours = 3;
-                } else if (kind === 'weekend') {
-                    durationHours = 48;
-                } else if (kind === 'full_day' || kind === 'night') {
-                    durationHours = 24;
-                } else {
-                    durationHours = 24;
-                }
-
-                end = new Date(start.getTime() + durationHours * 60 * 60 * 1000);
+            } catch (error) {
+                console.error('Erreur lors du calcul de la date de départ pour le walk-in', error);
             }
 
-            return end;
+            return new Date(start.getTime() + 24 * 60 * 60 * 1000);
         },
         async onWalkInGuestSearchChange(query) {
             if (this.guestSearchTimeout) {
@@ -1518,6 +1724,7 @@ export default {
         },
         openMaintenanceModal(room) {
             if (!this.canReportMaintenance || !room) {
+                this.showUnauthorizedAlert();
                 return;
             }
 
@@ -1571,6 +1778,10 @@ export default {
                 this.resetMaintenanceForm();
                 this.reloadRoomBoard();
             } catch (error) {
+                if (error?.response?.status === 403) {
+                    this.showUnauthorizedAlert();
+                    return;
+                }
                 if (error.response?.status === 422) {
                     this.maintenanceFormErrors = Object.fromEntries(
                         Object.entries(error.response.data.errors || {}).map(([key, value]) => [
@@ -1604,10 +1815,14 @@ export default {
             }
 
             if (!this.canProgressMaintenance && ['open', 'in_progress'].includes(status)) {
+                this.showUnauthorizedAlert();
+
                 return;
             }
 
             if (['resolved', 'closed'].includes(status) && !this.canHandleMaintenance) {
+                this.showUnauthorizedAlert();
+
                 return;
             }
 
@@ -1654,6 +1869,11 @@ export default {
 
                 this.reloadRoomBoard();
             } catch (error) {
+                if (error?.response?.status === 403) {
+                    this.showUnauthorizedAlert();
+
+                    return;
+                }
                 Swal.fire({
                     icon: 'error',
                     title: 'Erreur',
@@ -1792,7 +2012,7 @@ export default {
 
             router.get(`/reservations/${room.current_reservation.id}`);
         },
-        onOfferChange() {
+        async onOfferChange() {
             if (!this.form) {
                 return;
             }
@@ -1807,7 +2027,12 @@ export default {
                     ? new Date(this.form.check_in_at)
                     : new Date();
 
-                const end = this.computeWalkInEndDate(start, selected);
+                let end = await this.computeWalkInEndDate(start, selected);
+
+                if (!(end instanceof Date) || Number.isNaN(end.getTime())) {
+                    end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+                }
+
                 this.form.check_in_at = this.toDateTimeLocal(start);
                 this.form.check_out_at = this.toDateTimeLocal(end);
             }
@@ -1839,6 +2064,44 @@ export default {
             this.reloadRoomBoard();
         },
         async updateRoomHkStatus(roomId, hkStatus) {
+            const permissionMap = {
+                clean: this.canMarkClean,
+                dirty: this.canMarkDirty,
+                inspected: this.canMarkInspected,
+            };
+
+            if (permissionMap[hkStatus] === false) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
+
+            const tenantId = this.$page?.props?.auth?.user?.tenant_id;
+            const hotelId = this.$page?.props?.auth?.activeHotel?.id ?? this.$page?.props?.auth?.user?.active_hotel_id;
+
+            if (!navigator.onLine) {
+                this.applyRoomPatch(roomId, { hk_status: hkStatus, pending_sync: true });
+
+                await enqueue({
+                    type: 'hk.update',
+                    endpoint: `/frontdesk/rooms/${roomId}/hk-status`,
+                    method: 'patch',
+                    payload: { hk_status: hkStatus },
+                    tenant_id: tenantId,
+                    hotel_id: hotelId,
+                });
+
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Action en file',
+                    text: 'Le statut sera synchronisé dès le retour en ligne.',
+                    timer: 1800,
+                    showConfirmButton: false,
+                });
+
+                return;
+            }
+
             try {
                 const response = await window.axios.patch(
                     `/frontdesk/rooms/${roomId}/hk-status`,
@@ -1870,6 +2133,11 @@ export default {
                     this.reloadRoomBoard();
                 }
             } catch (error) {
+                if (error?.response?.status === 403) {
+                    this.showUnauthorizedAlert();
+
+                    return;
+                }
                 Swal.fire({
                     icon: 'error',
                     title: 'Erreur',
@@ -1895,6 +2163,37 @@ export default {
                 title: 'Indisponible',
                 text,
             });
+        },
+        async loadRoomActivity() {
+            if (!this.selectedRoom?.id) {
+                this.roomActivity = [];
+
+                return;
+            }
+
+            this.roomActivityLoading = true;
+
+            try {
+                const response = await axios.get(`/rooms/${this.selectedRoom.id}/activity`, {
+                    headers: { Accept: 'application/json' },
+                });
+
+                this.roomActivity = Array.isArray(response.data) ? response.data : [];
+            } catch {
+                this.roomActivity = [];
+            } finally {
+                this.roomActivityLoading = false;
+            }
+        },
+        roomActivityLabel(entry) {
+            const event = entry.event || entry.description || '';
+
+            switch (event) {
+                case 'hk_updated':
+                    return 'Statut ménage mis à jour';
+                default:
+                    return entry.description || 'Action';
+            }
         },
         reloadRoomBoard(extra = {}) {
             router.get(
@@ -2067,6 +2366,467 @@ export default {
                         classes: 'border-gray-300 bg-gray-50 text-gray-700',
                         dotClass: 'bg-gray-500',
                     };
+            }
+        },
+        getReservationHkStatus(reservationId) {
+            if (this.selectedRoom?.current_reservation?.id?.toString() === reservationId?.toString()) {
+                return this.selectedRoom.hk_status ?? null;
+            }
+
+            const room = (this.roomsByFloorLocal || []).flat().find(
+                (r) => r.current_reservation?.id?.toString() === reservationId?.toString(),
+            );
+
+            return room?.hk_status ?? null;
+        },
+        async changeStatus(action) {
+            const reservation = this.selectedRoom?.current_reservation;
+
+            if (!reservation || this.statusSubmitting) {
+                return;
+            }
+
+            if (action === 'check_in') {
+                const hkStatus = this.getReservationHkStatus(reservation.id);
+
+                if (hkStatus && !['clean', 'inspected'].includes(hkStatus)) {
+                    const warning = await Swal.fire({
+                        title: 'Chambre non prête',
+                        text: 'Cette chambre est signalée comme sale ou à inspecter. Voulez-vous continuer le check-in ?',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Oui',
+                        cancelButtonText: 'Non',
+                    });
+
+                    if (!warning.isConfirmed) {
+                        return;
+                    }
+                }
+            }
+
+            if (['cancel', 'no_show'].includes(action)) {
+                this.promptPenalty(action, reservation.id);
+
+                return;
+            }
+
+            if (['check_in', 'check_out'].includes(action)) {
+                await this.promptActualDateTime(action, reservation.id);
+
+                return;
+            }
+
+            this.simpleStatusConfirm(action, reservation.id);
+        },
+        simpleStatusConfirm(action, reservationId) {
+            Swal.fire({
+                title: 'Confirmer cette action ?',
+                text: this.getActionLabel(action),
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Oui',
+                cancelButtonText: 'Non',
+            }).then((result) => {
+                if (!result.isConfirmed) {
+                    return;
+                }
+
+                this.sendStatusRequest(action, reservationId, {});
+            });
+        },
+        promptPenalty(action, reservationId) {
+            const title = action === 'cancel' ? 'Annuler la réservation ?' : 'Marquer no-show ?';
+
+            Swal.fire({
+                title,
+                text: 'Vous pouvez saisir un montant de pénalité ou laisser 0 pour ne pas pénaliser.',
+                icon: 'warning',
+                html:
+                    '<div class="text-left">'
+                    + '<label class="block text-xs font-semibold text-gray-600">Montant de la pénalité</label>'
+                    + '<input id="swal-penalty-amount" type="number" min="0" step="0.01" value="0" class="swal2-input" />'
+                    + '</div>'
+                    + '<div class="mt-2 text-left">'
+                    + '<label class="block text-xs font-semibold text-gray-600">Note (optionnelle)</label>'
+                    + '<input id="swal-penalty-note" type="text" class="swal2-input" />'
+                    + '</div>',
+                showCancelButton: true,
+                confirmButtonText: 'Valider',
+                cancelButtonText: 'Annuler',
+                focusConfirm: false,
+                preConfirm: () => {
+                    const amountInput = document.getElementById('swal-penalty-amount');
+                    const noteInput = document.getElementById('swal-penalty-note');
+                    const amount = parseFloat((amountInput?.value ?? '0').toString());
+
+                    if (Number.isNaN(amount) || amount < 0) {
+                        Swal.showValidationMessage('Le montant doit être un nombre positif.');
+
+                        return false;
+                    }
+
+                    return {
+                        amount,
+                        note: (noteInput?.value ?? '').toString(),
+                    };
+                },
+            }).then((result) => {
+                if (!result.isConfirmed) {
+                    return;
+                }
+
+                this.sendStatusRequest(action, reservationId, {
+                    penalty_amount: result.value?.amount ?? 0,
+                    penalty_note: result.value?.note ?? '',
+                });
+            });
+        },
+        async promptActualDateTime(action, reservationId) {
+            const isCheckIn = action === 'check_in';
+            const title = isCheckIn ? 'Confirmer le check-in ?' : 'Confirmer le check-out ?';
+            const label = isCheckIn ? 'Date et heure de check-in' : 'Date et heure de check-out';
+
+            const defaultValue = new Date().toISOString().slice(0, 16);
+
+            const { value, isConfirmed } = await Swal.fire({
+                title,
+                html:
+                    '<div class="text-left">'
+                    + `<label class="block text-xs font-semibold text-gray-600">${label}</label>`
+                    + `<input id="swal-datetime" type="datetime-local" value="${defaultValue}" class="swal2-input" />`
+                    + '<p class="mt-1 text-[11px] text-gray-500">Vous pouvez ajuster la date/heure réelle du check-in/out.</p>'
+                    + '</div>',
+                showCancelButton: true,
+                confirmButtonText: 'Valider',
+                cancelButtonText: 'Annuler',
+                focusConfirm: false,
+                preConfirm: () => {
+                    const input = document.getElementById('swal-datetime');
+                    const datetime = (input?.value ?? '').toString();
+
+                    if (!datetime) {
+                        Swal.showValidationMessage('Veuillez saisir une date et heure valides.');
+
+                        return false;
+                    }
+
+                    return datetime;
+                },
+            });
+
+            if (!isConfirmed) {
+                return;
+            }
+
+            const preview = await this.confirmStayAdjustments(action, reservationId, value);
+
+            if (!preview.continue) {
+                return;
+            }
+
+            const payload = isCheckIn
+                ? { actual_check_in_at: value }
+                : { actual_check_out_at: value };
+
+            const combinedOverrides = preview.overrides || {};
+            this.pendingFeeOverrides = {
+                early: combinedOverrides.early_fee_override ?? null,
+                late: combinedOverrides.late_fee_override ?? null,
+            };
+
+            this.sendStatusRequest(action, reservationId, { ...payload, ...combinedOverrides }, combinedOverrides);
+        },
+        async confirmStayAdjustments(action, reservationId, actualDatetime) {
+            if (!['check_in', 'check_out'].includes(action)) {
+                return {
+                    continue: true,
+                    overrides: {},
+                };
+            }
+
+            if (!navigator.onLine) {
+                return {
+                    continue: true,
+                    overrides: {},
+                };
+            }
+
+            try {
+                const http = window.axios ?? axios;
+                const response = await http.post(
+                    `/reservations/${reservationId}/stay-adjustments/preview`,
+                    {
+                        action,
+                        actual_datetime: actualDatetime,
+                    },
+                );
+
+                const early = response.data?.early || {};
+                const late = response.data?.late || {};
+                const currency = response.data?.currency || this.selectedRoom?.current_reservation?.currency || 'XAF';
+                const overrides = {};
+
+                if (early.blocked && !this.canOverrideFees) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Arrivée anticipée non autorisée',
+                        text: early.reason || 'Arrivée anticipée refusée.',
+                    });
+
+                    return { continue: false, overrides: {} };
+                }
+
+                if (early.blocked && this.canOverrideFees) {
+                    const confirmOverride = await Swal.fire({
+                        icon: 'warning',
+                        title: 'Arrivée anticipée',
+                        text: early.reason || 'Arrivée avant l’heure standard.',
+                        showCancelButton: true,
+                        confirmButtonText: 'Continuer',
+                        cancelButtonText: 'Annuler',
+                    });
+
+                    if (!confirmOverride.isConfirmed) {
+                        return { continue: false, overrides: {} };
+                    }
+                }
+
+                if (early.is_early_checkin && (early.fee ?? 0) > 0) {
+                    const message = early.reason
+                        || `Un supplément sera appliqué (${this.formatFeeAmount(early.fee, currency)}).`;
+                    const feePrompt = await Swal.fire({
+                        title: 'Arrivée anticipée détectée',
+                        text: message,
+                        icon: 'info',
+                        input: this.canOverrideFees ? 'number' : null,
+                        inputValue: early.fee ?? 0,
+                        inputLabel: `Supplément (${currency})`,
+                        showCancelButton: true,
+                        confirmButtonText: 'Valider',
+                        cancelButtonText: 'Annuler',
+                    });
+
+                    if (!feePrompt.isConfirmed) {
+                        return { continue: false, overrides: {} };
+                    }
+
+                    if (this.canOverrideFees) {
+                        const overrideValue = Number(feePrompt.value ?? early.fee ?? 0);
+                        overrides.early_fee_override = Number.isFinite(overrideValue) ? overrideValue : early.fee;
+                    }
+                } else if (early.is_early_checkin && early.reason) {
+                    await Swal.fire({
+                        icon: 'info',
+                        title: 'Arrivée anticipée',
+                        text: early.reason,
+                        confirmButtonText: 'OK',
+                    });
+                }
+
+                if (action === 'check_out') {
+                    if (late.blocked && !this.canOverrideFees) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Départ tardif non autorisé',
+                            text: late.reason || 'Départ tardif refusé.',
+                        });
+
+                        return { continue: false, overrides: {} };
+                    }
+
+                    if (late.blocked && this.canOverrideFees) {
+                        const confirmLate = await Swal.fire({
+                            icon: 'warning',
+                            title: 'Départ tardif',
+                            text: late.reason || 'Départ au-delà de l’heure prévue.',
+                            showCancelButton: true,
+                            confirmButtonText: 'Continuer',
+                            cancelButtonText: 'Annuler',
+                        });
+
+                        if (!confirmLate.isConfirmed) {
+                            return { continue: false, overrides: {} };
+                        }
+                    }
+
+                    if (late.is_late_checkout && (late.fee ?? 0) > 0) {
+                        const latePrompt = await Swal.fire({
+                            title: 'Départ tardif détecté',
+                            text: late.reason
+                                || `Supplément de ${this.formatFeeAmount(late.fee, currency)}.`,
+                            icon: 'info',
+                            input: this.canOverrideFees ? 'number' : null,
+                            inputValue: late.fee ?? 0,
+                            inputLabel: `Supplément (${currency})`,
+                            showCancelButton: true,
+                            confirmButtonText: 'Valider',
+                            cancelButtonText: 'Annuler',
+                        });
+
+                        if (!latePrompt.isConfirmed) {
+                            return { continue: false, overrides: {} };
+                        }
+
+                        if (this.canOverrideFees) {
+                            const overrideLate = Number(latePrompt.value ?? late.fee ?? 0);
+                            overrides.late_fee_override = Number.isFinite(overrideLate) ? overrideLate : late.fee;
+                        }
+                    }
+                }
+
+                return {
+                    continue: true,
+                    overrides,
+                };
+            } catch (error) {
+                const message =
+                    this.extractFirstError(error.response?.data?.errors, null)
+                    ?? error.response?.data?.message
+                    ?? 'Impossible de calculer le supplément.';
+
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erreur',
+                    text: message,
+                });
+
+                return {
+                    continue: false,
+                    overrides: {},
+                };
+            }
+        },
+        formatFeeAmount(value, currency) {
+            const amount = Number(value || 0);
+            const cur = currency || this.selectedRoom?.current_reservation?.currency || this.defaults?.currency || 'XAF';
+
+            return `${amount.toLocaleString('fr-FR', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 2,
+            })} ${cur}`;
+        },
+        getActionLabel(action) {
+            switch (action) {
+                case 'confirm':
+                    return 'Confirmer cette réservation ?';
+                case 'check_in':
+                    return 'Effectuer le check-in de ce client ?';
+                case 'check_out':
+                    return 'Effectuer le check-out de ce client ?';
+                case 'cancel':
+                    return 'Annuler cette réservation ?';
+                case 'no_show':
+                    return 'Marquer cette réservation comme no-show ?';
+                default:
+                    return 'Confirmer cette action ?';
+            }
+        },
+        sendStatusRequest(action, reservationId, payload, overrides = {}) {
+            this.statusSubmitting = true;
+
+            const url = `/reservations/${reservationId}/status`;
+            const data = {
+                action,
+                ...(payload || {}),
+                ...(overrides || {}),
+            };
+
+            if (!navigator.onLine) {
+                const tenantId = this.$page?.props?.auth?.user?.tenant_id;
+                const hotelId = this.$page?.props?.auth?.activeHotel?.id ?? this.$page?.props?.auth?.user?.active_hotel_id;
+                this.updateLocalRoomReservationStatus(reservationId, action, true);
+                enqueue({
+                    type: 'reservation.transition',
+                    endpoint: url,
+                    method: 'patch',
+                    payload: data,
+                    tenant_id: tenantId,
+                    hotel_id: hotelId,
+                });
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Action en file',
+                    text: 'La transition sera synchronisée dès le retour en ligne.',
+                    timer: 2000,
+                    showConfirmButton: false,
+                });
+                this.statusSubmitting = false;
+
+                return;
+            }
+
+            router.patch(
+                url,
+                data,
+                {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        this.reloadRoomBoard();
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Succès',
+                            text: 'Statut mis à jour.',
+                            timer: 1500,
+                            showConfirmButton: false,
+                        });
+                    },
+                    onError: (errors) => {
+                        const firstError =
+                            (typeof errors === 'string'
+                                ? errors
+                                : Object.values(errors || {})[0])
+                            ?? 'Erreur lors de la mise à jour.';
+
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Erreur',
+                            text: firstError,
+                        });
+                    },
+                    onFinish: () => {
+                        this.statusSubmitting = false;
+                    },
+                },
+            );
+        },
+        updateLocalRoomReservationStatus(reservationId, action, pending = false) {
+            const map = {
+                confirm: 'confirmed',
+                check_in: 'in_house',
+                check_out: 'checked_out',
+                cancel: 'cancelled',
+                no_show: 'no_show',
+            };
+            const newStatus = map[action] ?? null;
+            if (!newStatus) return;
+
+            this.roomsByFloorLocal = this.roomsByFloorLocal.map((floorRooms) =>
+                floorRooms.map((room) => {
+                    if (room.current_reservation?.id === reservationId) {
+                        return {
+                            ...room,
+                            current_reservation: {
+                                ...room.current_reservation,
+                                status: newStatus,
+                                pending_sync: pending,
+                            },
+                        };
+                    }
+
+                    return room;
+                }),
+            );
+
+            if (this.selectedRoom?.current_reservation?.id === reservationId) {
+                this.selectedRoom = {
+                    ...this.selectedRoom,
+                    current_reservation: {
+                        ...this.selectedRoom.current_reservation,
+                        status: newStatus,
+                        pending_sync: pending,
+                    },
+                };
             }
         },
     },

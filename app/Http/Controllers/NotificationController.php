@@ -22,6 +22,13 @@ class NotificationController extends Controller
         $latest = $request->boolean('latest', false);
         $limit = min(max((int) $request->integer('limit', 10), 1), 50);
 
+        if (! Schema::hasColumn('notifications', 'tenant_id')) {
+            return response()->json([
+                'notifications' => [],
+                'unread_count' => 0,
+            ]);
+        }
+
         $query = $user->notifications()
             ->where('tenant_id', $tenantId)
             ->when($hotelId, fn ($q) => $q->where(function ($sub) use ($hotelId): void {

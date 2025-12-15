@@ -4,6 +4,8 @@ namespace App\Http\Middleware;
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
+use Illuminate\Notifications\DatabaseNotification;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -48,13 +50,84 @@ class HandleInertiaRequests extends Middleware
                     ? $request->user()->loadMissing(['roles', 'activeHotel', 'hotels:id,name'])
                     : null,
                 'can' => [
-                    'activity.view' => $request->user()?->hasAnyRole(['owner', 'manager', 'superadmin']) ?? false,
+                    ...$this->permissionFlags($request),
                 ],
                 'hotels' => $request->user()?->hotels()->select('hotels.id', 'hotels.name')->get() ?? collect(),
                 'activeHotel' => $request->user()?->activeHotel,
                 'hotelNotice' => $request->session()->get('hotel_notice'),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            'notifications' => [
+                'unread_count' => $this->notificationCount($request),
+            ],
         ];
+    }
+
+    /**
+     * @return array<string, bool>
+     */
+    private function permissionFlags(Request $request): array
+    {
+        $user = $request->user();
+
+        $permissions = [
+            'reservations.override_datetime',
+            'folio_items.void',
+            'housekeeping.mark_inspected',
+            'housekeeping.mark_clean',
+            'housekeeping.mark_dirty',
+            'cash_sessions.open',
+            'cash_sessions.close',
+            'rooms.view', 'rooms.create', 'rooms.update', 'rooms.delete',
+            'room_types.view', 'room_types.create', 'room_types.update', 'room_types.delete',
+            'offers.view', 'offers.create', 'offers.update', 'offers.delete',
+            'products.view', 'products.create', 'products.update', 'products.delete',
+            'product_categories.view', 'product_categories.create', 'product_categories.update', 'product_categories.delete',
+            'taxes.view', 'taxes.create', 'taxes.update', 'taxes.delete',
+            'payment_methods.view', 'payment_methods.create', 'payment_methods.update', 'payment_methods.delete',
+            'maintenance_tickets.view', 'maintenance_tickets.create', 'maintenance_tickets.update', 'maintenance_tickets.close',
+            'invoices.view', 'invoices.create', 'invoices.update', 'invoices.delete',
+            'pos.view', 'pos.create',
+            'night_audit.view', 'night_audit.export',
+        ];
+
+        $flags = [];
+
+        foreach ($permissions as $permission) {
+            $key = str_replace('.', '_', $permission);
+            $flags[$key] = $user?->can($permission) ?? false;
+        }
+
+        return $flags;
+    }
+
+    private function notificationCount(Request $request): int
+    {
+        $user = $request->user();
+
+        if (! $user || ! Schema::hasTable('notifications')) {
+            return 0;
+        }
+
+        $tenantId = $user->tenant_id;
+        $hotelId = $user->active_hotel_id ?? $request->session()->get('active_hotel_id');
+
+        if (! Schema::hasColumn('notifications', 'tenant_id')) {
+            return 0;
+        }
+
+        $query = DatabaseNotification::query()
+            ->where('notifiable_type', get_class($user))
+            ->where('notifiable_id', $user->id)
+            ->where('tenant_id', $tenantId)
+            ->whereNull('read_at');
+
+        if ($hotelId) {
+            $query->where(function ($q) use ($hotelId): void {
+                $q->whereNull('hotel_id')->orWhere('hotel_id', $hotelId);
+            });
+        }
+
+        return (int) $query->count();
     }
 }

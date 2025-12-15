@@ -5,7 +5,12 @@
                 <h1 class="text-xl font-semibold">Chambres</h1>
                 <p class="text-sm text-gray-500">Gestion des chambres.</p>
             </div>
-            <PrimaryButton type="button" class="px-4 py-2" @click="openCreateModal">
+            <PrimaryButton
+                v-if="canCreate"
+                type="button"
+                class="px-4 py-2"
+                @click="openCreateModal"
+            >
                 Nouvelle chambre
             </PrimaryButton>
         </div>
@@ -29,6 +34,7 @@
                         <td class="px-4 py-3 text-sm text-gray-600">{{ room.status }}</td>
                         <td class="space-x-3 px-4 py-3 text-sm text-gray-600">
                             <SecondaryButton
+                                v-if="canUpdate"
                                 type="button"
                                 class="px-2 py-1 text-xs"
                                 @click="openEditModal(room)"
@@ -36,6 +42,7 @@
                                 Éditer
                             </SecondaryButton>
                             <PrimaryButton
+                                v-if="canDelete"
                                 type="button"
                                 variant="danger"
                                 class="px-2 py-1 text-xs bg-serena-danger"
@@ -232,9 +239,23 @@ export default {
         errors() {
             return this.$page.props.errors || {};
         },
+        canCreate() {
+            return this.$page.props.auth?.can?.rooms_create ?? false;
+        },
+        canUpdate() {
+            return this.$page.props.auth?.can?.rooms_update ?? false;
+        },
+        canDelete() {
+            return this.$page.props.auth?.can?.rooms_delete ?? false;
+        },
     },
     methods: {
         openCreateModal() {
+            if (!this.canCreate) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
             this.isEditing = false;
             this.editId = null;
             this.resetForm();
@@ -242,6 +263,11 @@ export default {
             this.showModal = true;
         },
         openEditModal(room) {
+            if (!this.canUpdate) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
             this.isEditing = true;
             this.editId = room.id;
             this.form = {
@@ -268,6 +294,18 @@ export default {
             };
         },
         handleSubmit(values) {
+            if (!this.isEditing && !this.canCreate) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
+
+            if (this.isEditing && !this.canUpdate) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
+
             this.submitting = true;
             const url = this.isEditing ? `/ressources/rooms/${this.editId}` : '/ressources/rooms';
             if (this.isEditing) {
@@ -317,6 +355,11 @@ export default {
             }
         },
         destroy(id) {
+            if (!this.canDelete) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
             Swal.fire({
                 title: 'Supprimer cette chambre ?',
                 text: 'Cette action est irréversible.',
@@ -329,6 +372,13 @@ export default {
                 if (result.isConfirmed) {
                     router.delete(`/ressources/rooms/${id}`, { preserveScroll: true });
                 }
+            });
+        },
+        showUnauthorizedAlert() {
+            Swal.fire({
+                icon: 'error',
+                title: 'Action non autorisée',
+                text: 'Vous ne disposez pas des droits suffisants.',
             });
         },
     },

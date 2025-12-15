@@ -26,7 +26,18 @@ class Hotel extends Model
         'country',
         'check_in_time',
         'check_out_time',
+        'stay_settings',
     ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'stay_settings' => 'array',
+        ];
+    }
 
     public function tenant(): BelongsTo
     {

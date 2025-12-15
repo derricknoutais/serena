@@ -7,6 +7,7 @@ import { createApp, h } from 'vue';
 import Multiselect from 'vue-multiselect';
 import 'vue-multiselect/dist/vue-multiselect.css';
 import { initializeTheme } from './composables/useAppearance';
+import { registerServiceWorker } from './offline/registerServiceWorker';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
@@ -31,3 +32,4 @@ createInertiaApp({
 
 // This will set light / dark mode on page load...
 initializeTheme();
+registerServiceWorker();

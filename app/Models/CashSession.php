@@ -1,15 +1,16 @@
 <?php
 
 namespace App\Models;
-use Illuminate\Database\Eloquent\Model;
 
-use \Stancl\Tenancy\Database\Concerns\BelongsToTenant;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Builder;
+
+use function activity;
+
 class CashSession extends Model
 {
-
     protected $guarded = [];
 
     protected $casts = [
@@ -82,5 +83,38 @@ class CashSession extends Model
     public function scopeClosedPending(Builder $query)
     {
         return $query->where('status', 'closed_pending_validation');
+    }
+
+    protected static function booted(): void
+    {
+        static::created(function (CashSession $session): void {
+            activity('cash_session')
+                ->performedOn($session)
+                ->causedBy(auth()->user())
+                ->withProperties([
+                    'pos' => $session->type,
+                    'opening_amount' => $session->starting_amount,
+                    'expected_close' => $session->expected_closing_amount,
+                ])
+                ->event('opened')
+                ->log('opened');
+        });
+
+        static::updated(function (CashSession $session): void {
+            if ($session->wasChanged('status') && $session->status === 'closed') {
+                activity('cash_session')
+                    ->performedOn($session)
+                    ->causedBy(auth()->user())
+                    ->withProperties([
+                        'pos' => $session->type,
+                        'opening_amount' => $session->starting_amount,
+                        'expected_close' => $session->expected_closing_amount,
+                        'actual_close' => $session->closing_amount,
+                        'difference' => $session->difference_amount,
+                    ])
+                    ->event('closed')
+                    ->log('closed');
+            }
+        });
     }
 }

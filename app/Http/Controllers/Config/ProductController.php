@@ -19,6 +19,8 @@ class ProductController extends Controller
 
     public function index(Request $request): Response
     {
+        $this->authorize('products.view');
+
         $products = Product::query()
             ->with(['category'])
             ->when($this->activeHotelId($request), fn ($q) => $q->where('hotel_id', $this->activeHotelId($request)))
@@ -58,6 +60,8 @@ class ProductController extends Controller
 
     public function create(Request $request): Response
     {
+        $this->authorize('products.create');
+
         $categories = ProductCategory::query()
             ->where('tenant_id', $request->user()->tenant_id)
             ->when($this->activeHotelId($request), fn ($q) => $q->where('hotel_id', $this->activeHotelId($request)))
@@ -78,6 +82,8 @@ class ProductController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $this->authorize('products.create');
+
         $data = $request->validate([
             'product_category_id' => ['required', 'integer', 'exists:product_categories,id'],
             'name' => ['required', 'string'],
@@ -104,6 +110,8 @@ class ProductController extends Controller
 
     public function edit(Request $request, int $id): Response
     {
+        $this->authorize('products.update');
+
         $product = Product::query()
             ->where('hotel_id', $this->activeHotelId($request))
             ->where('tenant_id', $request->user()->tenant_id)
@@ -130,6 +138,8 @@ class ProductController extends Controller
 
     public function update(Request $request, int $id): RedirectResponse
     {
+        $this->authorize('products.update');
+
         $data = $request->validate([
             'product_category_id' => ['required', 'integer', 'exists:product_categories,id'],
             'name' => ['required', 'string'],
@@ -152,6 +162,8 @@ class ProductController extends Controller
 
     public function destroy(Request $request, int $id): RedirectResponse
     {
+        $this->authorize('products.delete');
+
         $product = Product::query()
             ->where('tenant_id', $request->user()->tenant_id)
             ->findOrFail($id);

@@ -8,9 +8,11 @@ use App\Models\Reservation;
 use App\Services\FolioBillingService;
 use App\Services\Offers\OfferReservationService;
 use App\Services\ReservationAvailabilityService;
+use App\Services\ReservationConflictService;
 use App\Support\Frontdesk\ReservationsIndexData;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -45,6 +47,8 @@ class ReservationController extends Controller
         Request $request,
         ReservationAvailabilityService $availability,
         OfferReservationService $offerReservationService,
+        ReservationConflictService $conflictService,
+        \App\Services\Notifier $notifier,
     ) {
         $tenantId = $request->user()->tenant_id;
         $hotelId = $request->user()->active_hotel_id ?? $request->session()->get('active_hotel_id');
@@ -135,8 +139,51 @@ class ReservationController extends Controller
         $reservationDraft->validateOfferDates();
 
         $availability->ensureAvailable($data);
+        if (! empty($data['room_id'])) {
+            $conflictService->validateOrThrowRoomConflict(
+                $hotelId,
+                $data['room_id'],
+                Carbon::parse($data['check_in_date']),
+                Carbon::parse($data['check_out_date']),
+                excludeReservationId: null,
+                tenantId: $tenantId,
+            );
+        } elseif (! empty($data['room_type_id'])) {
+            $conflictService->validateOrThrowOverbooking(
+                $hotelId,
+                (int) $data['room_type_id'],
+                Carbon::parse($data['check_in_date']),
+                Carbon::parse($data['check_out_date']),
+                excludeReservationId: null,
+                tenantId: $tenantId,
+            );
+        }
 
         $reservation = Reservation::query()->create($data);
+
+        $this->logReservationActivity(
+            event: 'created',
+            reservation: $reservation,
+            userId: $request->user()->id,
+            properties: [
+                'to_status' => $reservation->status,
+                'check_in_date' => $reservation->check_in_date,
+                'check_out_date' => $reservation->check_out_date,
+                'total_amount' => $reservation->total_amount,
+            ],
+        );
+
+        $notifier->notify('reservation.created', $hotelId, [
+            'tenant_id' => $tenantId,
+            'reservation_id' => $reservation->id,
+            'reservation_code' => $reservation->code,
+            'room_id' => $reservation->room_id,
+            'room_number' => $reservation->room?->number,
+            'guest_name' => $reservation->guest?->full_name ?? $reservation->guest?->name,
+        ], [
+            'cta_route' => 'reservations.show',
+            'cta_params' => ['reservation' => $reservation->id],
+        ]);
 
         return redirect()
             ->route('reservations.index')
@@ -150,6 +197,8 @@ class ReservationController extends Controller
         FolioBillingService $billingService,
         ReservationAvailabilityService $availability,
         OfferReservationService $offerReservationService,
+        ReservationConflictService $conflictService,
+        \App\Services\Notifier $notifier,
     ) {
         $tenantId = $request->user()->tenant_id;
 
@@ -244,8 +293,30 @@ class ReservationController extends Controller
         $draft->validateOfferDates();
 
         $availability->ensureAvailable($data, $reservation->id);
+        if (! empty($data['room_id'])) {
+            $conflictService->validateOrThrowRoomConflict(
+                $reservation->hotel_id,
+                $data['room_id'],
+                Carbon::parse($data['check_in_date']),
+                Carbon::parse($data['check_out_date']),
+                $reservation->id,
+                $reservation->tenant_id,
+            );
+        } elseif (! empty($data['room_type_id'])) {
+            $conflictService->validateOrThrowOverbooking(
+                $reservation->hotel_id,
+                (int) $data['room_type_id'],
+                Carbon::parse($data['check_in_date']),
+                Carbon::parse($data['check_out_date']),
+                $reservation->id,
+                $reservation->tenant_id,
+            );
+        }
 
-        $reservation->update($data);
+        $original = $reservation->getOriginal();
+        $reservation->fill($data);
+        $dirty = $reservation->getDirty();
+        $reservation->save();
 
         if (in_array(
             $reservation->status,
@@ -255,8 +326,87 @@ class ReservationController extends Controller
             $billingService->syncStayChargeFromReservation($reservation);
         }
 
+        if (! empty($dirty)) {
+            $this->logReservationActivity(
+                event: 'updated',
+                reservation: $reservation,
+                userId: $request->user()->id,
+                properties: [
+                    'from_status' => $original['status'] ?? null,
+                    'to_status' => $reservation->status,
+                    'check_in_date' => $reservation->check_in_date,
+                    'check_out_date' => $reservation->check_out_date,
+                    'total_amount' => $reservation->total_amount,
+                    'changes' => $this->formatChanges($dirty, $original, $reservation->getAttributes()),
+                ],
+            );
+        }
+
+        $notifier->notify('reservation.updated', $reservation->hotel_id, [
+            'tenant_id' => $reservation->tenant_id,
+            'reservation_id' => $reservation->id,
+            'reservation_code' => $reservation->code,
+            'room_id' => $reservation->room_id,
+            'room_number' => $reservation->room?->number,
+            'guest_name' => $reservation->guest?->full_name ?? $reservation->guest?->name,
+        ], [
+            'cta_route' => 'reservations.show',
+            'cta_params' => ['reservation' => $reservation->id],
+        ]);
+
         return redirect()
             ->route('reservations.index')
             ->with('success', 'Réservation mise à jour.');
+    }
+
+    /**
+     * @param  array<string, mixed>  $dirty
+     * @param  array<string, mixed>  $original
+     * @param  array<string, mixed>  $current
+     * @return array<string, array{from: mixed, to: mixed}>
+     */
+    private function formatChanges(array $dirty, array $original, array $current): array
+    {
+        $changes = [];
+
+        foreach (array_keys($dirty) as $key) {
+            $changes[$key] = [
+                'from' => $original[$key] ?? null,
+                'to' => $current[$key] ?? null,
+            ];
+        }
+
+        return $changes;
+    }
+
+    /**
+     * @param  array<string, mixed>  $properties
+     */
+    private function logReservationActivity(string $event, Reservation $reservation, int $userId, array $properties = []): void
+    {
+        $reservation->loadMissing(['room', 'offer', 'guest']);
+
+        $guestName = trim(sprintf(
+            '%s %s',
+            $reservation->guest?->first_name ?? '',
+            $reservation->guest?->last_name ?? '',
+        ));
+
+        $baseProperties = [
+            'reservation_code' => $reservation->code,
+            'room_id' => $reservation->room_id,
+            'room_number' => $reservation->room?->number,
+            'offer_id' => $reservation->offer_id,
+            'offer_name' => $reservation->offer?->name,
+            'guest_id' => $reservation->guest_id,
+            'guest_name' => Str::of($guestName)->trim()->value() ?: null,
+        ];
+
+        activity('reservation')
+            ->performedOn($reservation)
+            ->causedBy($userId)
+            ->withProperties(array_filter($baseProperties + $properties, fn ($value) => $value !== null && $value !== ''))
+            ->event($event)
+            ->log($event);
     }
 }

@@ -16,7 +16,7 @@
                 <h3 class="text-base font-semibold text-gray-800">Détails</h3>
                 <p class="text-sm text-gray-500">Cliquez sur un événement pour voir le détail.</p>
 
-            <div v-if="selectedEvent" class="mt-4 space-y-2 rounded-lg border border-gray-200 p-3">
+            <div v-if="selectedEvent" class="mt-4 space-y-4 rounded-lg border border-gray-200 p-3">
                 <div class="flex items-center justify-between">
                     <span class="text-sm font-semibold text-gray-800">{{ selectedEvent.title }}</span>
                     <span
@@ -25,17 +25,23 @@
                     >
                         {{ statusLabel(selectedEvent.status) }}
                     </span>
+                    <span
+                        v-if="selectedEvent?.pending_sync"
+                        class="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
+                    >
+                        Sync en attente
+                    </span>
                 </div>
                 <p class="text-xs text-gray-600">
                     Arrivée :
                     <span class="font-medium text-gray-800">
-                        {{ formatDateTime(selectedEvent.check_in) }}
+                        {{ formatDateTime(selectedEvent.checkInDate || selectedEvent.check_in) }}
                     </span>
                 </p>
                 <p class="text-xs text-gray-600">
                     Départ :
                     <span class="font-medium text-gray-800">
-                        {{ formatDateTime(selectedEvent.check_out) }}
+                        {{ formatDateTime(selectedEvent.checkOutDate || selectedEvent.check_out) }}
                     </span>
                 </p>
                 <p class="text-xs text-gray-600" v-if="selectedEvent.id">ID: {{ selectedEvent.id }}</p>
@@ -109,7 +115,7 @@
                 </div>
 
                 <div
-                    v-if="selectedEvent?.status === 'in_house'"
+                    v-if="selectedEvent?.status === 'in_house' && canOverrideTimes"
                     class="mt-3 space-y-2 rounded-lg border border-dashed border-gray-200 p-3"
                 >
                     <label class="text-xs font-semibold text-gray-700">Gestion du séjour</label>
@@ -137,6 +143,47 @@
                             Changer de chambre
                         </button>
                     </div>
+                </div>
+
+                <div class="mt-3 border-t border-gray-100 pt-3">
+                    <div class="mb-2 flex items-center justify-between">
+                        <span class="text-xs font-semibold text-gray-700">Historique</span>
+                        <button
+                            type="button"
+                            class="text-[11px] font-medium text-indigo-600 hover:text-indigo-700"
+                            @click="loadReservationActivity"
+                        >
+                            Actualiser
+                        </button>
+                    </div>
+                    <div v-if="activityLoading" class="text-[11px] text-gray-500">
+                        Chargement de l’historique…
+                    </div>
+                    <div v-else-if="reservationActivity.length === 0" class="text-[11px] text-gray-400">
+                        Aucune activité récente.
+                    </div>
+                    <ul v-else class="max-h-40 space-y-1 overflow-y-auto text-[11px] text-gray-600">
+                        <li
+                            v-for="entry in reservationActivity"
+                            :key="entry.id"
+                            class="flex items-start justify-between gap-2"
+                        >
+                            <div>
+                                <p class="font-medium text-gray-800">
+                                    {{ activityLabel(entry) }}
+                                </p>
+                                <p
+                                    v-if="entry.properties?.reservation_code"
+                                    class="text-[10px] text-gray-500"
+                                >
+                                    Réservation {{ entry.properties.reservation_code }}
+                                </p>
+                            </div>
+                            <span class="whitespace-nowrap text-[10px] text-gray-400">
+                                {{ entry.created_at }}
+                            </span>
+                        </li>
+                    </ul>
                 </div>
             </div>
         </div>
@@ -509,11 +556,11 @@
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <p class="text-xs font-semibold text-gray-500">Arrivée</p>
-                            <p>{{ formatDateTime(selectedEvent.check_in) }}</p>
+                            <p>{{ formatDateTime(selectedEvent.checkInDate || selectedEvent.check_in) }}</p>
                         </div>
                         <div>
                             <p class="text-xs font-semibold text-gray-500">Départ actuel</p>
-                            <p>{{ formatDateTime(selectedEvent.check_out) }}</p>
+                            <p>{{ formatDateTime(selectedEvent.checkOutDate || selectedEvent.check_out) }}</p>
                         </div>
                     </div>
                     <div>
@@ -618,6 +665,7 @@
     import dayGridPlugin from '@fullcalendar/daygrid';
     import FolioModal from '@/components/Frontdesk/FolioModal.vue';
     import Multiselect from 'vue-multiselect';
+    import { enqueue } from '@/offline/outbox';
 
     export default {
         name: 'ReservationsPlanner',
@@ -728,6 +776,13 @@
                 changeRoomSubmitting: false,
                 localGuests: [],
                 guestSearchTimeout: null,
+                activityLoading: false,
+                activityRequestKey: null,
+                reservationActivity: [],
+                pendingFeeOverrides: {
+                    early: null,
+                    late: null,
+                },
             };
         },
         created() {
@@ -791,6 +846,24 @@
                     this.form.offer_id = null;
                 }
                 this.updateUnitPriceFromSelection();
+            },
+            selectedEvent(newVal, oldVal) {
+                const newId = newVal?.id ?? null;
+                const oldId = oldVal?.id ?? null;
+
+                if (!newId) {
+                    this.reservationActivity = [];
+                    this.activityLoading = false;
+                    this.activityRequestKey = null;
+
+                    return;
+                }
+
+                if (newId === oldId) {
+                    return;
+                }
+
+                this.loadReservationActivity();
             },
             selectedRoom(newVal) {
                 this.form.room_id = newVal ? newVal.id : null;
@@ -882,6 +955,17 @@
                 return this.stayModalMode === 'extend'
                     ? 'Prolonger le séjour'
                     : 'Raccourcir le séjour';
+            },
+            canOverrideTimes() {
+                const permissions = this.$page?.props?.auth?.can ?? {};
+
+                return permissions.reservations_override_datetime ?? this.canManageTimes;
+            },
+            canOverrideFees() {
+                const roles = this.$page?.props?.auth?.user?.roles || [];
+                const hasRole = roles.some((role) => ['owner', 'manager'].includes(role.name));
+
+                return this.canOverrideTimes || hasRole;
             },
             stayModalMin() {
                 if (!this.selectedEvent) {
@@ -985,6 +1069,67 @@
             },
         },
         methods: {
+            showUnauthorizedAlert() {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Action non autorisée',
+                    text: 'Vous ne disposez pas des droits suffisants.',
+                });
+            },
+            async loadReservationActivity() {
+                if (!this.selectedEvent?.id) {
+                    this.reservationActivity = [];
+                    this.activityLoading = false;
+                    this.activityRequestKey = null;
+
+                    return;
+                }
+
+                const reservationId = this.selectedEvent.id;
+                const requestKey = `${reservationId}-${Date.now()}`;
+
+                this.activityRequestKey = requestKey;
+                this.activityLoading = true;
+                this.reservationActivity = [];
+
+                try {
+                    const response = await axios.get(`/reservations/${reservationId}/activity`, {
+                        headers: { Accept: 'application/json' },
+                    });
+
+                    if (this.activityRequestKey !== requestKey) {
+                        return;
+                    }
+
+                    this.reservationActivity = Array.isArray(response.data) ? response.data : [];
+                } catch {
+                    if (this.activityRequestKey === requestKey) {
+                        this.reservationActivity = [];
+                    }
+                } finally {
+                    if (this.activityRequestKey === requestKey) {
+                        this.activityLoading = false;
+                    }
+                }
+            },
+            activityLabel(entry) {
+                const event = entry.event || entry.description || '';
+
+                switch (event) {
+                    case 'confirmed':
+                        return 'Réservation confirmée';
+                    case 'checked_in':
+                        return 'Check-in effectué';
+                    case 'checked_out':
+                        return 'Check-out effectué';
+                    case 'cancelled':
+                        return 'Réservation annulée';
+                    case 'no_show':
+                        return 'Réservation marquée en no-show';
+                    default:
+                        return entry.description || 'Action';
+                }
+            },
             async onGuestSearchChange(query) {
                 if (this.guestSearchTimeout) {
                     clearTimeout(this.guestSearchTimeout);
@@ -1131,14 +1276,19 @@
                         text: message,
                     });
                 }
-            },
-            refreshReservationsData() {
-                router.reload({ only: ['reservationsData'] });
-            },
-            openStayModal(mode) {
-                if (!this.selectedEvent?.id) {
-                    return;
-                }
+        },
+        refreshReservationsData() {
+            router.reload({ only: ['reservationsData'] });
+        },
+        openStayModal(mode) {
+            if (!this.canOverrideTimes) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
+            if (!this.selectedEvent?.id) {
+                return;
+            }
 
                 const rawDeparture =
                     this.selectedEvent.checkOutDate
@@ -1157,14 +1307,19 @@
                 this.stayModalDate = this.applyOfferCheckoutTime(targetDate) || this.toDateTimeLocal(targetDate);
                 this.showStayModal = true;
             },
-            closeStayModal() {
-                this.showStayModal = false;
-                this.stayModalSubmitting = false;
-            },
-            async submitStayModal() {
-                if (!this.selectedEvent?.id || !this.stayModalDate) {
-                    return;
-                }
+        closeStayModal() {
+            this.showStayModal = false;
+            this.stayModalSubmitting = false;
+        },
+        async submitStayModal() {
+            if (!this.canOverrideTimes) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
+            if (!this.selectedEvent?.id || !this.stayModalDate) {
+                return;
+            }
 
                 this.stayModalSubmitting = true;
 
@@ -1186,9 +1341,21 @@
                     this.closeStayModal();
                     this.refreshReservationsData();
                 } catch (error) {
+                    const errors = error.response?.data?.errors ?? null;
+
+                    if (error.response?.status === 403) {
+                        this.showUnauthorizedAlert();
+
+                        return;
+                    }
+
+                    if (this.handleAvailabilityErrors(errors)) {
+                        return;
+                    }
+
                     const message =
                         error.response?.data?.message
-                        ?? error.response?.data?.errors?.check_out_date?.[0]
+                        ?? this.extractFirstError(errors, null)
                         ?? 'Impossible de mettre à jour le séjour.';
 
                     Swal.fire({
@@ -1237,9 +1404,15 @@
                     this.closeChangeRoomModal();
                     this.refreshReservationsData();
                 } catch (error) {
+                    const errors = error.response?.data?.errors ?? null;
+
+                    if (this.handleAvailabilityErrors(errors)) {
+                        return;
+                    }
+
                     const message =
                         error.response?.data?.message
-                        ?? error.response?.data?.errors?.room_id?.[0]
+                        ?? this.extractFirstError(errors, null)
                         ?? 'Impossible de changer la chambre.';
 
                     Swal.fire({
@@ -1278,6 +1451,15 @@
                     || 'XAF';
 
                 return `${amount.toFixed(0)} ${currency}`;
+            },
+            formatFeeAmount(value, currency) {
+                const amount = Number(value || 0);
+                const cur = currency || this.defaults.currency || 'XAF';
+
+                return `${amount.toLocaleString('fr-FR', {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 2,
+                })} ${cur}`;
             },
             normalizeDateTimeLocal(value) {
                 const date = this.valueToDate(value);
@@ -1418,7 +1600,9 @@
                 }
             },
             updateSelectedEventFromRaw(event) {
-                const checkIn = event.check_in_date ?? event.start;
+                const rawPlannedCheckIn = event.check_in_date ?? event.start;
+                const rawActualCheckIn = event.actual_check_in_at ?? null;
+                const checkIn = rawActualCheckIn || rawPlannedCheckIn;
                 const checkOut = event.check_out_date ?? event.end;
                 
                 this.selectedEvent = {
@@ -1432,6 +1616,7 @@
                     check_out: checkOut,
                     checkInDate: checkIn,
                     checkOutDate: checkOut,
+                    actualCheckInAt: rawActualCheckIn,
                     room_hk_status: event.room_hk_status ?? null,
                     room_id: event.room_id ?? null,
                     room_number: event.room_number ?? null,
@@ -1454,10 +1639,15 @@
                         status: event.extendedProps?.status ?? event.status ?? '',
                         start: event.startStr,
                         end: event.endStr,
-                        check_in: event.extendedProps?.check_in_date ?? event.startStr,
+                        check_in: event.extendedProps?.actual_check_in_at
+                            ?? event.extendedProps?.check_in_date
+                            ?? event.startStr,
                         check_out: event.extendedProps?.check_out_date ?? event.endStr,
-                        checkInDate: event.extendedProps?.check_in_date ?? event.startStr,
+                        checkInDate: event.extendedProps?.actual_check_in_at
+                            ?? event.extendedProps?.check_in_date
+                            ?? event.startStr,
                         checkOutDate: event.extendedProps?.check_out_date ?? event.endStr,
+                        actualCheckInAt: event.extendedProps?.actual_check_in_at ?? null,
                         room_hk_status: event.extendedProps?.room_hk_status ?? null,
                         room_id: event.extendedProps?.room_id ?? null,
                         room_number: event.extendedProps?.room_number ?? null,
@@ -1690,20 +1880,217 @@
                     return;
                 }
 
+                const preview = await this.confirmStayAdjustments(action, reservationId, value);
+
+                if (!preview.continue) {
+                    return;
+                }
+
                 const payload = isCheckIn
                     ? { actual_check_in_at: value }
                     : { actual_check_out_at: value };
 
-                this.sendStatusRequest(action, reservationId, payload);
+                const combinedOverrides = preview.overrides || {};
+                this.pendingFeeOverrides = {
+                    early: combinedOverrides.early_fee_override ?? null,
+                    late: combinedOverrides.late_fee_override ?? null,
+                };
+
+                this.sendStatusRequest(action, reservationId, { ...payload, ...combinedOverrides }, combinedOverrides);
             },
-            sendStatusRequest(action, reservationId, payload) {
+            async confirmStayAdjustments(action, reservationId, actualDatetime) {
+                if (!['check_in', 'check_out'].includes(action)) {
+                    return {
+                        continue: true,
+                        overrides: {},
+                    };
+                }
+
+                if (!navigator.onLine) {
+                    return {
+                        continue: true,
+                        overrides: {},
+                    };
+                }
+
+                try {
+                    const http = window.axios ?? axios;
+                    const response = await http.post(
+                        `/reservations/${reservationId}/stay-adjustments/preview`,
+                        {
+                            action,
+                            actual_datetime: actualDatetime,
+                        },
+                    );
+
+                    const early = response.data?.early || {};
+                    const late = response.data?.late || {};
+                    const currency = response.data?.currency || this.defaults.currency || 'XAF';
+                    const overrides = {};
+
+                    if (early.blocked && !this.canOverrideFees) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Arrivée anticipée non autorisée',
+                            text: early.reason || 'Arrivée anticipée refusée.',
+                        });
+
+                        return { continue: false, overrides: {} };
+                    }
+
+                    if (early.blocked && this.canOverrideFees) {
+                        const confirmOverride = await Swal.fire({
+                            icon: 'warning',
+                            title: 'Arrivée anticipée',
+                            text: early.reason || 'Arrivée avant l’heure standard.',
+                            showCancelButton: true,
+                            confirmButtonText: 'Continuer',
+                            cancelButtonText: 'Annuler',
+                        });
+
+                        if (!confirmOverride.isConfirmed) {
+                            return { continue: false, overrides: {} };
+                        }
+                    }
+
+                    if (early.is_early_checkin && (early.fee ?? 0) > 0) {
+                        const message = early.reason
+                            || `Un supplément sera appliqué (${this.formatFeeAmount(early.fee, currency)}).`;
+                        const feePrompt = await Swal.fire({
+                            title: 'Arrivée anticipée détectée',
+                            text: message,
+                            icon: 'info',
+                            input: this.canOverrideFees ? 'number' : null,
+                            inputValue: early.fee ?? 0,
+                            inputLabel: `Supplément (${currency})`,
+                            showCancelButton: true,
+                            confirmButtonText: 'Valider',
+                            cancelButtonText: 'Annuler',
+                        });
+
+                        if (!feePrompt.isConfirmed) {
+                            return { continue: false, overrides: {} };
+                        }
+
+                        if (this.canOverrideFees) {
+                            const overrideValue = Number(feePrompt.value ?? early.fee ?? 0);
+                            overrides.early_fee_override = Number.isFinite(overrideValue) ? overrideValue : early.fee;
+                        }
+                    } else if (early.is_early_checkin && early.reason) {
+                        await Swal.fire({
+                            icon: 'info',
+                            title: 'Arrivée anticipée',
+                            text: early.reason,
+                            confirmButtonText: 'OK',
+                        });
+                    }
+
+                    if (action === 'check_out') {
+                        if (late.blocked && !this.canOverrideFees) {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Départ tardif non autorisé',
+                                text: late.reason || 'Départ tardif refusé.',
+                            });
+
+                            return { continue: false, overrides: {} };
+                        }
+
+                        if (late.blocked && this.canOverrideFees) {
+                            const confirmLate = await Swal.fire({
+                                icon: 'warning',
+                                title: 'Départ tardif',
+                                text: late.reason || 'Départ au-delà de l’heure prévue.',
+                                showCancelButton: true,
+                                confirmButtonText: 'Continuer',
+                                cancelButtonText: 'Annuler',
+                            });
+
+                            if (!confirmLate.isConfirmed) {
+                                return { continue: false, overrides: {} };
+                            }
+                        }
+
+                        if (late.is_late_checkout && (late.fee ?? 0) > 0) {
+                            const latePrompt = await Swal.fire({
+                                title: 'Départ tardif détecté',
+                                text: late.reason
+                                    || `Supplément de ${this.formatFeeAmount(late.fee, currency)}.`,
+                                icon: 'info',
+                                input: this.canOverrideFees ? 'number' : null,
+                                inputValue: late.fee ?? 0,
+                                inputLabel: `Supplément (${currency})`,
+                                showCancelButton: true,
+                                confirmButtonText: 'Valider',
+                                cancelButtonText: 'Annuler',
+                            });
+
+                            if (!latePrompt.isConfirmed) {
+                                return { continue: false, overrides: {} };
+                            }
+
+                            if (this.canOverrideFees) {
+                                const overrideLate = Number(latePrompt.value ?? late.fee ?? 0);
+                                overrides.late_fee_override = Number.isFinite(overrideLate) ? overrideLate : late.fee;
+                            }
+                        }
+                    }
+
+                    return {
+                        continue: true,
+                        overrides,
+                    };
+                } catch (error) {
+                    const message =
+                        this.extractFirstError(error.response?.data?.errors, null)
+                        ?? error.response?.data?.message
+                        ?? 'Impossible de calculer le supplément.';
+
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erreur',
+                        text: message,
+                    });
+
+                    return {
+                        continue: false,
+                        overrides: {},
+                    };
+                }
+            },
+            sendStatusRequest(action, reservationId, payload, overrides = {}) {
                 this.statusSubmitting = true;
 
                 const url = `/reservations/${reservationId}/status`;
                 const data = {
                     action,
                     ...(payload || {}),
+                    ...(overrides || {}),
                 };
+
+                if (!navigator.onLine) {
+                    const tenantId = this.$page?.props?.auth?.user?.tenant_id;
+                    const hotelId = this.$page?.props?.auth?.activeHotel?.id ?? this.$page?.props?.auth?.user?.active_hotel_id;
+                    this.updateLocalEventStatus(reservationId, action, true);
+                    enqueue({
+                        type: 'reservation.transition',
+                        endpoint: url,
+                        method: 'patch',
+                        payload: data,
+                        tenant_id: tenantId,
+                        hotel_id: hotelId,
+                    });
+                    Swal.fire({
+                        icon: 'info',
+                        title: 'Action en file',
+                        text: 'La transition sera synchronisée dès le retour en ligne.',
+                        timer: 2000,
+                        showConfirmButton: false,
+                    });
+                    this.statusSubmitting = false;
+
+                    return;
+                }
 
                 router.patch(
                     url,
@@ -1738,6 +2125,28 @@
                         },
                     },
                 );
+            },
+            updateLocalEventStatus(reservationId, action, pending = false) {
+                const map = {
+                    confirm: 'confirmed',
+                    check_in: 'in_house',
+                    check_out: 'checked_out',
+                    cancel: 'cancelled',
+                    no_show: 'no_show',
+                };
+                const newStatus = map[action] ?? null;
+                if (!newStatus) return;
+
+                this.eventsLocal = this.eventsLocal.map((event) => {
+                    if (event.id === reservationId) {
+                        return { ...event, status: newStatus, pending_sync: pending };
+                    }
+                    return event;
+                });
+
+                if (this.selectedEvent?.id === reservationId) {
+                    this.selectedEvent = { ...this.selectedEvent, status: newStatus, pending_sync: pending };
+                }
             },
             getActionLabel(action) {
                 switch (action) {
@@ -1820,7 +2229,7 @@
                 this.form.tax_amount = tax;
                 this.form.total_amount = total;
             },
-            applyOfferDates(offer) {
+            async applyOfferDates(offer) {
                 if (!offer) {
                     return;
                 }
@@ -1843,41 +2252,25 @@
                     start.setHours(now.getHours(), now.getMinutes(), 0, 0);
                 }
 
-                this.form.check_in_date = this.toDateTimeLocal(start);
+                try {
+                    const http = window.axios ?? axios;
+                    const response = await http.post(`/api/offers/${offer.id}/time-preview`, {
+                        arrival_at: start.toISOString(),
+                    });
 
-                let end = new Date(start.getTime());
-                const kind = offer.kind ?? 'night';
+                    const arrival = new Date(response.data.arrival_at);
+                    const departure = new Date(response.data.departure_at);
 
-                const fixedHours = Number(offer.fixed_duration_hours || 0);
-
-                if (fixedHours > 0) {
-                    end = new Date(start.getTime() + fixedHours * 60 * 60 * 1000);
-                } else if (offer.check_out_until) {
-                    const [hStr, mStr] = offer.check_out_until.split(':');
-                    const h = Number(hStr) || 0;
-                    const m = Number(mStr) || 0;
-                    end.setHours(h, m, 0, 0);
-
-                    if (end.getTime() <= start.getTime()) {
-                        end.setDate(end.getDate() + 1);
-                    }
-                } else {
-                    let durationHours = 0;
-
-                    if (kind === 'short_stay') {
-                        durationHours = 3;
-                    } else if (kind === 'weekend') {
-                        durationHours = 48;
-                    } else if (kind === 'full_day' || kind === 'night') {
-                        durationHours = 24;
-                    } else {
-                        durationHours = 24;
+                    if (!Number.isNaN(arrival.getTime())) {
+                        this.form.check_in_date = this.toDateTimeLocal(arrival);
                     }
 
-                    end = new Date(start.getTime() + durationHours * 60 * 60 * 1000);
+                    if (!Number.isNaN(departure.getTime())) {
+                        this.form.check_out_date = this.toDateTimeLocal(departure);
+                    }
+                } catch (error) {
+                    console.error('Erreur lors du calcul des dates de l’offre', error);
                 }
-
-                this.form.check_out_date = this.toDateTimeLocal(end);
             },
             buildPriceMatrix() {
                 const matrix = {};
@@ -1956,7 +2349,22 @@
                             this.notifyBookingSuccess('Réservation mise à jour avec succès.');
                         },
                         onError: (errors) => {
-                            this.handleAvailabilityErrors(errors);
+                            const handled = this.handleAvailabilityErrors(errors);
+
+                            if (handled) {
+                                return;
+                            }
+
+                            const message = this.extractFirstError(
+                                errors,
+                                'Impossible de mettre à jour la réservation.',
+                            );
+
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Erreur',
+                                text: message,
+                            });
                         },
                         onFinish: () => {
                             this.submitting = false;
@@ -2046,15 +2454,29 @@
                             const errors = error.response?.data?.errors || null;
 
                             if (errors) {
-                                this.handleAvailabilityErrors(errors);
-
+                                const handled = this.handleAvailabilityErrors(errors);
                                 const offerError = errors.offer_id && (Array.isArray(errors.offer_id) ? errors.offer_id[0] : errors.offer_id);
+
+                                if (handled) {
+                                    return;
+                                }
 
                                 if (offerError) {
                                     Swal.fire({
                                         icon: 'error',
                                         title: 'Offre invalide',
                                         text: offerError,
+                                    });
+                                } else {
+                                    const message = this.extractFirstError(
+                                        errors,
+                                        error.response?.data?.message ?? 'Impossible de créer la réservation.',
+                                    );
+
+                                    Swal.fire({
+                                        icon: 'error',
+                                        title: 'Erreur',
+                                        text: message,
                                     });
                                 }
                             } else {
@@ -2079,24 +2501,61 @@
                 const day = String(dateObj.getDate()).padStart(2, '0');
                 return `${year}-${month}-${day}`;
             },
+            extractFirstError(errors, fallback = null) {
+                if (!errors) {
+                    return fallback;
+                }
+
+                if (typeof errors === 'string') {
+                    return errors;
+                }
+
+                if (Array.isArray(errors)) {
+                    return errors[0] ?? fallback;
+                }
+
+                const firstKey = Object.keys(errors)[0] ?? null;
+
+                if (!firstKey) {
+                    return fallback;
+                }
+
+                const value = errors[firstKey];
+
+                if (Array.isArray(value)) {
+                    return value[0] ?? fallback;
+                }
+
+                if (typeof value === 'string') {
+                    return value;
+                }
+
+                return fallback;
+            },
             handleAvailabilityErrors(errors) {
                 if (!errors) {
-                    return;
+                    return false;
                 }
 
-                const message = errors.room_id ?? errors.room_type_id ?? null;
+                const message = errors.room_id
+                    ?? errors.room_type_id
+                    ?? errors.check_out_date
+                    ?? errors.check_in_date
+                    ?? errors;
 
                 if (!message) {
-                    return;
+                    return false;
                 }
 
-                const text = Array.isArray(message) ? message[0] : message;
+                const text = this.extractFirstError(message);
 
                 Swal.fire({
                     icon: 'warning',
                     title: 'Indisponible',
                     text: text,
                 });
+
+                return true;
             },
             notifyBookingSuccess(message) {
                 Swal.fire({

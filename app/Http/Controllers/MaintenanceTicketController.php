@@ -20,6 +20,8 @@ class MaintenanceTicketController extends Controller
 
     public function index(Request $request): Response
     {
+        $this->authorize('viewAny', MaintenanceTicket::class);
+
         /** @var User $user */
         $user = $request->user();
         $hotelId = (int) ($user->active_hotel_id ?? $user->hotel_id ?? 0);
@@ -101,6 +103,8 @@ class MaintenanceTicketController extends Controller
             ]);
 
         $canHandle = $user->hasRole(['owner', 'manager', 'maintenance', 'superadmin']);
+        $canUpdate = $user->can('maintenance_tickets.update');
+        $canClose = $user->can('maintenance_tickets.close');
 
         return Inertia::render('Maintenance/Index', [
             'tickets' => $tickets,
@@ -116,14 +120,17 @@ class MaintenanceTicketController extends Controller
             ],
             'assignableUsers' => $assignableUsers,
             'permissions' => [
-                'canUpdateStatus' => $canHandle,
+                'canUpdateStatus' => $canUpdate,
                 'canAssign' => $canHandle,
+                'canClose' => $canClose,
             ],
         ]);
     }
 
     public function store(StoreMaintenanceTicketRequest $request): JsonResponse
     {
+        $this->authorize('create', MaintenanceTicket::class);
+
         /** @var User $user */
         $user = $request->user();
         $data = $request->validated();
@@ -162,6 +169,8 @@ class MaintenanceTicketController extends Controller
 
     public function update(UpdateMaintenanceTicketRequest $request, MaintenanceTicket $maintenanceTicket): JsonResponse
     {
+        $this->authorize('update', $maintenanceTicket);
+
         $ticket = $maintenanceTicket;
         /** @var User $user */
         $user = $request->user();
@@ -232,20 +241,10 @@ class MaintenanceTicketController extends Controller
 
     private function ensureStatusPermission(User $user, string $status): void
     {
-        $advancedRoles = ['owner', 'manager', 'maintenance', 'superadmin'];
-        $standardRoles = array_merge($advancedRoles, ['receptionist']);
+        $isClosing = in_array($status, [MaintenanceTicket::STATUS_RESOLVED, MaintenanceTicket::STATUS_CLOSED], true);
+        $requiredPermission = $isClosing ? 'maintenance_tickets.close' : 'maintenance_tickets.update';
 
-        if (in_array($status, [MaintenanceTicket::STATUS_RESOLVED, MaintenanceTicket::STATUS_CLOSED], true)) {
-            if (! $user->hasRole($advancedRoles)) {
-                abort(403);
-            }
-
-            return;
-        }
-
-        if (! $user->hasRole($standardRoles)) {
-            abort(403);
-        }
+        abort_if(! $user->can($requiredPermission), 403);
     }
 
     /**

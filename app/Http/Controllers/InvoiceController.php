@@ -14,6 +14,7 @@ class InvoiceController extends Controller
 {
     public function storeFromFolio(Request $request, Folio $folio, FolioBillingService $billingService): RedirectResponse|JsonResponse
     {
+        $this->authorize('invoices.create');
         $this->authorizeFolio($request, $folio);
 
         $existing = $folio->invoices()->latest()->first();
@@ -52,6 +53,7 @@ class InvoiceController extends Controller
 
     public function pdf(Request $request, Invoice $invoice): View
     {
+        $this->authorize('invoices.view');
         $this->authorizeInvoice($request, $invoice);
 
         $invoice->loadMissing(['items', 'folio.hotel', 'folio.reservation.guest', 'guest']);

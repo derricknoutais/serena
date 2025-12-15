@@ -1,0 +1,210 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Services;
+
+use App\Models\Folio;
+use App\Models\Hotel;
+use App\Models\Reservation;
+use Illuminate\Support\Carbon;
+
+class StayAdjustmentService
+{
+    public function __construct(
+        private readonly FolioBillingService $billingService,
+    ) {}
+
+    /**
+     * @return array{
+     *     is_early_checkin: bool,
+     *     early_fee_amount: float,
+     *     early_reason: ?string,
+     *     early_policy: string,
+     *     early_blocked: bool,
+     *     is_late_checkout: bool,
+     *     late_fee_amount: float,
+     *     late_reason: ?string,
+     *     late_policy: string,
+     *     late_blocked: bool,
+     *     currency: string|null
+     * }
+     */
+    public function evaluateEarlyLate(Reservation $reservation, Carbon $actualCheckInAt, ?Carbon $actualCheckOutAt = null): array
+    {
+        $hotel = $reservation->hotel ?? Hotel::query()->find($reservation->hotel_id);
+
+        $settings = $hotel?->stay_settings ?? [];
+        $standardCheckIn = $settings['standard_checkin_time'] ?? $hotel?->check_in_time ?? '14:00';
+        $standardCheckOut = $settings['standard_checkout_time'] ?? $hotel?->check_out_time ?? '12:00';
+
+        $earlyConfig = $settings['early_checkin'] ?? [];
+        $lateConfig = $settings['late_checkout'] ?? [];
+
+        $decision = [
+            'is_early_checkin' => false,
+            'early_fee_amount' => 0.0,
+            'early_reason' => null,
+            'early_policy' => $earlyConfig['policy'] ?? 'free',
+            'early_blocked' => false,
+            'is_late_checkout' => false,
+            'late_fee_amount' => 0.0,
+            'late_reason' => null,
+            'late_policy' => $lateConfig['policy'] ?? 'free',
+            'late_blocked' => false,
+            'currency' => $reservation->currency,
+        ];
+
+        $checkInTime = $standardCheckIn ? $this->timeOnDate($actualCheckInAt, $standardCheckIn) : null;
+        $checkOutTime = $standardCheckOut && $actualCheckOutAt ? $this->timeOnDate($actualCheckOutAt, $standardCheckOut) : null;
+
+        if ($checkInTime && $actualCheckInAt->lt($checkInTime)) {
+            $decision['is_early_checkin'] = true;
+            $decision['early_reason'] = sprintf(
+                'Arrivée avant l’heure standard (%s).',
+                $checkInTime->format('H:i')
+            );
+
+            $cutoff = $earlyConfig['cutoff_time'] ?? null;
+            if ($cutoff) {
+                $cutoffTime = $this->timeOnDate($actualCheckInAt, $cutoff);
+                if ($cutoffTime && $actualCheckInAt->lt($cutoffTime)) {
+                    $decision['early_reason'] = sprintf(
+                        'Arrivée avant %s.',
+                        $cutoffTime->format('H:i')
+                    );
+                }
+            }
+
+            $policy = $decision['early_policy'];
+            if ($policy === 'forbidden') {
+                $decision['early_blocked'] = true;
+            } elseif ($policy === 'paid') {
+                $feeType = $earlyConfig['fee_type'] ?? 'flat';
+                $feeValue = (float) ($earlyConfig['fee_value'] ?? 0);
+                $decision['early_fee_amount'] = $this->calculateFee($feeType, $feeValue, (float) $reservation->base_amount);
+            }
+        }
+
+        if ($actualCheckOutAt && $checkOutTime && $actualCheckOutAt->gt($checkOutTime)) {
+            $decision['is_late_checkout'] = true;
+            $decision['late_reason'] = sprintf(
+                'Départ après l’heure standard (%s).',
+                $checkOutTime->format('H:i')
+            );
+
+            $maxTime = $lateConfig['max_time'] ?? null;
+            if ($maxTime) {
+                $maxTimeParsed = $this->timeOnDate($actualCheckOutAt, $maxTime);
+                if ($maxTimeParsed && $actualCheckOutAt->gt($maxTimeParsed)) {
+                    $decision['late_reason'] = sprintf(
+                        'Départ au-delà de la limite (%s).',
+                        $maxTimeParsed->format('H:i')
+                    );
+                }
+            }
+
+            $policy = $decision['late_policy'];
+            if ($policy === 'forbidden') {
+                $decision['late_blocked'] = true;
+            } elseif ($policy === 'paid') {
+                $feeType = $lateConfig['fee_type'] ?? 'flat';
+                $feeValue = (float) ($lateConfig['fee_value'] ?? 0);
+                $decision['late_fee_amount'] = $this->calculateFee($feeType, $feeValue, (float) $reservation->base_amount);
+            }
+        }
+
+        return $decision;
+    }
+
+    public function applyFeesToFolio(
+        Reservation $reservation,
+        array $decision,
+        ?float $earlyOverride,
+        ?float $lateOverride,
+        bool $canOverride,
+    ): void {
+        if (! $decision['is_early_checkin'] && ! $decision['is_late_checkout']) {
+            return;
+        }
+
+        $folio = $this->billingService->ensureMainFolioForReservation($reservation);
+
+        if ($decision['is_early_checkin'] && ($decision['early_fee_amount'] > 0 || ($canOverride && $earlyOverride !== null))) {
+            $amount = $this->resolveAmount($decision['early_fee_amount'], $earlyOverride, $canOverride);
+            $this->addFeeIfMissing(
+                $folio,
+                'Arrivée anticipée',
+                $amount,
+                'early_checkin',
+                $decision['early_reason'],
+            );
+        }
+
+        if ($decision['is_late_checkout'] && ($decision['late_fee_amount'] > 0 || ($canOverride && $lateOverride !== null))) {
+            $amount = $this->resolveAmount($decision['late_fee_amount'], $lateOverride, $canOverride);
+            $this->addFeeIfMissing(
+                $folio,
+                'Départ tardif',
+                $amount,
+                'late_checkout',
+                $decision['late_reason'],
+            );
+        }
+    }
+
+    private function resolveAmount(float $computed, ?float $override, bool $canOverride): float
+    {
+        if ($canOverride && $override !== null && $override >= 0) {
+            return (float) $override;
+        }
+
+        return max(0.0, $computed);
+    }
+
+    private function addFeeIfMissing(Folio $folio, string $description, float $amount, string $kind, ?string $reason): void
+    {
+        if ($amount <= 0) {
+            return;
+        }
+
+        $alreadyExists = $folio->items()
+            ->where('type', 'service_fee')
+            ->where('meta->kind', $kind)
+            ->exists();
+
+        if ($alreadyExists) {
+            return;
+        }
+
+        $folio->addCharge([
+            'description' => $description,
+            'quantity' => 1,
+            'unit_price' => $amount,
+            'type' => 'service_fee',
+            'tax_amount' => 0,
+            'meta' => [
+                'kind' => $kind,
+                'reason' => $reason,
+            ],
+        ]);
+    }
+
+    private function calculateFee(string $type, float $value, float $baseAmount): float
+    {
+        if ($type === 'percent') {
+            return round($baseAmount * ($value / 100), 2);
+        }
+
+        return round($value, 2);
+    }
+
+    private function timeOnDate(Carbon $dateTime, string $timeString): ?Carbon
+    {
+        if (! $timeString) {
+            return null;
+        }
+
+        return $dateTime->copy()->setTimeFromTimeString($timeString);
+    }
+}

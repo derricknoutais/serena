@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Models\Reservation;
 use App\Models\Room;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 
 class ReservationStateMachine
@@ -36,6 +37,8 @@ class ReservationStateMachine
         private readonly ReservationAvailabilityService $availability,
         private readonly FolioBillingService $billing,
         private readonly RoomStateMachine $roomStateMachine,
+        private readonly StayAdjustmentService $stayAdjustmentService,
+        private readonly Notifier $notifier,
     ) {}
 
     public function canTransition(string $from, string $to): bool
@@ -48,11 +51,33 @@ class ReservationStateMachine
         $this->assertTransition($reservation, Reservation::STATUS_CONFIRMED);
         $this->ensureAvailability($reservation, Reservation::STATUS_CONFIRMED);
 
-        return $this->applyStatus($reservation, Reservation::STATUS_CONFIRMED);
+        $fromStatus = $reservation->status;
+        $updated = $this->applyStatus($reservation, Reservation::STATUS_CONFIRMED);
+
+        activity('reservation')
+            ->performedOn($updated)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'from_status' => $fromStatus,
+                'to_status' => $updated->status,
+                'reservation_code' => $updated->code,
+                'room_id' => $updated->room_id,
+                'offer_id' => $updated->offer_id,
+                'check_in_date' => $updated->check_in_date,
+                'check_out_date' => $updated->check_out_date,
+            ])
+            ->event('confirmed')
+            ->log('confirmed');
+
+        return $updated;
     }
 
-    public function checkIn(Reservation $reservation): Reservation
-    {
+    public function checkIn(
+        Reservation $reservation,
+        ?Carbon $actualAt = null,
+        bool $canOverrideFees = false,
+        ?float $earlyOverride = null,
+    ): Reservation {
         $this->assertTransition($reservation, Reservation::STATUS_IN_HOUSE);
         $this->ensureAvailability($reservation, Reservation::STATUS_IN_HOUSE);
 
@@ -62,7 +87,7 @@ class ReservationStateMachine
             ]);
         }
 
-        $reservation->loadMissing('room');
+        $reservation->loadMissing(['room', 'guest']);
 
         if (! $reservation->room instanceof Room) {
             throw ValidationException::withMessages([
@@ -70,19 +95,100 @@ class ReservationStateMachine
             ]);
         }
 
+        if ($reservation->room->hk_status && ! in_array($reservation->room->hk_status, ['clean', 'inspected'], true)) {
+            $this->notifier->notify('room.sold_but_dirty', $reservation->hotel_id, [
+                'tenant_id' => $reservation->tenant_id,
+                'room_id' => $reservation->room_id,
+                'room_number' => $reservation->room->number,
+                'reservation_id' => $reservation->id,
+                'reservation_code' => $reservation->code,
+            ], [
+                'cta_route' => 'rooms.board',
+                'cta_params' => ['date' => now()->toDateString()],
+            ]);
+        }
+
+        $actualCheckInAt = $actualAt ?? now();
+
+        $decision = $this->stayAdjustmentService->evaluateEarlyLate($reservation, $actualCheckInAt);
+
+        if ($decision['early_blocked'] && ! $canOverrideFees) {
+            throw ValidationException::withMessages([
+                'check_in' => $decision['early_reason'] ?? 'Arrivée anticipée non autorisée.',
+            ]);
+        }
+
         $this->roomStateMachine->markOccupied($reservation->room, $reservation);
-        $reservation->actual_check_in_at = now();
+        $fromStatus = $reservation->status;
+        $reservation->actual_check_in_at = $actualCheckInAt;
         $this->billing->ensureMainFolioForReservation($reservation);
         $this->billing->syncStayChargeFromReservation($reservation);
 
-        return $this->applyStatus($reservation, Reservation::STATUS_IN_HOUSE);
+        $updated = $this->applyStatus($reservation, Reservation::STATUS_IN_HOUSE);
+
+        $this->stayAdjustmentService->applyFeesToFolio(
+            $updated,
+            $decision,
+            $earlyOverride,
+            null,
+            $canOverrideFees,
+        );
+
+        $this->notifier->notify('reservation.checked_in', $updated->hotel_id, [
+            'tenant_id' => $updated->tenant_id,
+            'reservation_id' => $updated->id,
+            'reservation_code' => $updated->code,
+            'room_id' => $updated->room_id,
+            'room_number' => $updated->room?->number,
+            'guest_name' => $updated->guest?->full_name ?? $updated->guest?->name,
+        ], [
+            'cta_route' => 'reservations.index',
+        ]);
+
+        activity('reservation')
+            ->performedOn($updated)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'from_status' => $fromStatus,
+                'to_status' => $updated->status,
+                'reservation_code' => $updated->code,
+                'room_id' => $updated->room_id,
+                'offer_id' => $updated->offer_id,
+                'check_in_date' => $updated->check_in_date,
+                'check_out_date' => $updated->check_out_date,
+                'actual_check_in_at' => $updated->actual_check_in_at,
+            ])
+            ->event('checked_in')
+            ->log('checked_in');
+
+        return $updated;
     }
 
-    public function checkOut(Reservation $reservation): Reservation
-    {
+    public function checkOut(
+        Reservation $reservation,
+        ?Carbon $actualAt = null,
+        bool $canOverrideFees = false,
+        ?float $lateOverride = null,
+    ): Reservation {
         $this->assertTransition($reservation, Reservation::STATUS_CHECKED_OUT);
 
-        $reservation->loadMissing('room');
+        $reservation->loadMissing(['room', 'guest', 'mainFolio']);
+
+        $actualCheckOutAt = $actualAt ?? now();
+        $actualCheckIn = $reservation->actual_check_in_at
+            ?? ($reservation->check_in_date ? Carbon::parse($reservation->check_in_date) : $actualCheckOutAt);
+
+        $decision = $this->stayAdjustmentService->evaluateEarlyLate(
+            $reservation,
+            $actualCheckIn,
+            $actualCheckOutAt,
+        );
+
+        if ($decision['late_blocked'] && ! $canOverrideFees) {
+            throw ValidationException::withMessages([
+                'check_out' => $decision['late_reason'] ?? 'Départ tardif non autorisé.',
+            ]);
+        }
 
         if ($reservation->room) {
             $this->roomStateMachine->markAvailable($reservation->room);
@@ -90,9 +196,61 @@ class ReservationStateMachine
             $reservation->room->save();
         }
 
-        $reservation->actual_check_out_at = now();
+        $fromStatus = $reservation->status;
+        $reservation->actual_check_out_at = $actualCheckOutAt;
 
-        return $this->applyStatus($reservation, Reservation::STATUS_CHECKED_OUT);
+        $updated = $this->applyStatus($reservation, Reservation::STATUS_CHECKED_OUT);
+
+        $this->stayAdjustmentService->applyFeesToFolio(
+            $updated,
+            $decision,
+            null,
+            $lateOverride,
+            $canOverrideFees,
+        );
+
+        activity('reservation')
+            ->performedOn($updated)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'from_status' => $fromStatus,
+                'to_status' => $updated->status,
+                'reservation_code' => $updated->code,
+                'room_id' => $updated->room_id,
+                'offer_id' => $updated->offer_id,
+                'check_in_date' => $updated->check_in_date,
+                'check_out_date' => $updated->check_out_date,
+                'actual_check_out_at' => $updated->actual_check_out_at,
+            ])
+            ->event('checked_out')
+            ->log('checked_out');
+
+        $mainFolio = $updated->mainFolio()->first();
+        if ($mainFolio && $mainFolio->balance > 0.01) {
+            $this->notifier->notify('folio.balance_remaining_on_checkout', $updated->hotel_id, [
+                'tenant_id' => $updated->tenant_id,
+                'reservation_id' => $updated->id,
+                'reservation_code' => $updated->code,
+                'balance' => $mainFolio->balance,
+                'currency' => $mainFolio->currency,
+            ], [
+                'cta_route' => 'reservations.folio.show',
+                'cta_params' => ['reservation' => $updated->id],
+            ]);
+        }
+
+        $this->notifier->notify('reservation.checked_out', $updated->hotel_id, [
+            'tenant_id' => $updated->tenant_id,
+            'reservation_id' => $updated->id,
+            'reservation_code' => $updated->code,
+            'room_id' => $updated->room_id,
+            'room_number' => $updated->room?->number,
+            'guest_name' => $updated->guest?->full_name ?? $updated->guest?->name,
+        ], [
+            'cta_route' => 'reservations.index',
+        ]);
+
+        return $updated;
     }
 
     public function cancel(Reservation $reservation): Reservation
@@ -106,7 +264,25 @@ class ReservationStateMachine
             }
         }
 
-        return $this->applyStatus($reservation, Reservation::STATUS_CANCELLED);
+        $fromStatus = $reservation->status;
+        $updated = $this->applyStatus($reservation, Reservation::STATUS_CANCELLED);
+
+        activity('reservation')
+            ->performedOn($updated)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'from_status' => $fromStatus,
+                'to_status' => $updated->status,
+                'reservation_code' => $updated->code,
+                'room_id' => $updated->room_id,
+                'offer_id' => $updated->offer_id,
+                'check_in_date' => $updated->check_in_date,
+                'check_out_date' => $updated->check_out_date,
+            ])
+            ->event('cancelled')
+            ->log('cancelled');
+
+        return $updated;
     }
 
     public function markNoShow(Reservation $reservation): Reservation
@@ -125,8 +301,26 @@ class ReservationStateMachine
                 $this->roomStateMachine->markAvailable($reservation->room);
             }
         }
+        $fromStatus = $reservation->status;
 
-        return $this->applyStatus($reservation, Reservation::STATUS_NO_SHOW);
+        $updated = $this->applyStatus($reservation, Reservation::STATUS_NO_SHOW);
+
+        activity('reservation')
+            ->performedOn($updated)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'from_status' => $fromStatus,
+                'to_status' => $updated->status,
+                'reservation_code' => $updated->code,
+                'room_id' => $updated->room_id,
+                'offer_id' => $updated->offer_id,
+                'check_in_date' => $updated->check_in_date,
+                'check_out_date' => $updated->check_out_date,
+            ])
+            ->event('no_show')
+            ->log('no_show');
+
+        return $updated;
     }
 
     private function ensureAvailability(Reservation $reservation, string $status): void
@@ -148,6 +342,11 @@ class ReservationStateMachine
         $reservation->save();
 
         return $reservation;
+    }
+
+    public function getStayAdjustmentService(): StayAdjustmentService
+    {
+        return $this->stayAdjustmentService;
     }
 
     private function assertTransition(Reservation $reservation, string $targetStatus): void

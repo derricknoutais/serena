@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Frontdesk;
 
 use App\Http\Controllers\Controller;
 use App\Models\Reservation;
+use App\Services\OccupancyForecastService;
 use App\Support\Frontdesk\ReservationsIndexData;
 use App\Support\Frontdesk\RoomBoardData;
 use Illuminate\Http\JsonResponse;
@@ -14,12 +15,44 @@ use Inertia\Response;
 
 class FrontdeskController extends Controller
 {
+    public function __construct(private readonly OccupancyForecastService $forecastService) {}
+
     public function dashboard(Request $request): Response
     {
+        $forecast = null;
+        if ($request->user()->can('night_audit.view')) {
+            $forecast = $this->forecastService->generate(
+                (int) $request->user()->tenant_id,
+                (int) ($request->user()->active_hotel_id ?? $request->user()->hotel_id),
+                7,
+            );
+        }
+
         return Inertia::render('FrontDesk', [
             'reservationsData' => ReservationsIndexData::build($request),
             'roomBoardData' => RoomBoardData::build($request),
+            'forecastData' => $forecast,
         ]);
+    }
+
+    public function forecast(Request $request): JsonResponse
+    {
+        $request->validate([
+            'days' => ['nullable', 'integer', 'in:7,14'],
+            'hotel_id' => ['nullable', 'integer'],
+        ]);
+
+        if (! $request->user()->can('night_audit.view')) {
+            abort(403);
+        }
+
+        $user = $request->user();
+        $hotelId = (int) ($request->integer('hotel_id') ?: ($user->active_hotel_id ?? $user->hotel_id));
+        $days = (int) $request->integer('days', 7);
+
+        $forecast = $this->forecastService->generate((int) $user->tenant_id, $hotelId, $days);
+
+        return response()->json($forecast);
     }
 
     public function arrivals(Request $request): JsonResponse

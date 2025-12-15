@@ -233,15 +233,9 @@ class RoomBoardData
             'walkInSource' => $walkInSource,
             'canManageHousekeeping' => $canManageHousekeeping,
             'maintenancePermissions' => [
-                'canReport' => $user->can('create', MaintenanceTicket::class),
-                'canHandle' => $user->hasRole(['owner', 'manager', 'maintenance', 'superadmin']),
-                'canProgress' => $user->hasRole([
-                    'owner',
-                    'manager',
-                    'maintenance',
-                    'superadmin',
-                    'receptionist',
-                ]),
+                'canReport' => $user->can('maintenance_tickets.create'),
+                'canHandle' => $user->can('maintenance_tickets.close'),
+                'canProgress' => $user->can('maintenance_tickets.update'),
             ],
             'currentUser' => [
                 'id' => $user->id,

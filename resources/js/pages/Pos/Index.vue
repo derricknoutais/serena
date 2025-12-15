@@ -1,6 +1,6 @@
 <template>
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="space-y-4">
+        <div v-if="canViewPos" class="space-y-4">
             <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                     <p class="text-sm font-semibold uppercase text-serena-primary">Bar / POS</p>
@@ -81,12 +81,16 @@
                                 {{ formatCurrency(product.unit_price) }}
                             </p>
                             <button
+                                v-if="canCreatePos"
                                 type="button"
                                 class="mt-3 rounded-xl bg-serena-primary px-3 py-2 text-sm font-semibold text-white transition hover:bg-serena-primary-dark"
                                 @click="addToCart(product)"
                             >
                                 Ajouter
                             </button>
+                            <span v-else class="mt-3 text-xs text-serena-text-muted">
+                                Ajout non autorisé
+                            </span>
                         </article>
                     </div>
                     <div
@@ -106,7 +110,7 @@
                         <button
                             type="button"
                             class="text-sm text-serena-danger underline decoration-dotted disabled:opacity-30"
-                            :disabled="!cart.length"
+                            :disabled="!cart.length || !canCreatePos"
                             @click="clearCart"
                         >
                             Vider
@@ -129,6 +133,7 @@
                                 <button
                                     type="button"
                                     class="text-xs text-serena-danger"
+                                    :disabled="!canCreatePos"
                                     @click="removeFromCart(line.product_id)"
                                 >
                                     Retirer
@@ -139,6 +144,7 @@
                                     <button
                                         type="button"
                                         class="text-lg font-bold text-serena-text-muted"
+                                        :disabled="!canCreatePos"
                                         @click="decrement(line.product_id)"
                                     >
                                         −
@@ -147,6 +153,7 @@
                                     <button
                                         type="button"
                                         class="text-lg font-bold text-serena-text-muted"
+                                        :disabled="!canCreatePos"
                                         @click="increment(line.product_id)"
                                     >
                                         +
@@ -235,6 +242,12 @@
                 </section>
             </div>
         </div>
+        <div
+            v-else
+            class="rounded-2xl border border-dashed border-serena-border bg-white p-8 text-center text-sm text-serena-text-muted"
+        >
+            Accès POS non autorisé.
+        </div>
     </AppLayout>
 </template>
 
@@ -291,6 +304,15 @@ export default {
                 { label: 'Bar / POS' },
             ];
         },
+        permissionFlags() {
+            return this.$page?.props?.auth?.can ?? {};
+        },
+        canViewPos() {
+            return this.permissionFlags.pos_view ?? true;
+        },
+        canCreatePos() {
+            return this.permissionFlags.pos_create ?? false;
+        },
         filteredProducts() {
             if (this.selectedCategoryId === 'all') {
                 return this.products;
@@ -307,10 +329,11 @@ export default {
             return this.cart.reduce((sum, line) => sum + line.total_amount, 0);
         },
         canSubmitCounter() {
-            return this.cart.length > 0 && !!this.selectedPaymentMethodId && !this.submitting;
+            return this.canCreatePos && this.cart.length > 0 && !!this.selectedPaymentMethodId && !this.submitting;
         },
         canSubmitRoom() {
             return (
+                this.canCreatePos &&
                 this.cart.length > 0 &&
                 !!this.selectedReservationId &&
                 !this.submitting &&
@@ -330,10 +353,22 @@ export default {
         this.selectedReservationId = this.inHouseReservations[0]?.id ?? null;
     },
     methods: {
+        showUnauthorizedAlert() {
+            Swal.fire({
+                icon: 'error',
+                title: 'Action non autorisée',
+                text: 'Vous ne disposez pas des droits suffisants.',
+            });
+        },
         refreshProducts() {
             this.$inertia.reload({ only: ['products', 'categories'] });
         },
         addToCart(product) {
+            if (!this.canCreatePos) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
             const existing = this.cart.find((line) => line.product_id === product.id);
 
             if (existing) {
@@ -356,6 +391,11 @@ export default {
             this.cart.push(line);
         },
         increment(productId) {
+            if (!this.canCreatePos) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
             const line = this.cart.find((item) => item.product_id === productId);
             if (!line) {
                 return;
@@ -364,6 +404,11 @@ export default {
             this.updateLineAmounts(line);
         },
         decrement(productId) {
+            if (!this.canCreatePos) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
             const line = this.cart.find((item) => item.product_id === productId);
             if (!line) {
                 return;
@@ -378,9 +423,19 @@ export default {
             this.updateLineAmounts(line);
         },
         removeFromCart(productId) {
+            if (!this.canCreatePos) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
             this.cart = this.cart.filter((item) => item.product_id !== productId);
         },
         clearCart() {
+            if (!this.canCreatePos) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
             this.cart = [];
             this.clientLabel = '';
         },
@@ -413,6 +468,10 @@ export default {
         },
         async submitCounterSale() {
             if (!this.canSubmitCounter) {
+                if (!this.canCreatePos) {
+                    this.showUnauthorizedAlert();
+                }
+
                 return;
             }
             this.submitting = true;
@@ -442,6 +501,10 @@ export default {
         },
         async submitRoomSale() {
             if (!this.canSubmitRoom) {
+                if (!this.canCreatePos) {
+                    this.showUnauthorizedAlert();
+                }
+
                 return;
             }
             this.submitting = true;
@@ -469,6 +532,12 @@ export default {
             }
         },
         handleError(error) {
+            if (error?.response?.status === 403) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
+
             let message = 'Une erreur est survenue. Merci de réessayer.';
 
             if (error?.response?.data?.message) {

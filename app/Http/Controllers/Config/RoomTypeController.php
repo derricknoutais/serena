@@ -19,6 +19,8 @@ class RoomTypeController extends Controller
 
     public function index(Request $request): Response
     {
+        $this->authorize('room_types.view');
+
         $activeHotelId = $this->activeHotelId($request);
 
         $roomTypes = RoomType::query()
@@ -42,11 +44,15 @@ class RoomTypeController extends Controller
 
     public function create(Request $request): Response
     {
+        $this->authorize('room_types.create');
+
         return Inertia::render('Config/RoomTypes/RoomTypesCreate');
     }
 
     public function store(Request $request): RedirectResponse
     {
+        $this->authorize('room_types.create');
+
         $data = $request->validate([
             'name' => ['required', 'string'],
             'capacity_adults' => ['required', 'integer', 'min:1'],
@@ -72,6 +78,8 @@ class RoomTypeController extends Controller
 
     public function edit(Request $request, int $id): Response
     {
+        $this->authorize('room_types.update');
+
         $roomType = RoomType::query()
             ->where('hotel_id', $this->activeHotelId($request))
             ->where('tenant_id', $request->user()->tenant_id)
@@ -84,6 +92,8 @@ class RoomTypeController extends Controller
 
     public function show(Request $request, int $id): Response|RedirectResponse
     {
+        $this->authorize('room_types.view');
+
         $roomType = RoomType::query()
             ->with(['offerPrices.offer'])
             ->where('hotel_id', $this->activeHotelId($request))
@@ -120,6 +130,8 @@ class RoomTypeController extends Controller
 
     public function update(Request $request, int $id): RedirectResponse
     {
+        $this->authorize('room_types.update');
+
         $data = $request->validate([
             'name' => ['required', 'string'],
             'capacity_adults' => ['required', 'integer', 'min:1'],
@@ -140,6 +152,8 @@ class RoomTypeController extends Controller
 
     public function storePrice(Request $request, RoomType $roomType): RedirectResponse
     {
+        $this->authorize('room_types.update');
+
         $roomType = RoomType::query()
             ->where('id', $roomType->getKey())
             ->where('tenant_id', $request->user()->tenant_id)
@@ -160,6 +174,8 @@ class RoomTypeController extends Controller
             ->where('hotel_id', $this->activeHotelId($request))
             ->firstOrFail();
 
+        $hotel = $offer->hotel;
+
         OfferRoomTypePrice::query()->updateOrCreate(
             [
                 'offer_id' => $offer->id,
@@ -169,6 +185,7 @@ class RoomTypeController extends Controller
                 ...$data,
                 'tenant_id' => $request->user()->tenant_id,
                 'hotel_id' => $this->activeHotelId($request),
+                'currency' => $hotel?->currency ?? 'XAF',
                 'is_active' => $data['is_active'] ?? true,
             ],
         );
@@ -180,6 +197,8 @@ class RoomTypeController extends Controller
 
     public function destroy(Request $request, int $id): RedirectResponse
     {
+        $this->authorize('room_types.delete');
+
         $roomType = RoomType::query()
             ->where('tenant_id', $request->user()->tenant_id)
             ->findOrFail($id);

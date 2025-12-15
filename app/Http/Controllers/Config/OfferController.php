@@ -19,6 +19,8 @@ class OfferController extends Controller
 
     public function index(Request $request): Response
     {
+        $this->authorize('offers.view');
+
         $offers = Offer::query()
             ->when($this->activeHotelId($request), fn ($q) => $q->where('hotel_id', $this->activeHotelId($request)))
             ->where('tenant_id', $request->user()->tenant_id)
@@ -41,6 +43,8 @@ class OfferController extends Controller
                     'valid_from' => $offer->valid_from,
                     'valid_to' => $offer->valid_to,
                     'valid_days_of_week' => $offer->valid_days_of_week,
+                    'time_rule' => $offer->time_rule,
+                    'time_config' => $offer->time_config,
                     'description' => $offer->description,
                     'is_active' => $offer->is_active,
                     'prices' => $prices,
@@ -64,11 +68,15 @@ class OfferController extends Controller
 
     public function create(): Response
     {
+        $this->authorize('offers.create');
+
         return Inertia::render('Config/Offers/OffersCreate');
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request)
     {
+        $this->authorize('offers.create');
+
         $data = $request->validate([
             'name' => ['required', 'string'],
             'kind' => ['required', 'string', 'in:hourly,night,day,package'],
@@ -76,6 +84,8 @@ class OfferController extends Controller
             'fixed_duration_hours' => ['nullable', 'integer', 'min:1'],
             'check_in_from' => ['nullable', 'date_format:H:i'],
             'check_out_until' => ['nullable', 'date_format:H:i'],
+            'time_rule' => ['nullable', 'string', 'in:rolling,fixed_window,fixed_checkout,weekend_window'],
+            'time_config' => ['nullable', 'array'],
             'valid_days_of_week' => ['nullable', 'array'],
             'valid_days_of_week.*' => ['integer', 'between:1,7'],
             'valid_from' => ['nullable', 'date'],
@@ -97,7 +107,6 @@ class OfferController extends Controller
             'tenant_id' => $request->user()->tenant_id,
             'hotel_id' => $hotel->id,
         ]);
-
         foreach ($data['prices'] ?? [] as $price) {
             OfferRoomTypePrice::query()->updateOrCreate(
                 [
@@ -119,6 +128,8 @@ class OfferController extends Controller
 
     public function edit(Request $request, int $id): Response
     {
+        $this->authorize('offers.update');
+
         $offer = Offer::query()
             ->where('hotel_id', $this->activeHotelId($request))
             ->where('tenant_id', $request->user()->tenant_id)
@@ -131,6 +142,8 @@ class OfferController extends Controller
 
     public function update(Request $request, int $id): RedirectResponse
     {
+        $this->authorize('offers.update');
+
         $data = $request->validate([
             'name' => ['required', 'string'],
             'kind' => ['required', 'string', 'in:hourly,night,day,package'],
@@ -138,6 +151,8 @@ class OfferController extends Controller
             'fixed_duration_hours' => ['nullable', 'integer', 'min:1'],
             'check_in_from' => ['nullable', 'date_format:H:i'],
             'check_out_until' => ['nullable', 'date_format:H:i'],
+            'time_rule' => ['nullable', 'string', 'in:rolling,fixed_window,fixed_checkout,weekend_window'],
+            'time_config' => ['nullable', 'array'],
             'valid_days_of_week' => ['nullable', 'array'],
             'valid_days_of_week.*' => ['integer', 'between:1,7'],
             'valid_from' => ['nullable', 'date'],
@@ -163,7 +178,7 @@ class OfferController extends Controller
                 ->firstOrFail();
 
             foreach ($data['prices'] as $price) {
-                OfferRoomTypePrice::query()->updateOrCreate(
+                OfferRoomTypePrice::updateOrCreate(
                     [
                         'tenant_id' => $offer->tenant_id,
                         'hotel_id' => $offer->hotel_id,
@@ -184,6 +199,8 @@ class OfferController extends Controller
 
     public function destroy(Request $request, int $id): RedirectResponse
     {
+        $this->authorize('offers.delete');
+
         $offer = Offer::query()
             ->where('tenant_id', $request->user()->tenant_id)
             ->findOrFail($id);

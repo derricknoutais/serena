@@ -13,10 +13,12 @@ use App\Models\Reservation;
 use App\Models\Room;
 use App\Models\RoomType;
 use App\Services\FolioBillingService;
+use App\Services\OfferTimeEngine;
+use App\Services\ReservationConflictService;
 use App\Services\ReservationStateMachine;
-use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -26,6 +28,8 @@ class RoomBoardWalkInController extends Controller
     public function __construct(
         private readonly ReservationStateMachine $stateMachine,
         private readonly FolioBillingService $billingService,
+        private readonly OfferTimeEngine $offerTimeEngine,
+        private readonly ReservationConflictService $conflictService,
     ) {}
 
     public function store(Request $request): JsonResponse
@@ -44,8 +48,8 @@ class RoomBoardWalkInController extends Controller
             'room_type_id' => ['required', 'integer', 'exists:room_types,id'],
             'offer_id' => ['required', 'integer', Rule::exists('offers', 'id')->where('tenant_id', $tenantId)->where('hotel_id', $hotelId)],
             'offer_price_id' => ['required', 'integer', 'exists:offer_room_type_prices,id'],
-            'check_in_at' => ['required', 'date'],
-            'check_out_at' => ['required', 'date', 'after:check_in_at'],
+            'check_in_at' => ['nullable', 'date'],
+            'check_out_at' => ['nullable', 'date', 'after:check_in_at'],
             'adults' => ['required', 'integer', 'min:1'],
             'children' => ['nullable', 'integer', 'min:0'],
             'amount_received' => ['required', 'numeric', 'min:0'],
@@ -88,11 +92,19 @@ class RoomBoardWalkInController extends Controller
         $taxAmount = 0.0;
         $totalAmount = $baseAmount + $taxAmount;
 
-        $checkInAt = Carbon::parse($validated['check_in_at']);
-        $checkOutAt = Carbon::parse($validated['check_out_at']);
+        $arrivalAt = Carbon::now();
+        $period = $this->offerTimeEngine->computeStayPeriod($offer, $arrivalAt);
+        $checkInDate = $period['arrival_at']->toDateString();
+        $checkOutDate = $period['departure_at']->toDateString();
 
-        $checkInDate = $checkInAt->toDateString();
-        $checkOutDate = $checkOutAt->toDateString();
+        $this->conflictService->validateOrThrowRoomConflict(
+            $hotelId,
+            (string) $room->id,
+            Carbon::parse($checkInDate),
+            Carbon::parse($checkOutDate),
+            excludeReservationId: null,
+            tenantId: $tenantId,
+        );
 
         /** @var Reservation $reservation */
         $reservation = DB::transaction(function () use (

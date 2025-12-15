@@ -5,7 +5,7 @@ import SecondaryButton from '@/components/SecondaryButton.vue';
 import TextInput from '@/components/TextInput.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, router } from '@inertiajs/vue3';
-import { computed, reactive } from 'vue';
+import { computed, reactive, watch, ref } from 'vue';
 
 const props = defineProps<{
     activities: {
@@ -46,6 +46,37 @@ const submitFilters = () => {
 };
 
 const hasFilters = computed(() => Boolean(filterState.event || filterState.user_id || filterState.search));
+
+const filtersInitialized = ref(false);
+let filtersTimer: number | undefined;
+
+watch(filterState, () => {
+    if (!filtersInitialized.value) {
+        filtersInitialized.value = true;
+        return;
+    }
+
+    if (filtersTimer) {
+        clearTimeout(filtersTimer);
+    }
+
+    filtersTimer = window.setTimeout(() => submitFilters(), 250);
+}, { deep: true });
+
+const readableProps = (activity: (typeof props.activities.data)[number]) => {
+    if (Array.isArray(activity.readable_properties) && activity.readable_properties.length) {
+        return activity.readable_properties;
+    }
+
+    if (!activity.properties) {
+        return [];
+    }
+
+    return Object.entries(activity.properties).map(([key, value]) => ({
+        label: key.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+        value: String(value ?? ''),
+    }));
+};
 </script>
 
 <template>
@@ -121,9 +152,16 @@ const hasFilters = computed(() => Boolean(filterState.event || filterState.user_
                     >
                         <div class="md:col-span-2">
                             <p class="font-medium text-serena-text-main">{{ activity.description }}</p>
-                            <p class="text-xs text-serena-text-muted" v-if="activity.properties">
-                                {{ activity.properties }}
-                            </p>
+                            <div class="mt-1 flex flex-wrap gap-2">
+                                <span
+                                    v-for="prop in readableProps(activity)"
+                                    :key="`${prop.label}-${prop.value}`"
+                                    class="inline-flex items-center gap-1 rounded-full bg-serena-primary-soft px-2 py-1 text-[11px] font-medium text-serena-primary"
+                                >
+                                    <span class="text-[10px] uppercase tracking-wide text-serena-text-muted">{{ prop.label }}</span>
+                                    <span class="text-serena-text-main">{{ prop.value }}</span>
+                                </span>
+                            </div>
                         </div>
                         <div class="text-sm capitalize text-serena-text-muted">
                             {{ activity.event || 'non défini' }}

@@ -25,12 +25,12 @@ class PosController extends Controller
 {
     use ResolvesActiveHotel;
 
-    public function __construct(private readonly FolioBillingService $folioBilling)
-    {
-    }
+    public function __construct(private readonly FolioBillingService $folioBilling) {}
 
     public function index(Request $request): Response
     {
+        $this->authorize('pos.view');
+
         $hotel = $this->requireActiveHotel($request);
         $tenantId = $request->user()->tenant_id;
 
@@ -40,7 +40,7 @@ class PosController extends Controller
             ->where('is_active', true)
             ->orderBy('name')
             ->get()
-            ->map(fn(ProductCategory $category) => [
+            ->map(fn (ProductCategory $category) => [
                 'id' => $category->id,
                 'name' => $category->name,
                 'description' => $category->description,
@@ -54,7 +54,7 @@ class PosController extends Controller
             ->with(['category:id,name', 'tax:id,name,rate'])
             ->orderBy('name')
             ->get()
-            ->map(fn(Product $product) => [
+            ->map(fn (Product $product) => [
                 'id' => $product->id,
                 'name' => $product->name,
                 'unit_price' => (float) $product->unit_price,
@@ -75,7 +75,7 @@ class PosController extends Controller
             })
             ->orderBy('name')
             ->get()
-            ->map(fn(PaymentMethod $method) => [
+            ->map(fn (PaymentMethod $method) => [
                 'id' => $method->id,
                 'name' => $method->name,
                 'code' => $method->code,
@@ -90,7 +90,7 @@ class PosController extends Controller
             ->with(['guest:id,first_name,last_name', 'room:id,number'])
             ->orderBy('code')
             ->get()
-            ->map(fn(Reservation $reservation) => [
+            ->map(fn (Reservation $reservation) => [
                 'id' => $reservation->id,
                 'code' => $reservation->code,
                 'guest_name' => $reservation->guest?->full_name,
@@ -110,6 +110,8 @@ class PosController extends Controller
 
     public function storeCounterSale(StoreCounterSaleRequest $request): JsonResponse
     {
+        $this->authorize('pos.create');
+
         $hotel = $this->requireActiveHotel($request);
         $user = $request->user();
         $tenantId = $user->tenant_id;
@@ -117,7 +119,7 @@ class PosController extends Controller
 
         $products = $this->productsForItems($data['items'], $tenantId, $hotel->id);
         $lines = $this->normalizeItems($data['items'], $products);
-        $totalAmount = collect($lines)->sum(fn(array $line) => $line['total_amount']);
+        $totalAmount = collect($lines)->sum(fn (array $line) => $line['total_amount']);
 
         $paymentMethod = PaymentMethod::query()
             ->where('tenant_id', $tenantId)
@@ -169,7 +171,7 @@ class PosController extends Controller
                     ->where('status', 'open')
                     ->first();
 
-                if (!$activeSession) {
+                if (! $activeSession) {
                     throw \Illuminate\Validation\ValidationException::withMessages([
                         'payment_method_id' => 'Aucune caisse bar ouverte. Veuillez ouvrir une session de caisse.',
                     ]);
@@ -200,6 +202,8 @@ class PosController extends Controller
 
     public function storeRoomSale(StoreRoomSaleRequest $request): JsonResponse
     {
+        $this->authorize('pos.create');
+
         $hotel = $this->requireActiveHotel($request);
         $user = $request->user();
         $tenantId = $user->tenant_id;
@@ -213,7 +217,7 @@ class PosController extends Controller
 
         $products = $this->productsForItems($data['items'], $tenantId, $hotel->id);
         $lines = $this->normalizeItems($data['items'], $products);
-        $addedTotal = collect($lines)->sum(fn(array $line) => $line['total_amount']);
+        $addedTotal = collect($lines)->sum(fn (array $line) => $line['total_amount']);
 
         $folio = DB::transaction(function () use ($reservation, $lines) {
             $folio = $this->folioBilling->ensureMainFolioForReservation($reservation);

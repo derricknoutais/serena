@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\Activity;
 use App\Models\Offer;
 use App\Models\Reservation;
 
@@ -25,11 +26,10 @@ it('creates reservation from offer with room type id set', function (): void {
         'hotel_id' => $hotel->id,
         'name' => '24 Heures',
         'kind' => 'full_day',
-        'valid_from' => now()->toDateString(),
-        'valid_to' => now()->copy()->addDay()->toDateString(),
-        'check_in_from' => null,
-        'check_out_until' => null,
-        'fixed_duration_hours' => null,
+        'time_rule' => 'rolling',
+        'time_config' => [
+            'duration_minutes' => 1440,
+        ],
     ]);
 
     $domain = tenantDomain($tenant);
@@ -55,5 +55,16 @@ it('creates reservation from offer with room type id set', function (): void {
     $reservation = Reservation::query()->findOrFail($reservationId);
 
     expect($reservation->room_type_id)->toBe($roomType->id);
+
+    $activity = Activity::query()
+        ->where('log_name', 'reservation')
+        ->where('subject_id', (string) $reservation->id)
+        ->where('event', 'created')
+        ->first();
+
+    expect($activity)->not->toBeNull();
+    expect($activity->properties['reservation_code'])->toBe('RSV-TEST-001');
+    expect($activity->properties['offer_name'])->toBe('24 Heures');
+    expect($activity->properties['room_number'] ?? null)->not->toBeNull();
 }
 );

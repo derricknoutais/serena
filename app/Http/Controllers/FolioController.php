@@ -8,15 +8,14 @@ use App\Services\FolioPayloadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class FolioController extends Controller
 {
-    public function __construct(private readonly FolioPayloadService $folioPayloads)
-    {
-    }
+    public function __construct(private readonly FolioPayloadService $folioPayloads) {}
 
     public function show(Request $request, Folio $folio): Response|JsonResponse
     {
@@ -51,9 +50,7 @@ class FolioController extends Controller
         $discountPercent = isset($data['discount_percent']) ? (float) $data['discount_percent'] : 0.0;
         $discountAmount = isset($data['discount_amount']) ? (float) $data['discount_amount'] : 0.0;
 
-        $item = $folio->items()->make([
-            'tenant_id' => $folio->tenant_id,
-            'hotel_id' => $folio->hotel_id,
+        $folio->addCharge([
             'description' => $data['description'],
             'quantity' => $quantity,
             'unit_price' => $unitPrice,
@@ -65,10 +62,6 @@ class FolioController extends Controller
             'type' => $data['type'] ?? null,
             'product_id' => $data['product_id'] ?? null,
         ]);
-
-        $item->recalculateAmounts();
-        $item->save();
-        $folio->recalculateTotals();
 
         return back()->with('success', 'Charge ajoutée au folio.');
     }
@@ -105,7 +98,7 @@ class FolioController extends Controller
                 ->where('status', 'open')
                 ->first();
 
-            if (!$activeSession) {
+            if (! $activeSession) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
                     'payment_method_id' => 'Aucune caisse réception ouverte. Veuillez ouvrir une session de caisse.',
                 ]);
@@ -124,7 +117,7 @@ class FolioController extends Controller
             'cash_session_id' => $cashSessionId,
         ]);
 
-        if (!$request->wantsJson()) {
+        if (! $request->wantsJson()) {
             return back()->with('success', 'Paiement enregistré.');
         }
 
@@ -135,6 +128,8 @@ class FolioController extends Controller
 
     public function destroyPayment(Request $request, Folio $folio, Payment $payment): RedirectResponse|JsonResponse
     {
+        Gate::authorize('folio_items.void');
+
         $this->authorizeFolio($request, $folio);
 
         abort_if((int) $payment->folio_id !== (int) $folio->id, 404);
@@ -142,7 +137,7 @@ class FolioController extends Controller
         $payment->delete();
         $folio->recalculateTotals();
 
-        if (!$request->wantsJson()) {
+        if (! $request->wantsJson()) {
             return back()->with('success', 'Paiement supprimé.');
         }
 

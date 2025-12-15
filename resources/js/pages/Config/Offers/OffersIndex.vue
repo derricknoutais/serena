@@ -5,7 +5,12 @@
                 <h1 class="text-xl font-semibold">Offres</h1>
                 <p class="text-sm text-gray-500">Offres et packages.</p>
             </div>
-            <PrimaryButton type="button" class="px-4 py-2" @click="openCreateModal">
+            <PrimaryButton
+                v-if="canCreate"
+                type="button"
+                class="px-4 py-2"
+                @click="openCreateModal"
+            >
                 Nouvelle offre
             </PrimaryButton>
         </div>
@@ -36,6 +41,7 @@
                         </td>
                         <td class="space-x-3 px-4 py-3 text-sm text-gray-600">
                             <SecondaryButton
+                                v-if="canUpdate"
                                 type="button"
                                 class="px-2 py-1 text-xs"
                                 @click="openEditModal(offer)"
@@ -43,6 +49,7 @@
                                 Éditer
                             </SecondaryButton>
                             <PrimaryButton
+                                v-if="canDelete"
                                 type="button"
                                 variant="danger"
                                 class="px-2 py-1 text-xs bg-serena-danger"
@@ -139,49 +146,152 @@
                             </div>
                         </Field>
 
-                        <Field name="fixed_duration_hours" rules="numeric|min:1" v-slot="{ field, meta }">
-                            <div>
-                                <label class="text-sm font-medium text-gray-700">Durée fixe (heures)</label>
-                                <input
-                                    v-bind="field"
-                                    type="number"
-                                    min="1"
-                                    step="1"
-                                    class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                                />
-                                <ErrorMessage name="fixed_duration_hours" class="mt-1 text-xs text-red-600" />
-                                <p v-if="!meta.valid && meta.touched" class="mt-1 text-xs text-red-600">
-                                    Renseignez une durée en heures (optionnel).
-                                </p>
-                                <p v-if="errors.fixed_duration_hours" class="mt-1 text-xs text-red-600">
-                                    {{ errors.fixed_duration_hours }}
-                                </p>
-                            </div>
-                        </Field>
+                        <div class="md:col-span-2 mt-4 rounded-lg border border-gray-100 bg-gray-50 p-4">
+                            <h3 class="mb-2 text-sm font-semibold text-gray-800">
+                                Règle de temps de l’offre
+                            </h3>
 
-                        <Field name="check_in_from" v-slot="{ field }">
-                            <div>
-                                <label class="text-sm font-medium text-gray-700">Arrivée possible à partir de</label>
-                                <input
-                                    v-bind="field"
-                                    type="time"
-                                    class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                                />
-                                <ErrorMessage name="check_in_from" class="mt-1 text-xs text-red-600" />
-                            </div>
-                        </Field>
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Type de règle</label>
+                                    <select
+                                        v-model="form.time_rule"
+                                        class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                    >
+                                        <option :value="null">Non configuré</option>
+                                        <option
+                                            v-for="opt in timeRuleOptions"
+                                            :key="opt.value"
+                                            :value="opt.value"
+                                        >
+                                            {{ opt.label }}
+                                        </option>
+                                    </select>
+                                </div>
 
-                        <Field name="check_out_until" v-slot="{ field }">
-                            <div>
-                                <label class="text-sm font-medium text-gray-700">Départ possible jusqu’à</label>
-                                <input
-                                    v-bind="field"
-                                    type="time"
-                                    class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                                />
-                                <ErrorMessage name="check_out_until" class="mt-1 text-xs text-red-600" />
+                                <div v-if="form.time_rule === 'rolling'">
+                                    <label class="text-sm font-medium text-gray-700">Durée (heures)</label>
+                                    <input
+                                        v-model.number="timeConfigDraft.duration_hours"
+                                        type="number"
+                                        min="1"
+                                        step="1"
+                                        class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                    />
+                                    <p class="mt-1 text-xs text-gray-500">
+                                        Exemple : 3h, 6h, 24h.
+                                    </p>
+                                </div>
+
+                                <div v-else-if="form.time_rule === 'fixed_window'" class="md:col-span-2 grid gap-4 md:grid-cols-2">
+                                    <div>
+                                        <label class="text-sm font-medium text-gray-700">Heure de début</label>
+                                        <input
+                                            v-model="timeConfigDraft.start_time"
+                                            type="time"
+                                            class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="text-sm font-medium text-gray-700">Heure de fin</label>
+                                        <input
+                                            v-model="timeConfigDraft.end_time"
+                                            type="time"
+                                            class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                        />
+                                    </div>
+                                    <p class="md:col-span-2 mt-1 text-xs text-gray-500">
+                                        Si l’heure de fin est avant l’heure de début, la sortie se fait le lendemain (plage de nuit).
+                                    </p>
+                                </div>
+
+                                <div v-else-if="form.time_rule === 'fixed_checkout'" class="md:col-span-2 grid gap-4 md:grid-cols-2">
+                                    <div>
+                                        <label class="text-sm font-medium text-gray-700">Heure de départ</label>
+                                        <input
+                                            v-model="timeConfigDraft.checkout_time"
+                                            type="time"
+                                            class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="text-sm font-medium text-gray-700">Nombre de nuits</label>
+                                        <input
+                                            v-model.number="timeConfigDraft.day_offset"
+                                            type="number"
+                                            min="1"
+                                            step="1"
+                                            class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="text-sm font-medium text-gray-700">Heure limite arrivée (cutoff)</label>
+                                        <input
+                                            v-model="timeConfigDraft.night_cutoff_time"
+                                            type="time"
+                                            class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                        />
+                                        <p class="mt-1 text-xs text-gray-500">
+                                            Si l’arrivée est avant cette heure, la nuitée est rattachée à la veille (sortie à l’heure de checkout le même jour).
+                                        </p>
+                                    </div>
+                                    <p class="md:col-span-2 mt-1 text-xs text-gray-500">
+                                        Exemple : arrivée aujourd’hui après l’heure de cutoff, départ le jour suivant à 12:00.
+                                    </p>
+                                </div>
+
+                                <div v-else-if="form.time_rule === 'weekend_window'" class="md:col-span-2 space-y-3">
+                                    <div class="grid gap-4 md:grid-cols-2">
+                                        <div>
+                                            <label class="text-sm font-medium text-gray-700">Jours d’arrivée autorisés</label>
+                                            <Multiselect
+                                                :model-value="timeConfigDraft.checkin.allowed_weekdays"
+                                                @update:modelValue="(val) => { timeConfigDraft.checkin.allowed_weekdays = val; }"
+                                                :options="weekdayOptions"
+                                                label="label"
+                                                track-by="value"
+                                                placeholder="Sélectionner les jours"
+                                                :multiple="true"
+                                                :close-on-select="false"
+                                                :allow-empty="true"
+                                                class="mt-1"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label class="text-sm font-medium text-gray-700">Heure minimale d’arrivée</label>
+                                            <input
+                                                v-model="timeConfigDraft.checkin.start_time"
+                                                type="time"
+                                                class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div class="grid gap-4 md:grid-cols-2">
+                                        <div>
+                                            <label class="text-sm font-medium text-gray-700">Heure de départ</label>
+                                            <input
+                                                v-model="timeConfigDraft.checkout.time"
+                                                type="time"
+                                                class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label class="text-sm font-medium text-gray-700">Nombre de jours après l’arrivée</label>
+                                            <input
+                                                v-model.number="timeConfigDraft.checkout.max_days_after_checkin"
+                                                type="number"
+                                                min="1"
+                                                step="1"
+                                                class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                            />
+                                        </div>
+                                    </div>
+                                    <p class="mt-1 text-xs text-gray-500">
+                                        Exemple : entrée ven/sam dès {{ timeConfigDraft.checkin.start_time || '12:00' }} → sortie +{{ timeConfigDraft.checkout.max_days_after_checkin || 2 }} jours à {{ timeConfigDraft.checkout.time || '12:00' }}.
+                                    </p>
+                                </div>
                             </div>
-                        </Field>
+                        </div>
 
                         <Field name="valid_from" v-slot="{ field }">
                             <div>
@@ -204,28 +314,6 @@
                                     class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                                 />
                                 <ErrorMessage name="valid_to" class="mt-1 text-xs text-red-600" />
-                            </div>
-                        </Field>
-
-                        <Field name="valid_days_of_week" v-slot="{ field }">
-                            <div class="md:col-span-2">
-                                <label class="text-sm font-medium text-gray-700">Jours valides</label>
-                                <Multiselect
-                                    :model-value="field.value ?? form.valid_days_of_week"
-                                    @update:modelValue="(val) => { field.onChange(val); form.valid_days_of_week = val; }"
-                                    :options="dayOptionsNormalized"
-                                    label="label"
-                                    track-by="value"
-                                    placeholder="Sélectionner les jours"
-                                    :multiple="true"
-                                    :close-on-select="false"
-                                    :allow-empty="true"
-                                    class="mt-1"
-                                />
-                                <ErrorMessage name="valid_days_of_week" class="mt-1 text-xs text-red-600" />
-                                <p v-if="errors.valid_days_of_week" class="mt-1 text-xs text-red-600">
-                                    {{ errors.valid_days_of_week }}
-                                </p>
                             </div>
                         </Field>
 
@@ -266,6 +354,7 @@
                                     <tr>
                                         <th class="px-3 py-2 text-left">Type de chambre</th>
                                         <th class="px-3 py-2 text-right">Prix (XAF)</th>
+                                        <th class="px-3 py-2 text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -286,9 +375,54 @@
                                                 class="w-28 rounded-md border border-gray-200 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-100"
                                             />
                                         </td>
+                                        <td class="px-3 py-1.5 text-right">
+                                            <button
+                                                type="button"
+                                                class="text-[11px] font-semibold text-serena-danger hover:underline"
+                                                @click="removeRoomTypePrice(rtPrice.room_type_id)"
+                                            >
+                                                Supprimer
+                                            </button>
+                                        </td>
                                     </tr>
                                 </tbody>
                             </table>
+                        </div>
+                        <div class="mt-3 flex flex-wrap items-end gap-3">
+                            <div class="flex flex-col">
+                                <label class="text-xs font-semibold text-gray-600">Ajouter un type de chambre</label>
+                                <select
+                                    v-model="newPriceRoomTypeId"
+                                    class="mt-1 w-56 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                >
+                                    <option :value="null" disabled>Sélectionner</option>
+                                    <option
+                                        v-for="rt in availableRoomTypes"
+                                        :key="rt.id"
+                                        :value="rt.id"
+                                    >
+                                        {{ rt.name }}
+                                    </option>
+                                </select>
+                            </div>
+                            <div class="flex flex-col">
+                                <label class="text-xs font-semibold text-gray-600">Prix</label>
+                                <input
+                                    v-model.number="newPriceValue"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    class="mt-1 w-32 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                />
+                            </div>
+                            <PrimaryButton
+                                type="button"
+                                class="px-4 py-2 text-sm"
+                                :disabled="!newPriceRoomTypeId || newPriceValue === '' || Number.isNaN(Number(newPriceValue))"
+                                @click="addRoomTypePrice"
+                            >
+                                Ajouter
+                            </PrimaryButton>
                         </div>
                     </div>
 
@@ -353,15 +487,35 @@ export default {
                 name: '',
                 kind: null,
                 billing_mode: null,
-                fixed_duration_hours: null,
-                check_in_from: '',
-                check_out_until: '',
+                time_rule: null,
                 valid_from: '',
                 valid_to: '',
-                valid_days_of_week: [],
                 is_active: true,
             },
+            timeRuleOptions: [
+                { label: 'Durée glissante (H/M)', value: 'rolling' },
+                { label: 'Plage fixe (22:00 → 08:00)', value: 'fixed_window' },
+                { label: 'Départ fixe (type nuit)', value: 'fixed_checkout' },
+                { label: 'Formule week-end (H48/H72)', value: 'weekend_window' },
+            ],
+            timeConfigDraft: {
+                duration_hours: 24,
+                start_time: '22:00',
+                end_time: '08:00',
+                checkout_time: '12:00',
+                day_offset: 1,
+                checkin: {
+                    allowed_weekdays: [5, 6],
+                    start_time: '12:00',
+                },
+                checkout: {
+                    time: '12:00',
+                    max_days_after_checkin: 2,
+                },
+            },
             roomTypePrices: [],
+            newPriceRoomTypeId: null,
+            newPriceValue: '',
         };
     },
     computed: {
@@ -387,12 +541,47 @@ export default {
                 value: mapDayToNumber[k] ?? k,
             }));
         },
+        weekdayOptions() {
+            return [
+                { label: 'Lundi', value: 1 },
+                { label: 'Mardi', value: 2 },
+                { label: 'Mercredi', value: 3 },
+                { label: 'Jeudi', value: 4 },
+                { label: 'Vendredi', value: 5 },
+                { label: 'Samedi', value: 6 },
+                { label: 'Dimanche', value: 7 },
+            ];
+        },
+        selectedRoomTypeIds() {
+            return this.roomTypePrices.map((p) => p.room_type_id);
+        },
+        availableRoomTypes() {
+            const selected = this.selectedRoomTypeIds;
+
+            return (this.roomTypes || []).filter(
+                (rt) => !selected.includes(rt.id),
+            );
+        },
         errors() {
             return this.$page.props.errors || {};
+        },
+        canCreate() {
+            return this.$page.props.auth?.can?.offers_create ?? false;
+        },
+        canUpdate() {
+            return this.$page.props.auth?.can?.offers_update ?? false;
+        },
+        canDelete() {
+            return this.$page.props.auth?.can?.offers_delete ?? false;
         },
     },
     methods: {
         openCreateModal() {
+            if (!this.canCreate) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
             this.isEditing = false;
             this.editId = null;
             this.resetForm();
@@ -401,28 +590,23 @@ export default {
             this.showModal = true;
         },
         openEditModal(offer) {
+            if (!this.canUpdate) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
             this.isEditing = true;
             this.editId = offer.id;
             this.form = {
                 name: offer.name || '',
                 kind: this.kindOptionsNormalized.find((opt) => opt.value === offer.kind) ?? null,
                 billing_mode: this.billingModeOptions.find((opt) => opt.value === offer.billing_mode) ?? null,
-                fixed_duration_hours: offer.fixed_duration_hours || null,
-                check_in_from: offer.check_in_from || '',
-                check_out_until: offer.check_out_until || '',
+                time_rule: offer.time_rule || null,
                 valid_from: offer.valid_from || '',
                 valid_to: offer.valid_to || '',
-                valid_days_of_week: Array.isArray(offer.valid_days_of_week)
-                    ? offer.valid_days_of_week
-                        .map((d) => {
-                            const match = this.dayOptionsNormalized.find((opt) => opt.value === d);
-
-                            return match ?? null;
-                        })
-                        .filter((opt) => opt !== null)
-                    : [],
                 is_active: !!offer.is_active,
             };
+            this.initializeTimeConfigDraft(offer);
             this.initializeRoomTypePrices(offer);
             this.formKey += 1;
             this.showModal = true;
@@ -436,15 +620,15 @@ export default {
                 name: '',
                 kind: null,
                 billing_mode: null,
-                fixed_duration_hours: null,
-                check_in_from: '',
-                check_out_until: '',
+                time_rule: null,
                 valid_from: '',
                 valid_to: '',
-                valid_days_of_week: [],
                 is_active: true,
             };
             this.roomTypePrices = [];
+            this.newPriceRoomTypeId = null;
+            this.newPriceValue = '';
+            this.resetTimeConfigDraft();
         },
         initializeRoomTypePrices(offer = null) {
             const pricesByRoomType = {};
@@ -455,29 +639,179 @@ export default {
                 });
             }
 
-            this.roomTypePrices = (this.roomTypes || []).map((rt) => ({
-                room_type_id: rt.id,
-                room_type_name: rt.name,
-                price: Object.prototype.hasOwnProperty.call(pricesByRoomType, rt.id)
-                    ? pricesByRoomType[rt.id]
-                    : '',
-            }));
+            this.roomTypePrices = (this.roomTypes || [])
+                .filter((rt) => Object.prototype.hasOwnProperty.call(pricesByRoomType, rt.id))
+                .map((rt) => ({
+                    room_type_id: rt.id,
+                    room_type_name: rt.name,
+                    price: Object.prototype.hasOwnProperty.call(pricesByRoomType, rt.id)
+                        ? pricesByRoomType[rt.id]
+                        : '',
+                }));
+
+            if (!this.roomTypePrices.length) {
+                this.roomTypePrices = (this.roomTypes || []).map((rt) => ({
+                    room_type_id: rt.id,
+                    room_type_name: rt.name,
+                    price: '',
+                }));
+            }
+        },
+        resetTimeConfigDraft() {
+            this.timeConfigDraft = {
+                duration_hours: 24,
+                start_time: '22:00',
+                end_time: '08:00',
+                checkout_time: '12:00',
+                day_offset: 1,
+                checkin: {
+                    allowed_weekdays: this.weekdayOptions.filter((opt) => [5, 6].includes(opt.value)),
+                    start_time: '12:00',
+                },
+                checkout: {
+                    time: '12:00',
+                    max_days_after_checkin: 2,
+                },
+                night_cutoff_time: '',
+            };
+        },
+        addRoomTypePrice() {
+            if (!this.newPriceRoomTypeId) {
+                return;
+            }
+
+            const roomType = (this.roomTypes || []).find((rt) => rt.id === this.newPriceRoomTypeId);
+
+            if (!roomType) {
+                return;
+            }
+
+            if (this.selectedRoomTypeIds.includes(roomType.id)) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Déjà présent',
+                    text: 'Ce type de chambre est déjà dans la liste.',
+                });
+
+                return;
+            }
+
+            this.roomTypePrices.push({
+                room_type_id: roomType.id,
+                room_type_name: roomType.name,
+                price: Number.isNaN(Number(this.newPriceValue)) ? '' : Number(this.newPriceValue),
+            });
+
+            this.newPriceRoomTypeId = null;
+            this.newPriceValue = '';
+        },
+        removeRoomTypePrice(roomTypeId) {
+            this.roomTypePrices = this.roomTypePrices.filter((p) => p.room_type_id !== roomTypeId);
+        },
+        initializeTimeConfigDraft(offer) {
+            this.resetTimeConfigDraft();
+
+            if (!offer || !offer.time_rule || !offer.time_config) {
+                return;
+            }
+
+            const cfg = offer.time_config || {};
+
+            if (offer.time_rule === 'rolling') {
+                this.timeConfigDraft.duration_hours = Math.max(
+                    1,
+                    Math.round((cfg.duration_minutes || 60) / 60),
+                );
+            } else if (offer.time_rule === 'fixed_window') {
+                this.timeConfigDraft.start_time = cfg.start_time || '22:00';
+                this.timeConfigDraft.end_time = cfg.end_time || '08:00';
+            } else if (offer.time_rule === 'fixed_checkout') {
+                this.timeConfigDraft.checkout_time = cfg.checkout_time || '12:00';
+                this.timeConfigDraft.day_offset = cfg.day_offset || 1;
+                this.timeConfigDraft.night_cutoff_time = cfg.night_cutoff_time || '';
+            } else if (offer.time_rule === 'weekend_window') {
+                const allowedWeekdays = Array.isArray(cfg.checkin?.allowed_weekdays)
+                    ? cfg.checkin.allowed_weekdays
+                    : [5, 6];
+
+                this.timeConfigDraft.checkin.allowed_weekdays = allowedWeekdays
+                    .map((day) => this.weekdayOptions.find((opt) => opt.value === day) ?? null)
+                    .filter((opt) => opt !== null);
+                this.timeConfigDraft.checkin.start_time = cfg.checkin?.start_time || '12:00';
+                this.timeConfigDraft.checkout.time = cfg.checkout?.time || '12:00';
+                this.timeConfigDraft.checkout.max_days_after_checkin = cfg.checkout?.max_days_after_checkin || 2;
+            }
+        },
+        buildTimeConfigPayload() {
+            if (!this.form.time_rule) {
+                return null;
+            }
+
+            if (this.form.time_rule === 'rolling') {
+                const minutes = Math.max(1, Number(this.timeConfigDraft.duration_hours || 0)) * 60;
+
+                return {
+                    duration_minutes: minutes,
+                };
+            }
+
+            if (this.form.time_rule === 'fixed_window') {
+                return {
+                    start_time: this.timeConfigDraft.start_time,
+                    end_time: this.timeConfigDraft.end_time,
+                };
+            }
+
+            if (this.form.time_rule === 'fixed_checkout') {
+                return {
+                    checkout_time: this.timeConfigDraft.checkout_time,
+                    day_offset: Math.max(1, Number(this.timeConfigDraft.day_offset || 1)),
+                    night_cutoff_time: this.timeConfigDraft.night_cutoff_time || null,
+                };
+            }
+
+            if (this.form.time_rule === 'weekend_window') {
+                return {
+                    checkin: {
+                        allowed_weekdays: Array.isArray(this.timeConfigDraft.checkin.allowed_weekdays)
+                            ? this.timeConfigDraft.checkin.allowed_weekdays.map((d) => d?.value ?? d)
+                            : [],
+                        start_time: this.timeConfigDraft.checkin.start_time,
+                    },
+                    checkout: {
+                        time: this.timeConfigDraft.checkout.time,
+                        max_days_after_checkin: Math.max(
+                            1,
+                            Number(this.timeConfigDraft.checkout.max_days_after_checkin || 1),
+                        ),
+                    },
+                };
+            }
+
+            return null;
         },
         handleSubmit(values) {
+            if (!this.isEditing && !this.canCreate) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
+
+            if (this.isEditing && !this.canUpdate) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
             this.submitting = true;
             const payload = {
                 ...values,
                 kind: values.kind?.value ?? values.kind,
                 billing_mode: values.billing_mode?.value ?? values.billing_mode,
-                fixed_duration_hours: values.fixed_duration_hours ? Number(values.fixed_duration_hours) : null,
-                check_in_from: values.check_in_from || null,
-                check_out_until: values.check_out_until || null,
+                time_rule: this.form.time_rule || null,
                 valid_from: values.valid_from || null,
                 valid_to: values.valid_to || null,
-                valid_days_of_week: Array.isArray(values.valid_days_of_week)
-                    ? values.valid_days_of_week.map((d) => d?.value ?? d)
-                    : [],
                 is_active: !!values.is_active,
+                time_config: this.buildTimeConfigPayload(),
                 prices: this.roomTypePrices
                     .filter((p) => p.price !== '' && !Number.isNaN(Number(p.price)))
                     .map((p) => ({
@@ -524,6 +858,11 @@ export default {
             }
         },
         destroy(id) {
+            if (!this.canDelete) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
             Swal.fire({
                 title: 'Supprimer cette offre ?',
                 text: 'Cette action est irréversible.',
@@ -536,6 +875,13 @@ export default {
                 if (result.isConfirmed) {
                     router.delete(`/ressources/offers/${id}`, { preserveScroll: true });
                 }
+            });
+        },
+        showUnauthorizedAlert() {
+            Swal.fire({
+                icon: 'error',
+                title: 'Action non autorisée',
+                text: 'Vous ne disposez pas des droits suffisants.',
             });
         },
     },

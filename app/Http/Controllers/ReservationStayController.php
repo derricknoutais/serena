@@ -9,10 +9,12 @@ use App\Models\Reservation;
 use App\Models\Room;
 use App\Services\FolioBillingService;
 use App\Services\ReservationAvailabilityService;
+use App\Services\ReservationConflictService;
 use App\Services\RoomStateMachine;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
 class ReservationStayController extends Controller
@@ -21,10 +23,12 @@ class ReservationStayController extends Controller
         private readonly ReservationAvailabilityService $availability,
         private readonly FolioBillingService $billingService,
         private readonly RoomStateMachine $roomStateMachine,
+        private readonly ReservationConflictService $conflictService,
     ) {}
 
     public function updateDates(Request $request, Reservation $reservation): JsonResponse
     {
+        Gate::authorize('reservations.override_datetime');
         $this->ensureAuthorized($request, $reservation);
         $reservation->loadMissing(['offer', 'room.roomType', 'mainFolio']);
 
@@ -71,6 +75,26 @@ class ReservationStayController extends Controller
             'check_in_date' => $checkIn->toDateTimeString(),
             'check_out_date' => $newCheckOut->toDateTimeString(),
         ];
+
+        if ($reservation->room_id) {
+            $this->conflictService->validateOrThrowRoomConflict(
+                $reservation->hotel_id,
+                $reservation->room_id,
+                $checkIn,
+                $newCheckOut,
+                $reservation->id,
+                $reservation->tenant_id,
+            );
+        } elseif ($reservation->room_type_id) {
+            $this->conflictService->validateOrThrowOverbooking(
+                $reservation->hotel_id,
+                (int) $reservation->room_type_id,
+                $checkIn,
+                $newCheckOut,
+                $reservation->id,
+                $reservation->tenant_id,
+            );
+        }
 
         $this->availability->ensureAvailable($payload, $reservation->id);
 
@@ -161,6 +185,14 @@ class ReservationStayController extends Controller
         ];
 
         $this->availability->ensureAvailable($payload, $reservation->id);
+        $this->conflictService->validateOrThrowRoomConflict(
+            $reservation->hotel_id,
+            $newRoom->id,
+            $checkIn,
+            $checkOut,
+            $reservation->id,
+            $reservation->tenant_id,
+        );
 
         $oldBaseAmount = (float) $reservation->base_amount;
         $oldUnitPrice = (float) $reservation->unit_price;

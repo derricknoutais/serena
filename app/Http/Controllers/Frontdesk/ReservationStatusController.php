@@ -8,8 +8,10 @@ use App\Models\PaymentMethod;
 use App\Models\Reservation;
 use App\Services\FolioBillingService;
 use App\Services\ReservationStateMachine;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -23,7 +25,6 @@ class ReservationStatusController extends Controller
 
     public function update(Request $request, Reservation $reservation): RedirectResponse
     {
-
         $tenantId = $request->user()->tenant_id;
 
         abort_unless($reservation->tenant_id === $tenantId, 404);
@@ -34,6 +35,10 @@ class ReservationStatusController extends Controller
             'action' => ['required', Rule::in(['confirm', 'check_in', 'check_out', 'cancel', 'no_show'])],
             'penalty_amount' => ['nullable', 'numeric', 'min:0'],
             'penalty_note' => ['nullable', 'string', 'max:255'],
+            'actual_check_in_at' => ['nullable', 'date'],
+            'actual_check_out_at' => ['nullable', 'date'],
+            'early_fee_override' => ['nullable', 'numeric', 'min:0'],
+            'late_fee_override' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $action = $validated['action'];
@@ -47,12 +52,37 @@ class ReservationStatusController extends Controller
         ];
 
         $targetStatus = $map[$action];
+        $canOverrideFees = $request->user()?->hasAnyRole(['owner', 'manager']) ?? false;
+        $actualCheckInAt = ! empty($validated['actual_check_in_at'])
+            ? Carbon::parse($validated['actual_check_in_at'])
+            : null;
+        $actualCheckOutAt = ! empty($validated['actual_check_out_at'])
+            ? Carbon::parse($validated['actual_check_out_at'])
+            : null;
 
-        DB::transaction(function () use ($action, $reservation, $targetStatus, $validated): void {
+        DB::transaction(function () use (
+            $action,
+            $reservation,
+            $targetStatus,
+            $validated,
+            $canOverrideFees,
+            $actualCheckInAt,
+            $actualCheckOutAt
+        ): void {
             $updatedReservation = match ($action) {
                 'confirm' => $this->reservationStateMachine->confirm($reservation),
-                'check_in' => $this->reservationStateMachine->checkIn($reservation),
-                'check_out' => $this->reservationStateMachine->checkOut($reservation),
+                'check_in' => $this->reservationStateMachine->checkIn(
+                    $reservation,
+                    $actualCheckInAt,
+                    $canOverrideFees,
+                    isset($validated['early_fee_override']) ? (float) $validated['early_fee_override'] : null,
+                ),
+                'check_out' => $this->reservationStateMachine->checkOut(
+                    $reservation,
+                    $actualCheckOutAt,
+                    $canOverrideFees,
+                    isset($validated['late_fee_override']) ? (float) $validated['late_fee_override'] : null,
+                ),
                 'cancel' => $this->reservationStateMachine->cancel($reservation),
                 'no_show' => $this->reservationStateMachine->markNoShow($reservation),
                 default => throw ValidationException::withMessages([
@@ -69,6 +99,59 @@ class ReservationStatusController extends Controller
         });
 
         return back()->with('success', 'Statut mis à jour.');
+    }
+
+    public function preview(Request $request, Reservation $reservation): JsonResponse
+    {
+        $tenantId = $request->user()->tenant_id;
+
+        abort_unless($reservation->tenant_id === $tenantId, 404);
+
+        $data = $request->validate([
+            'action' => ['required', Rule::in(['check_in', 'check_out'])],
+            'actual_datetime' => ['required', 'date'],
+        ]);
+
+        $canOverrideFees = $request->user()?->hasAnyRole(['owner', 'manager']) ?? false;
+        $actual = Carbon::parse($data['actual_datetime']);
+
+        $decision = $this->reservationStateMachine->getStayAdjustmentService()->evaluateEarlyLate(
+            $reservation,
+            $data['action'] === 'check_in'
+                ? $actual
+                : ($reservation->actual_check_in_at ?? ($reservation->check_in_date ? Carbon::parse($reservation->check_in_date) : $actual)),
+            $data['action'] === 'check_out' ? $actual : null,
+        );
+
+        if ($decision['early_blocked'] && ! $canOverrideFees) {
+            throw ValidationException::withMessages([
+                'action' => $decision['early_reason'] ?? 'Arrivée anticipée non autorisée.',
+            ]);
+        }
+
+        if ($decision['late_blocked'] && ! $canOverrideFees) {
+            throw ValidationException::withMessages([
+                'action' => $decision['late_reason'] ?? 'Départ tardif non autorisé.',
+            ]);
+        }
+
+        return response()->json([
+            'early' => [
+                'is_early_checkin' => $decision['is_early_checkin'],
+                'fee' => $decision['early_fee_amount'],
+                'reason' => $decision['early_reason'],
+                'policy' => $decision['early_policy'],
+                'blocked' => $decision['early_blocked'],
+            ],
+            'late' => [
+                'is_late_checkout' => $decision['is_late_checkout'],
+                'fee' => $decision['late_fee_amount'],
+                'reason' => $decision['late_reason'],
+                'policy' => $decision['late_policy'],
+                'blocked' => $decision['late_blocked'],
+            ],
+            'currency' => $decision['currency'],
+        ]);
     }
 
     private function applyPenalty(Reservation $reservation, string $targetStatus, float $amount, ?string $note): void

@@ -91,6 +91,21 @@ class Notifier
                 'title' => 'Journée ré-ouverte',
                 'message' => sprintf('Journée business %s ré-ouverte', $payload['business_date'] ?? ''),
             ],
+            'reservation.created' => [
+                'title' => 'Nouvelle réservation',
+                'message' => sprintf(
+                    'Réservation %s créée pour %s',
+                    $payload['reservation_code'] ?? '',
+                    $payload['guest_name'] ?? 'client'
+                ),
+            ],
+            'reservation.updated' => [
+                'title' => 'Réservation mise à jour',
+                'message' => sprintf(
+                    'Réservation %s mise à jour',
+                    $payload['reservation_code'] ?? ''
+                ),
+            ],
             'reservation.checked_in' => [
                 'title' => 'Check-in effectué',
                 'message' => sprintf(

@@ -17,6 +17,8 @@ class ProductCategoryController extends Controller
 
     public function index(Request $request): Response
     {
+        $this->authorize('product_categories.view');
+
         $categories = ProductCategory::query()
             ->when($this->activeHotelId($request), fn ($q) => $q->where('hotel_id', $this->activeHotelId($request)))
             ->where('tenant_id', $request->user()->tenant_id)
@@ -36,6 +38,8 @@ class ProductCategoryController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $this->authorize('product_categories.create');
+
         $data = $request->validate([
             'name' => ['required', 'string'],
             'description' => ['nullable', 'string'],
@@ -58,6 +62,8 @@ class ProductCategoryController extends Controller
 
     public function update(Request $request, int $id): RedirectResponse
     {
+        $this->authorize('product_categories.update');
+
         $data = $request->validate([
             'name' => ['required', 'string'],
             'description' => ['nullable', 'string'],
@@ -76,6 +82,8 @@ class ProductCategoryController extends Controller
 
     public function destroy(Request $request, int $id): RedirectResponse
     {
+        $this->authorize('product_categories.delete');
+
         $category = ProductCategory::query()
             ->where('tenant_id', $request->user()->tenant_id)
             ->when($this->activeHotelId($request), fn ($q) => $q->where('hotel_id', $this->activeHotelId($request)))

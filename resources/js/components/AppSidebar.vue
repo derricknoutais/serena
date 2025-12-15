@@ -44,13 +44,19 @@ const mainNavItems: NavItem[] = [
         icon: LayoutGrid,
     },
     {
+        title: 'Night Audit',
+        href: '/night-audit',
+        icon: Activity,
+        requiredPermission: 'night_audit_view',
+    },
+    {
         title: 'Frontdesk',
         href: frontdeskDashboard(),
         icon: ConciergeBell,
     },
 ];
 
-const ressourcesNavItems: NavItem[] = [
+const baseRessourcesNavItems: (NavItem & { requiredPermission?: string })[] = [
     {
         title: 'Hôtel',
         href: '/ressources/hotel',
@@ -60,43 +66,66 @@ const ressourcesNavItems: NavItem[] = [
         title: 'Types de chambres',
         href: '/ressources/room-types',
         icon: Layers,
+        requiredPermission: 'room_types_view',
     },
     {
         title: 'Chambres',
         href: '/ressources/rooms',
         icon: BedDouble,
+        requiredPermission: 'rooms_view',
     },
     {
         title: 'Offres',
         href: '/ressources/offers',
         icon: Sparkles,
+        requiredPermission: 'offers_view',
     },
     {
         title: 'Taxes',
         href: '/ressources/taxes',
         icon: Percent,
+        requiredPermission: 'taxes_view',
     },
     {
         title: 'Catégories de produits',
         href: '/ressources/product-categories',
         icon: Tags,
+        requiredPermission: 'product_categories_view',
     },
     {
         title: 'Produits',
         href: '/ressources/products',
         icon: ShoppingBag,
+        requiredPermission: 'products_view',
     },
     {
         title: 'Utilisateurs (tenant)',
         href: '/ressources/users',
         icon: UserCog,
+    },
+    {
+        title: 'Journal d’activités',
+        href: activityIndex(),
+        icon: Activity,
     }
 ];
 
 const page = usePage();
+const pageProps = computed(() => (page?.props ? page.props : page.value.props));
+const permissions = computed<Record<string, boolean>>(
+    () => pageProps.value?.auth?.can ?? {},
+);
 const currentUrl = computed(() => (page?.url ? page.url : page.value.url) || '');
 
-const ressourcesOpen = ref(currentUrl.value.startsWith('/ressources/'));
+const ressourcesNavItems = computed(() => baseRessourcesNavItems.filter((item) => {
+    if (!item.requiredPermission) {
+        return true;
+    }
+
+    return permissions.value[item.requiredPermission] ?? false;
+}));
+
+const ressourcesOpen = ref(currentUrl.value.startsWith('/ressources/') || currentUrl.value.startsWith('/activity'));
 const receptionOpen = ref(currentUrl.value.startsWith('/guests') || currentUrl.value.startsWith('/frontdesk'));
 
 const footerNavItems: NavItem[] = [

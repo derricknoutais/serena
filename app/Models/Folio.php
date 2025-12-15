@@ -168,7 +168,23 @@ class Folio extends Model
         $item->recalculateAmounts();
         $item->save();
 
-        return tap($item, fn () => $this->recalculateTotals());
+        return tap($item, function (FolioItem $created): void {
+            $this->recalculateTotals();
+
+            activity('folio')
+                ->performedOn($this)
+                ->causedBy(auth()->user())
+                ->withProperties([
+                    'action' => 'item_created',
+                    'item_id' => $created->id,
+                    'item_type' => $created->type ?? null,
+                    'description' => $created->description,
+                    'amount' => $created->total_amount,
+                    'currency' => $this->currency,
+                ])
+                ->event('item_created')
+                ->log('item_created');
+        });
     }
 
     public function addPayment(array $data): Payment
@@ -191,7 +207,21 @@ class Folio extends Model
 
         $payment = $this->payments()->create($payload);
 
-        return tap($payment, fn () => $this->recalculateTotals());
+        return tap($payment, function (Payment $created): void {
+            $this->recalculateTotals();
+
+            activity('payment')
+                ->performedOn($created)
+                ->causedBy(auth()->user())
+                ->withProperties([
+                    'amount' => $created->amount,
+                    'currency' => $created->currency,
+                    'method' => $created->paymentMethod?->name,
+                    'cash_session_id' => $created->cash_session_id,
+                ])
+                ->event('created')
+                ->log('created');
+        });
     }
 
     public function recalculateTotals(): void

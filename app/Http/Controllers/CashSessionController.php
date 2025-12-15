@@ -3,15 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Models\CashSession;
-use App\Models\CashTransaction;
+use App\Services\Notifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class CashSessionController extends Controller
 {
+    public function __construct(
+        private readonly Notifier $notifier,
+    ) {}
+
     /**
      * Manager view: List all sessions
      */
@@ -32,6 +36,7 @@ class CashSessionController extends Controller
                 ->paginate(20)
                 ->through(function ($session) {
                     $session->total_received = $session->calculateTotalReceived();
+
                     return $session;
                 }),
         ]);
@@ -63,6 +68,8 @@ class CashSessionController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        Gate::authorize('cash_sessions.open');
+
         $data = $request->validate([
             'starting_amount' => ['required', 'numeric', 'min:0'],
             'type' => ['required', 'in:frontdesk,bar'],
@@ -83,7 +90,7 @@ class CashSessionController extends Controller
             return back()->withErrors(['session' => "Une caisse '{$data['type']}' est déjà ouverte pour cet hôtel."]);
         }
 
-        CashSession::create([
+        $session = CashSession::create([
             'tenant_id' => $user->tenant_id,
             'hotel_id' => $user->active_hotel_id,
             'opened_by_user_id' => $user->id,
@@ -94,11 +101,22 @@ class CashSessionController extends Controller
             'notes' => $data['notes'],
         ]);
 
+        $this->notifier->notify('cash_session.opened', $session->hotel_id, [
+            'tenant_id' => $session->tenant_id,
+            'cash_session_id' => $session->id,
+            'session_code' => sprintf('%s #%d', $session->type, $session->id),
+            'user_name' => $user->name,
+        ], [
+            'cta_route' => 'cash.index',
+        ]);
+
         return back();
     }
 
     public function close(Request $request, CashSession $cashSession): RedirectResponse
     {
+        Gate::authorize('cash_sessions.close');
+
         if ($cashSession->status !== 'open') {
             abort(403, 'Session déjà fermée.');
         }
@@ -119,7 +137,16 @@ class CashSessionController extends Controller
             'expected_closing_amount' => $expected,
             'difference_amount' => $difference,
             'status' => 'closed_pending_validation',
-            'notes' => $data['notes'] ? $cashSession->notes . "\n[Fermeture] " . $data['notes'] : $cashSession->notes,
+            'notes' => $data['notes'] ? $cashSession->notes."\n[Fermeture] ".$data['notes'] : $cashSession->notes,
+        ]);
+
+        $this->notifier->notify('cash_session.closed', $cashSession->hotel_id, [
+            'tenant_id' => $cashSession->tenant_id,
+            'cash_session_id' => $cashSession->id,
+            'session_code' => sprintf('%s #%d', $cashSession->type, $cashSession->id),
+            'difference' => $difference,
+        ], [
+            'cta_route' => 'cash.index',
         ]);
 
         return back()->with('success', 'Caisse fermée. En attente de validation.');

@@ -5,7 +5,12 @@
                 <h1 class="text-xl font-semibold">Types de chambres</h1>
                 <p class="text-sm text-gray-500">Gestion des catégories de chambres.</p>
             </div>
-            <PrimaryButton type="button" class="px-4 py-2" @click="openCreateModal">
+            <PrimaryButton
+                v-if="canCreate"
+                type="button"
+                class="px-4 py-2"
+                @click="openCreateModal"
+            >
                 Nouveau type
             </PrimaryButton>
         </div>
@@ -34,6 +39,7 @@
                         <td class="px-4 py-3 text-sm text-gray-800">{{ item.base_price }}</td>
                         <td class="space-x-3 px-4 py-3 text-sm text-gray-600">
                             <SecondaryButton
+                                v-if="canUpdate"
                                 type="button"
                                 class="px-2 py-1 text-xs"
                                 @click.stop="openEditModal(item)"
@@ -41,6 +47,7 @@
                                 Éditer
                             </SecondaryButton>
                             <PrimaryButton
+                                v-if="canDelete"
                                 type="button"
                                 variant="danger"
                                 class="px-2 py-1 text-xs bg-serena-danger"
@@ -217,6 +224,15 @@ export default {
         backendErrors() {
             return this.errors;
         },
+        canCreate() {
+            return this.$page.props.auth?.can?.room_types_create ?? false;
+        },
+        canUpdate() {
+            return this.$page.props.auth?.can?.room_types_update ?? false;
+        },
+        canDelete() {
+            return this.$page.props.auth?.can?.room_types_delete ?? false;
+        },
     },
     methods: {
         openCreateModal() {
@@ -301,6 +317,14 @@ export default {
             }
         },
         destroy(id) {
+            if (!this.canDelete) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Action non autorisée',
+                    text: 'Vous ne disposez pas des droits pour supprimer ce type.',
+                });
+                return;
+            }
             Swal.fire({
                 title: 'Supprimer ce type de chambre ?',
                 text: 'Cette action est irréversible.',

@@ -17,6 +17,8 @@ class TaxController extends Controller
 
     public function index(Request $request): Response
     {
+        $this->authorize('taxes.view');
+
         $taxes = Tax::query()
             ->when($this->activeHotelId($request), fn ($q) => $q->where('hotel_id', $this->activeHotelId($request)))
             ->where('tenant_id', $request->user()->tenant_id)
@@ -37,11 +39,15 @@ class TaxController extends Controller
 
     public function create(): Response
     {
+        $this->authorize('taxes.create');
+
         return Inertia::render('Config/Taxes/TaxesCreate');
     }
 
     public function store(Request $request): RedirectResponse
     {
+        $this->authorize('taxes.create');
+
         $data = $request->validate([
             'name' => ['required', 'string'],
             'rate' => ['required', 'numeric', 'min:0'],
@@ -66,6 +72,8 @@ class TaxController extends Controller
 
     public function edit(Request $request, int $id): Response
     {
+        $this->authorize('taxes.update');
+
         $tax = Tax::query()
             ->where('hotel_id', $this->activeHotelId($request))
             ->where('tenant_id', $request->user()->tenant_id)
@@ -78,6 +86,8 @@ class TaxController extends Controller
 
     public function update(Request $request, int $id): RedirectResponse
     {
+        $this->authorize('taxes.update');
+
         $data = $request->validate([
             'name' => ['required', 'string'],
             'rate' => ['required', 'numeric', 'min:0'],
@@ -97,6 +107,8 @@ class TaxController extends Controller
 
     public function destroy(Request $request, int $id): RedirectResponse
     {
+        $this->authorize('taxes.delete');
+
         $tax = Tax::query()
             ->where('tenant_id', $request->user()->tenant_id)
             ->findOrFail($id);

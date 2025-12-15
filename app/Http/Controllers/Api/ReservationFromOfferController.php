@@ -109,6 +109,29 @@ class ReservationFromOfferController extends Controller
 
         $reservation->save();
 
+        $reservation->loadMissing(['room', 'offer', 'guest']);
+
+        activity('reservation')
+            ->performedOn($reservation)
+            ->causedBy($user)
+            ->withProperties([
+                'reservation_code' => $reservation->code,
+                'room_id' => $reservation->room_id,
+                'room_number' => $reservation->room?->number,
+                'offer_id' => $reservation->offer_id,
+                'offer_name' => $reservation->offer?->name,
+                'guest_id' => $reservation->guest_id,
+                'guest_name' => $reservation->guest?->first_name
+                    ? trim($reservation->guest->first_name.' '.$reservation->guest->last_name)
+                    : null,
+                'to_status' => $reservation->status,
+                'check_in_date' => $reservation->check_in_date,
+                'check_out_date' => $reservation->check_out_date,
+                'total_amount' => $reservation->total_amount,
+            ])
+            ->event('created')
+            ->log('created');
+
         return response()->json([
             'reservation' => [
                 'id' => $reservation->id,

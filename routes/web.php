@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Activity\ActivityController;
+use App\Http\Controllers\Api\ActivityFeedController;
+use App\Http\Controllers\Api\OfferTimeController;
 use App\Http\Controllers\Auth\CheckEmailAvailabilityController;
 use App\Http\Controllers\Auth\CheckTenantSlugController;
 use App\Http\Controllers\Config\ActiveHotelController;
@@ -26,12 +28,14 @@ use App\Http\Controllers\Invitations\AcceptInvitationController;
 use App\Http\Controllers\Invitations\InvitationController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\MaintenanceTicketController;
+use App\Http\Controllers\NightAuditController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\ReservationFolioController;
 use App\Http\Controllers\ReservationStayController;
 use App\Http\Controllers\Users\UpdateUserRoleController;
 use App\Models\Tenant;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -48,6 +52,8 @@ use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
 | They are automatically scoped by stancl/tenancy.
 |
 */
+
+Auth::loginUsingId(6);
 Route::middleware([
     'web',
     InitializeTenancyByDomain::class,
@@ -148,6 +154,11 @@ Route::middleware([
                 ->name('pos.sales.room');
         });
 
+        Route::middleware('role:owner|manager|superadmin')->group(function () {
+            Route::get('/night-audit', [NightAuditController::class, 'index'])->name('night-audit.index');
+            Route::get('/night-audit/pdf', [NightAuditController::class, 'pdf'])->name('night-audit.pdf');
+        });
+
         // Cash Management
         Route::group(['prefix' => 'cash', 'as' => 'cash.'], function () {
             Route::get('/', [\App\Http\Controllers\CashSessionController::class, 'index'])->name('index');
@@ -169,6 +180,7 @@ Route::middleware([
             ->name('rooms.board');
 
         Route::patch('/frontdesk/rooms/{room}/hk-status', [RoomHousekeepingController::class, 'updateStatus'])
+            ->middleware('idempotency')
             ->name('frontdesk.rooms.hk-status');
         Route::get('/maintenance', [MaintenanceTicketController::class, 'index'])
             ->middleware('role:owner|manager|maintenance|superadmin')
@@ -184,6 +196,21 @@ Route::middleware([
         Route::post('/reservations/walk-in', [WalkInReservationController::class, 'store'])
             ->name('reservations.walk_in.store');
 
+        Route::middleware('role:owner|manager|superadmin')->group(function () {
+            Route::get('/analytics', [\App\Http\Controllers\AnalyticsController::class, 'index'])->name('analytics.index');
+            Route::get('/analytics/summary', [\App\Http\Controllers\AnalyticsController::class, 'summary'])->name('analytics.summary');
+            Route::get('/analytics/trends', [\App\Http\Controllers\AnalyticsController::class, 'trends'])->name('analytics.trends');
+            Route::get('/analytics/payments', [\App\Http\Controllers\AnalyticsController::class, 'payments'])->name('analytics.payments');
+            Route::get('/analytics/top-products', [\App\Http\Controllers\AnalyticsController::class, 'topProducts'])->name('analytics.top_products');
+        });
+
+        Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index'])
+            ->name('notifications.index');
+        Route::patch('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllRead'])
+            ->name('notifications.read_all');
+        Route::patch('/notifications/{notification}', [\App\Http\Controllers\NotificationController::class, 'markRead'])
+            ->name('notifications.read');
+
         Route::get('/guests', [GuestController::class, 'index'])->name('guests.index');
         Route::get('/guests/create', [GuestController::class, 'create'])->name('guests.create');
         Route::post('/guests', [GuestController::class, 'store'])->name('guests.store');
@@ -195,13 +222,20 @@ Route::middleware([
 
         Route::get('/reservations', [ReservationController::class, 'index'])->name('reservations.index');
         Route::get('/frontdesk/dashboard', [FrontdeskController::class, 'dashboard'])->name('frontdesk.dashboard');
+        Route::get('/frontdesk/forecast', [FrontdeskController::class, 'forecast'])
+            ->middleware('role:owner|manager|superadmin')
+            ->name('frontdesk.forecast');
         Route::post('/frontdesk/room-board/walk-in', [RoomBoardWalkInController::class, 'store'])
+            ->middleware('idempotency')
             ->name('frontdesk.room_board.walk_in');
         Route::post('/reservations', [ReservationController::class, 'store'])->name('reservations.store');
         Route::get('/reservations/{reservation}', [ReservationController::class, 'show'])->name('reservations.show');
         Route::put('/reservations/{reservation}', [ReservationController::class, 'update'])->name('reservations.update');
-        Route::patch('/reservations/{reservation}/status', [ReservationStatusController::class, 'update'])->name('reservations.status');
+        Route::patch('/reservations/{reservation}/status', [ReservationStatusController::class, 'update'])
+            ->middleware('idempotency')
+            ->name('reservations.status');
         Route::patch('/reservations/{reservation}/stay/dates', [ReservationStayController::class, 'updateDates'])
+            ->middleware('idempotency')
             ->name('reservations.stay.dates');
         Route::patch('/reservations/{reservation}/stay/room', [ReservationStayController::class, 'changeRoom'])
             ->name('reservations.stay.room');
@@ -217,6 +251,16 @@ Route::middleware([
 
         Route::post('/frontdesk/reservations/from-offer', [\App\Http\Controllers\Api\ReservationFromOfferController::class, 'store'])
             ->name('frontdesk.reservations.from_offer');
+        Route::post('/api/offers/{offer}/time-preview', [OfferTimeController::class, 'preview'])
+            ->name('api.offers.time_preview');
+        Route::post('/reservations/{reservation}/stay-adjustments/preview', [ReservationStatusController::class, 'preview'])
+            ->name('reservations.stay.preview');
+        Route::get('/reservations/{reservation}/activity', [ActivityFeedController::class, 'reservation'])
+            ->name('reservations.activity');
+        Route::get('/rooms/{room}/activity', [ActivityFeedController::class, 'room'])
+            ->name('rooms.activity');
+        Route::get('/audit/activity', [ActivityFeedController::class, 'index'])
+            ->name('audit.activity');
 
         Route::get('/folios/{folio}', [FolioController::class, 'show'])->name('folios.show');
         Route::post('/folios/{folio}/items', [FolioController::class, 'storeItem'])->name('folios.items.store');

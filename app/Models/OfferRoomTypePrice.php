@@ -18,11 +18,35 @@ class OfferRoomTypePrice extends Model
         'hotel_id',
         'offer_id',
         'room_type_id',
+        'currency',
         'price',
         'extra_adult_price',
         'extra_child_price',
         'is_active',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (OfferRoomTypePrice $price): void {
+            if (! empty($price->currency)) {
+                return;
+            }
+
+            $hotel = $price->hotel ?? Hotel::query()->find($price->hotel_id);
+
+            $price->currency = $hotel?->currency ?? 'XAF';
+        });
+
+        static::updating(function (OfferRoomTypePrice $price): void {
+            if (! empty($price->currency)) {
+                return;
+            }
+
+            $hotel = $price->hotel ?? Hotel::query()->find($price->hotel_id);
+
+            $price->currency = $hotel?->currency ?? 'XAF';
+        });
+    }
 
     public function hotel(): BelongsTo
     {

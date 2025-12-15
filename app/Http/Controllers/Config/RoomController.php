@@ -18,6 +18,8 @@ class RoomController extends Controller
 
     public function index(Request $request): Response
     {
+        $this->authorize('rooms.view');
+
         $activeHotelId = $this->activeHotelId($request);
 
         $rooms = Room::query()
@@ -52,6 +54,8 @@ class RoomController extends Controller
 
     public function create(Request $request): Response
     {
+        $this->authorize('rooms.create');
+
         $roomTypes = RoomType::query()
             ->where('tenant_id', $request->user()->tenant_id)
             ->orderBy('name')
@@ -66,6 +70,8 @@ class RoomController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $this->authorize('rooms.create');
+
         $request->merge([
             'room_type_id' => $request->integer('room_type_id'),
             'status' => (string) $request->input('status'),
@@ -97,6 +103,8 @@ class RoomController extends Controller
 
     public function edit(Request $request, int $id): Response
     {
+        $this->authorize('rooms.update');
+
         $room = Room::query()
             ->where('hotel_id', $this->activeHotelId($request))
             ->where('tenant_id', $request->user()->tenant_id)
@@ -118,6 +126,8 @@ class RoomController extends Controller
 
     public function update(Request $request, int $id): RedirectResponse
     {
+        $this->authorize('rooms.update');
+
         $request->merge([
             'room_type_id' => $request->integer('room_type_id'),
             'status' => (string) $request->input('status'),
@@ -144,6 +154,8 @@ class RoomController extends Controller
 
     public function destroy(Request $request, int $id): RedirectResponse
     {
+        $this->authorize('rooms.delete');
+
         $room = Room::query()
             ->where('tenant_id', $request->user()->tenant_id)
             ->findOrFail($id);

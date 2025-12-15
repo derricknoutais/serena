@@ -296,8 +296,8 @@
                                         <th class="px-3 py-2 text-left">Date</th>
                                         <th class="px-3 py-2 text-left">Méthode</th>
                                         <th class="px-3 py-2 text-right">Montant</th>
-                                        <th class="px-3 py-2 text-left">Note</th>
-                                        <th class="px-3 py-2 text-right" v-if="permissions?.can_manage_payments">Actions</th>
+                                    <th class="px-3 py-2 text-left">Note</th>
+                                    <th class="px-3 py-2 text-right" v-if="canVoidPayments">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -313,7 +313,7 @@
                                         </td>
                                         <td class="px-3 py-1.5">{{ payment.notes || '—' }}</td>
                                         <td
-                                            v-if="permissions?.can_manage_payments"
+                                            v-if="canVoidPayments"
                                             class="px-3 py-1.5 text-right"
                                         >
                                             <button
@@ -387,7 +387,7 @@
                             type="button"
                             class="rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700"
                             @click="confirmGenerateInvoice"
-                            :disabled="!folio || isSubmitting || !permissions?.can_manage_invoices"
+                            :disabled="!folio || isSubmitting || !canManageInvoices"
                         >
                             Générer la facture
                         </button>
@@ -420,7 +420,7 @@
                                 Télécharger le PDF
                             </button>
                             <button
-                                v-if="permissions?.can_manage_invoices"
+                                v-if="canManageInvoices"
                                 type="button"
                                 class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700"
                                 @click="confirmGenerateInvoice"
@@ -487,6 +487,24 @@ export default {
             }
 
             return 'text-green-600';
+        },
+        permissionFlags() {
+            return this.$page?.props?.auth?.can ?? {};
+        },
+        canVoidPayments() {
+            return this.permissionFlags.folio_items_void
+                ?? (this.permissions?.can_manage_payments ?? false);
+        },
+        canManageInvoices() {
+            return this.permissionFlags.invoices_create
+                ?? (this.permissions?.can_manage_invoices ?? false);
+        },
+        canViewInvoices() {
+            if (this.permissionFlags.invoices_view !== undefined) {
+                return this.permissionFlags.invoices_view;
+            }
+
+            return this.canManageInvoices;
         },
     },
     methods: {
@@ -590,16 +608,48 @@ export default {
             }
         },
         async deletePayment(paymentId) {
-            if (!this.folio || !this.permissions?.can_manage_payments) {
+            if (!this.folio || !this.canVoidPayments) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Action non autorisée',
+                    text: 'Vous ne disposez pas des droits suffisants.',
+                });
+
                 return;
             }
 
             const http = window.axios ?? axios;
-            await http.delete(`/folios/${this.folio.id}/payments/${paymentId}`);
-            this.$emit('updated');
+            try {
+                await http.delete(`/folios/${this.folio.id}/payments/${paymentId}`);
+                this.$emit('updated');
+            } catch (error) {
+                if (error?.response?.status === 403) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Action non autorisée',
+                        text: 'Vous ne disposez pas des droits suffisants.',
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erreur',
+                        text: 'Impossible de supprimer ce paiement.',
+                    });
+                }
+            }
         },
         async confirmGenerateInvoice() {
             if (!this.folio) {
+                return;
+            }
+
+            if (!this.canManageInvoices) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Action non autorisée',
+                    text: 'Vous ne disposez pas des droits suffisants.',
+                });
+
                 return;
             }
 
@@ -628,6 +678,16 @@ export default {
                 return;
             }
 
+            if (!this.canManageInvoices) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Action non autorisée',
+                    text: 'Vous ne disposez pas des droits suffisants.',
+                });
+
+                return;
+            }
+
             this.isSubmitting = true;
 
             try {
@@ -636,12 +696,30 @@ export default {
                     close_folio: false,
                 });
                 this.$emit('updated');
+            } catch (error) {
+                if (error?.response?.status === 403) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Action non autorisée',
+                        text: 'Vous ne disposez pas des droits suffisants.',
+                    });
+                }
             } finally {
                 this.isSubmitting = false;
             }
         },
         downloadInvoice(invoice) {
             if (!invoice?.id) {
+                return;
+            }
+
+            if (!this.canViewInvoices) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Action non autorisée',
+                    text: 'Vous ne disposez pas des droits suffisants.',
+                });
+
                 return;
             }
 

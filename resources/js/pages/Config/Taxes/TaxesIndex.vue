@@ -5,7 +5,12 @@
                 <h1 class="text-xl font-semibold">Taxes</h1>
                 <p class="text-sm text-gray-500">Paramétrage des taxes.</p>
             </div>
-            <PrimaryButton type="button" class="px-4 py-2" @click="openModal">
+            <PrimaryButton
+                v-if="canCreate"
+                type="button"
+                class="px-4 py-2"
+                @click="openModal"
+            >
                 Nouvelle taxe
             </PrimaryButton>
         </div>
@@ -36,6 +41,7 @@
                         </td>
                         <td class="px-4 py-3 text-sm text-gray-600 space-x-3">
                             <SecondaryButton
+                                v-if="canUpdate"
                                 type="button"
                                 class="px-2 py-1 text-xs"
                                 @click="openModal(tax)"
@@ -43,6 +49,7 @@
                                 Éditer
                             </SecondaryButton>
                             <PrimaryButton
+                                v-if="canDelete"
                                 type="button"
                                 variant="danger"
                                 class="px-2 py-1 text-xs bg-serena-danger"
@@ -239,9 +246,29 @@ export default {
         errors() {
             return this.$page.props.errors || {};
         },
+        canCreate() {
+            return this.$page.props.auth?.can?.taxes_create ?? false;
+        },
+        canUpdate() {
+            return this.$page.props.auth?.can?.taxes_update ?? false;
+        },
+        canDelete() {
+            return this.$page.props.auth?.can?.taxes_delete ?? false;
+        },
     },
     methods: {
         openModal(tax = null) {
+            if (!tax && !this.canCreate) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
+
+            if (tax && !this.canUpdate) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
             if (tax) {
                 this.editingTaxId = tax.id;
                 this.form = {
@@ -274,6 +301,17 @@ export default {
             this.formKey += 1;
         },
         submit() {
+            if (!this.editingTaxId && !this.canCreate) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
+
+            if (this.editingTaxId && !this.canUpdate) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
             this.submitting = true;
             const payload = {
                 name: this.form.name,
@@ -297,6 +335,11 @@ export default {
             });
         },
         destroy(id) {
+            if (!this.canDelete) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
             Swal.fire({
                 title: 'Supprimer cette taxe ?',
                 text: 'Cette action est irréversible.',
@@ -309,6 +352,13 @@ export default {
                 if (result.isConfirmed) {
                     router.delete(`/ressources/taxes/${id}`, { preserveScroll: true });
                 }
+            });
+        },
+        showUnauthorizedAlert() {
+            Swal.fire({
+                icon: 'error',
+                title: 'Action non autorisée',
+                text: 'Vous ne disposez pas des droits suffisants.',
             });
         },
     },

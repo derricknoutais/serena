@@ -105,6 +105,101 @@
                             </div>
                         </Field>
 
+                        <div class="md:col-span-2 rounded-lg border border-gray-100 bg-gray-50 p-4">
+                            <p class="text-sm font-semibold text-gray-800">Arrivées anticipées / départs tardifs</p>
+                            <p class="text-xs text-gray-500">Définissez la politique et les frais appliqués automatiquement au check-in / check-out.</p>
+                            <div class="mt-3 grid gap-4 md:grid-cols-2">
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Politique arrivée anticipée</label>
+                                    <Field name="early_policy" v-slot="{ field }">
+                                        <select
+                                            v-bind="field"
+                                            class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                        >
+                                            <option value="free">Autorisée (gratuite)</option>
+                                            <option value="paid">Autorisée (payante)</option>
+                                            <option value="forbidden">Interdite</option>
+                                        </select>
+                                    </Field>
+                                    <div v-if="form.early_policy === 'paid'" class="mt-2 grid grid-cols-2 gap-2">
+                                        <Field name="early_fee_type" v-slot="{ field }">
+                                            <select
+                                                v-bind="field"
+                                                class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                            >
+                                                <option value="flat">Montant fixe</option>
+                                                <option value="percent">Pourcentage</option>
+                                            </select>
+                                        </Field>
+                                        <Field name="early_fee_value" v-slot="{ field }">
+                                            <input
+                                                v-bind="field"
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                                placeholder="Montant"
+                                            />
+                                        </Field>
+                                    </div>
+                                    <Field name="early_cutoff_time" v-slot="{ field }">
+                                        <div class="mt-2">
+                                            <label class="text-xs font-medium text-gray-600">Heure seuil (optionnelle)</label>
+                                            <input
+                                                v-bind="field"
+                                                type="time"
+                                                class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                            />
+                                        </div>
+                                    </Field>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Politique départ tardif</label>
+                                    <Field name="late_policy" v-slot="{ field }">
+                                        <select
+                                            v-bind="field"
+                                            class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                        >
+                                            <option value="free">Autorisé (gratuit)</option>
+                                            <option value="paid">Autorisé (payant)</option>
+                                            <option value="forbidden">Interdit</option>
+                                        </select>
+                                    </Field>
+                                    <div v-if="form.late_policy === 'paid'" class="mt-2 grid grid-cols-2 gap-2">
+                                        <Field name="late_fee_type" v-slot="{ field }">
+                                            <select
+                                                v-bind="field"
+                                                class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                            >
+                                                <option value="flat">Montant fixe</option>
+                                                <option value="percent">Pourcentage</option>
+                                            </select>
+                                        </Field>
+                                        <Field name="late_fee_value" v-slot="{ field }">
+                                            <input
+                                                v-bind="field"
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                                placeholder="Montant"
+                                            />
+                                        </Field>
+                                    </div>
+                                    <Field name="late_max_time" v-slot="{ field }">
+                                        <div class="mt-2">
+                                            <label class="text-xs font-medium text-gray-600">Heure limite (optionnelle)</label>
+                                            <input
+                                                v-bind="field"
+                                                type="time"
+                                                class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                            />
+                                        </div>
+                                    </Field>
+                                </div>
+                            </div>
+                        </div>
+
                         <Field name="timezone" v-slot="{ field, meta }">
                             <div class="md:col-span-2">
                                 <label class="text-sm font-medium text-gray-700">
@@ -208,6 +303,14 @@ export default {
                 address: this.hotel?.address || '',
                 city: this.hotel?.city || '',
                 country: this.hotel?.country || '',
+                early_policy: this.hotel?.stay_settings?.early_checkin?.policy || 'free',
+                early_fee_type: this.hotel?.stay_settings?.early_checkin?.fee_type || 'flat',
+                early_fee_value: this.hotel?.stay_settings?.early_checkin?.fee_value ?? 0,
+                early_cutoff_time: this.hotel?.stay_settings?.early_checkin?.cutoff_time || '',
+                late_policy: this.hotel?.stay_settings?.late_checkout?.policy || 'free',
+                late_fee_type: this.hotel?.stay_settings?.late_checkout?.fee_type || 'flat',
+                late_fee_value: this.hotel?.stay_settings?.late_checkout?.fee_value ?? 0,
+                late_max_time: this.hotel?.stay_settings?.late_checkout?.max_time || '',
             },
             hasHotel: Boolean(this.hotel && this.hotel.id),
         };
@@ -238,14 +341,22 @@ export default {
                 this.form = {
                     name: '',
                     currency: 'XAF',
-                    timezone: '',
-                    check_in_time: '14:00',
-                    check_out_time: '12:00',
-                    address: '',
-                    city: '',
-                    country: '',
-                };
-            }
+                timezone: '',
+                check_in_time: '14:00',
+                check_out_time: '12:00',
+                address: '',
+                city: '',
+                country: '',
+                early_policy: 'free',
+                early_fee_type: 'flat',
+                early_fee_value: 0,
+                early_cutoff_time: '',
+                late_policy: 'free',
+                late_fee_type: 'flat',
+                late_fee_value: 0,
+                late_max_time: '',
+            };
+        }
             this.formKey += 1;
             this.showModal = true;
         },
