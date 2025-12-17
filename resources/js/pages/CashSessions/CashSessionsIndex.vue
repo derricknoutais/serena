@@ -81,7 +81,7 @@
                     </tbody>
                 </table>
             </div>
-            
+
             <div v-if="sessions.links.length > 3" class="border-t border-gray-100 px-4 py-3 text-sm text-gray-500">
                  <!-- Pagination placeholder or implementation -->
                  Pagination à ajouter selon vos besoins.
@@ -91,12 +91,12 @@
 </template>
 
 <script>
-import AppLayout from '@/Layouts/AppLayout.vue';
+import AppLayout from '@/layouts/AppLayout.vue';
 import { router } from '@inertiajs/vue3';
 import { h } from 'vue';
 import Swal from 'sweetalert2';
 
-// Simple Badge Component inline definition for Options API usage if needed, or just standard component 
+// Simple Badge Component inline definition for Options API usage if needed, or just standard component
 const SessionStatusBadge = {
     props: ['status'],
     render() {
@@ -125,8 +125,8 @@ export default {
     methods: {
         formatDate(dateString) {
             if (!dateString) return '';
-            return new Date(dateString).toLocaleString('fr-FR', { 
-                day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' 
+            return new Date(dateString).toLocaleString('fr-FR', {
+                day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit'
             });
         },
         formatCurrency(amount, currency = 'XAF') {
