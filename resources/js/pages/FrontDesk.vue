@@ -61,7 +61,7 @@
     import ReservationsPlanner from '@/components/Frontdesk/ReservationsPlanner.vue';
     import RoomBoard from '@/components/Frontdesk/RoomBoard.vue';
     import OperationsBoard from '@/components/Frontdesk/OperationsBoard.vue';
-    import CashIndicator from '@/Components/CashIndicator.vue';
+    import CashIndicator from '@/components/CashIndicator.vue';
     import OccupancyForecast from '@/components/Frontdesk/OccupancyForecast.vue';
 
     export default {
