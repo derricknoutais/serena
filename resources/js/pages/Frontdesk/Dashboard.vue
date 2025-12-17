@@ -5,7 +5,7 @@
                 Opérations
             </h2>
         </div>
-        
+
         <div class="mb-4 flex w-full items-center justify-between rounded-lg bg-white p-3 shadow-sm border border-gray-100">
              <div class="text-sm font-semibold text-gray-700">
                 Caisse FrontDesk
@@ -20,7 +20,7 @@
 <script>
     import AppLayout from '@/layouts/AppLayout.vue';
     import OperationsBoard from '@/components/Frontdesk/OperationsBoard.vue';
-    import CashIndicator from '@/Components/CashIndicator.vue';
+    import CashIndicator from '@/components/CashIndicator.vue';
 
     export default {
         name: 'FrontdeskDashboardPage',

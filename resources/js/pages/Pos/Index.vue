@@ -255,7 +255,7 @@
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import AppLayout from '@/layouts/AppLayout.vue';
-import CashIndicator from '@/Components/CashIndicator.vue';
+import CashIndicator from '@/components/CashIndicator.vue';
 
 export default {
     name: 'PosIndexPage',
