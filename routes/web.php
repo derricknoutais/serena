@@ -52,8 +52,13 @@ use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
 | They are automatically scoped by stancl/tenancy.
 |
 */
-
-Auth::loginUsingId(6);
+if(env('APP_ENV') === 'local') {
+    // For local development, we can use a specific tenant ID to avoid creating a new tenant
+    // This is useful for testing purposes.
+    // config(['tenancy.central_domains' => ['saas-template.test']]);
+    // config(['tenancy.database.connection' => 'tenant']);
+    Auth::loginUsingId(6);
+}
 Route::middleware([
     'web',
     InitializeTenancyByDomain::class,
