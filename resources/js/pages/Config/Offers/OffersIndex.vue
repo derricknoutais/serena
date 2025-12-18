@@ -20,8 +20,8 @@
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Nom</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Type</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Facturation</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Type d’offre</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Mode de facturation</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Active</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Actions</th>
                     </tr>
@@ -29,8 +29,8 @@
                 <tbody class="divide-y divide-gray-200">
                     <tr v-for="offer in offers.data" :key="offer.id" class="hover:bg-gray-50">
                         <td class="px-4 py-3 text-sm text-gray-800">{{ offer.name }}</td>
-                        <td class="px-4 py-3 text-sm text-gray-600">{{ offer.kind }}</td>
-                        <td class="px-4 py-3 text-sm text-gray-600">{{ offer.billing_mode }}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">{{ kindLabels[offer.kind] ?? offer.kind }}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">{{ billingModeLabels[offer.billing_mode] ?? offer.billing_mode }}</td>
                         <td class="px-4 py-3 text-sm text-gray-600">
                             <span
                                 class="inline-flex rounded-full px-2 py-1 text-xs font-medium"
@@ -80,8 +80,31 @@
                     <SecondaryButton type="button" class="text-sm" @click="closeModal">Fermer</SecondaryButton>
                 </div>
 
-                <Form :key="formKey" :initial-values="form" @submit="handleSubmit" class="space-y-4">
-                    <div class="grid gap-4 md:grid-cols-2">
+                <Form
+                    ref="offerForm"
+                    :key="formKey"
+                    :initial-values="form"
+                    @submit="handleSubmit"
+                    class="space-y-4"
+                >
+                    <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        <span
+                            :class="['rounded-full px-3 py-1', currentStep === 1 ? 'bg-serena-primary text-white' : 'bg-gray-100 text-gray-700']"
+                        >
+                            1. Détails
+                        </span>
+                        <span
+                            :class="['rounded-full px-3 py-1', currentStep === 2 ? 'bg-serena-primary text-white' : 'bg-gray-100 text-gray-700']"
+                        >
+                            2. Tarifs & activation
+                        </span>
+                    </div>
+
+                    <div v-if="step1Errors.length" class="rounded-lg border border-serena-danger/30 bg-red-50 px-3 py-2 text-xs text-red-700">
+                        Merci de corriger : {{ step1Errors.join(' | ') }}.
+                    </div>
+
+                    <div v-show="currentStep === 1" class="grid gap-4 md:grid-cols-2">
                         <Field name="name" rules="required" v-slot="{ field, meta }">
                             <div>
                                 <label class="text-sm font-medium text-gray-700">
@@ -96,9 +119,9 @@
                                 <p v-if="!meta.valid && meta.touched" class="mt-1 text-xs text-red-600">
                                     Champ requis.
                                 </p>
-                                <p v-if="errors.name" class="mt-1 text-xs text-red-600">{{ errors.name }}</p>
-                            </div>
-                        </Field>
+                                    <p v-if="errors.name" class="mt-1 text-xs text-red-600">{{ errors.name }}</p>
+                                </div>
+                            </Field>
 
                         <!-- champ code supprimé -->
 
@@ -120,9 +143,9 @@
                                 <p v-if="!meta.valid && meta.touched" class="mt-1 text-xs text-red-600">
                                     <ErrorMessage name="kind" />
                                 </p>
-                                <p v-if="errors.kind" class="mt-1 text-xs text-red-600">{{ errors.kind }}</p>
-                            </div>
-                        </Field>
+                                    <p v-if="errors.kind" class="mt-1 text-xs text-red-600">{{ errors.kind }}</p>
+                                </div>
+                            </Field>
 
                         <Field name="billing_mode" rules="required" v-slot="{ field, meta }">
                             <div>
@@ -142,9 +165,9 @@
                                 <p v-if="!meta.valid && meta.touched" class="mt-1 text-xs text-red-600">
                                     <ErrorMessage name="billing_mode" />
                                 </p>
-                                <p v-if="errors.billing_mode" class="mt-1 text-xs text-red-600">{{ errors.billing_mode }}</p>
-                            </div>
-                        </Field>
+                                    <p v-if="errors.billing_mode" class="mt-1 text-xs text-red-600">{{ errors.billing_mode }}</p>
+                                </div>
+                            </Field>
 
                         <div class="md:col-span-2 mt-4 rounded-lg border border-gray-100 bg-gray-50 p-4">
                             <h3 class="mb-2 text-sm font-semibold text-gray-800">
@@ -328,107 +351,125 @@
                                 <ErrorMessage name="description" class="mt-1 text-xs text-red-600" />
                             </div>
                         </Field>
-
-                        <Field name="is_active" type="checkbox" v-slot="{ field }">
-                            <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
-                                <input
-                                    v-bind="field"
-                                    type="checkbox"
-                                    class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                />
-                                Activer l’offre
-                            </label>
-                        </Field>
                     </div>
 
-                    <div class="mt-6 rounded-lg border border-gray-100 bg-gray-50 p-4">
-                        <h3 class="mb-2 text-sm font-semibold text-gray-800">
-                            Tarifs par type de chambre
-                        </h3>
-                        <p class="mb-3 text-xs text-gray-500">
-                            Vous pouvez saisir un prix par type de chambre. Ces tarifs seront utilisés pour pré-remplir les réservations.
-                        </p>
-                        <div class="max-h-56 overflow-y-auto rounded-md border border-gray-200 bg-white">
-                            <table class="min-w-full text-xs">
-                                <thead class="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-500">
-                                    <tr>
-                                        <th class="px-3 py-2 text-left">Type de chambre</th>
-                                        <th class="px-3 py-2 text-right">Prix (XAF)</th>
-                                        <th class="px-3 py-2 text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr
-                                        v-for="rtPrice in roomTypePrices"
-                                        :key="rtPrice.room_type_id"
-                                        class="border-t text-gray-700"
-                                    >
-                                        <td class="px-3 py-1.5">
-                                            {{ rtPrice.room_type_name }}
-                                        </td>
-                                        <td class="px-3 py-1.5 text-right">
-                                            <input
-                                                v-model.number="rtPrice.price"
-                                                type="number"
-                                                min="0"
-                                                step="0.01"
-                                                class="w-28 rounded-md border border-gray-200 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-100"
-                                            />
-                                        </td>
-                                        <td class="px-3 py-1.5 text-right">
-                                            <button
-                                                type="button"
-                                                class="text-[11px] font-semibold text-serena-danger hover:underline"
-                                                @click="removeRoomTypePrice(rtPrice.room_type_id)"
-                                            >
-                                                Supprimer
-                                            </button>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                    <div v-show="currentStep === 2" class="space-y-4">
+                        <div class="flex items-center gap-2">
+                            <Field name="is_active" type="checkbox" v-slot="{ field }">
+                                <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
+                                    <input
+                                        v-bind="field"
+                                        type="checkbox"
+                                        class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                    />
+                                    Activer l’offre
+                                </label>
+                            </Field>
                         </div>
-                        <div class="mt-3 flex flex-wrap items-end gap-3">
-                            <div class="flex flex-col">
-                                <label class="text-xs font-semibold text-gray-600">Ajouter un type de chambre</label>
-                                <select
-                                    v-model="newPriceRoomTypeId"
-                                    class="mt-1 w-56 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+
+                        <div class="mt-2 rounded-lg border border-gray-100 bg-gray-50 p-4">
+                            <h3 class="mb-2 text-sm font-semibold text-gray-800">
+                                Tarifs par type de chambre
+                            </h3>
+                            <p class="mb-3 text-xs text-gray-500">
+                                Vous pouvez saisir un prix par type de chambre. Ces tarifs seront utilisés pour pré-remplir les réservations.
+                            </p>
+                            <div class="max-h-56 overflow-y-auto rounded-md border border-gray-200 bg-white">
+                                <table class="min-w-full text-xs">
+                                    <thead class="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-500">
+                                        <tr>
+                                            <th class="px-3 py-2 text-left">Type de chambre</th>
+                                            <th class="px-3 py-2 text-right">Prix (XAF)</th>
+                                            <th class="px-3 py-2 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr
+                                            v-for="rtPrice in roomTypePrices"
+                                            :key="rtPrice.room_type_id"
+                                            class="border-t text-gray-700"
+                                        >
+                                            <td class="px-3 py-1.5">
+                                                {{ rtPrice.room_type_name }}
+                                            </td>
+                                            <td class="px-3 py-1.5 text-right">
+                                                <input
+                                                    v-model.number="rtPrice.price"
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    class="w-28 rounded-md border border-gray-200 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                                                />
+                                            </td>
+                                            <td class="px-3 py-1.5 text-right">
+                                                <button
+                                                    type="button"
+                                                    class="text-[11px] font-semibold text-serena-danger hover:underline"
+                                                    @click="removeRoomTypePrice(rtPrice.room_type_id)"
+                                                >
+                                                    Supprimer
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="mt-3 flex flex-wrap items-end gap-3">
+                                <div class="flex flex-col">
+                                    <label class="text-xs font-semibold text-gray-600">Ajouter un type de chambre</label>
+                                    <Multiselect
+                                        :model-value="newPriceRoomType"
+                                        @update:modelValue="(val) => { newPriceRoomType = val; }"
+                                        :options="availableRoomTypeOptions"
+                                        label="label"
+                                        track-by="value"
+                                        placeholder="Sélectionner"
+                                        :allow-empty="false"
+                                        class="mt-1 w-56"
+                                    />
+                                </div>
+                                <div class="flex flex-col">
+                                    <label class="text-xs font-semibold text-gray-600">Prix</label>
+                                    <input
+                                        v-model.number="newPriceValue"
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        class="mt-1 w-32 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                    />
+                                </div>
+                                <PrimaryButton
+                                    type="button"
+                                    class="px-4 py-2 text-sm"
+                                    :disabled="!newPriceRoomType || newPriceValue === '' || Number.isNaN(Number(newPriceValue))"
+                                    @click="addRoomTypePrice"
                                 >
-                                    <option :value="null" disabled>Sélectionner</option>
-                                    <option
-                                        v-for="rt in availableRoomTypes"
-                                        :key="rt.id"
-                                        :value="rt.id"
-                                    >
-                                        {{ rt.name }}
-                                    </option>
-                                </select>
+                                    Ajouter
+                                </PrimaryButton>
                             </div>
-                            <div class="flex flex-col">
-                                <label class="text-xs font-semibold text-gray-600">Prix</label>
-                                <input
-                                    v-model.number="newPriceValue"
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    class="mt-1 w-32 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                                />
-                            </div>
-                            <PrimaryButton
-                                type="button"
-                                class="px-4 py-2 text-sm"
-                                :disabled="!newPriceRoomTypeId || newPriceValue === '' || Number.isNaN(Number(newPriceValue))"
-                                @click="addRoomTypePrice"
-                            >
-                                Ajouter
-                            </PrimaryButton>
                         </div>
                     </div>
 
                     <div class="flex items-center justify-end gap-3">
                         <SecondaryButton type="button" class="text-sm" @click="closeModal">Annuler</SecondaryButton>
+                        <SecondaryButton
+                            v-if="currentStep === 2"
+                            type="button"
+                            class="text-sm"
+                            @click="goToStep(1)"
+                        >
+                            Retour
+                        </SecondaryButton>
                         <PrimaryButton
+                            v-if="currentStep === 1"
+                            type="button"
+                            class="px-4 py-2 text-sm"
+                            @click="goToStep(2)"
+                        >
+                            Suivant
+                        </PrimaryButton>
+                        <PrimaryButton
+                            v-else
                             type="submit"
                             class="px-4 py-2 text-sm"
                             :disabled="submitting"
@@ -483,6 +524,8 @@ export default {
             submitting: false,
             editId: null,
             formKey: 0,
+            currentStep: 1,
+            step1Errors: [],
             form: {
                 name: '',
                 kind: null,
@@ -514,16 +557,22 @@ export default {
                 },
             },
             roomTypePrices: [],
-            newPriceRoomTypeId: null,
+            newPriceRoomType: null,
             newPriceValue: '',
         };
     },
     computed: {
         kindOptionsNormalized() {
-            return this.kindOptions.map((k) => ({ label: k, value: k }));
+            return this.kindOptions.map((k) => ({
+                label: this.kindLabels[k] ?? k,
+                value: k,
+            }));
         },
         billingModeOptions() {
-            return this.billingModes.map((k) => ({ label: k, value: k }));
+            return this.billingModes.map((k) => ({
+                label: this.billingModeLabels[k] ?? k,
+                value: k,
+            }));
         },
         dayOptionsNormalized() {
             const mapDayToNumber = {
@@ -555,12 +604,30 @@ export default {
         selectedRoomTypeIds() {
             return this.roomTypePrices.map((p) => p.room_type_id);
         },
-        availableRoomTypes() {
+        availableRoomTypeOptions() {
             const selected = this.selectedRoomTypeIds;
 
-            return (this.roomTypes || []).filter(
-                (rt) => !selected.includes(rt.id),
-            );
+            return (this.roomTypes || [])
+                .filter((rt) => !selected.includes(rt.id))
+                .map((rt) => ({
+                    label: rt.name,
+                    value: rt.id,
+                }));
+        },
+        kindLabels() {
+            return {
+                hourly: 'Tarif horaire',
+                night: 'Nuitée',
+                day: 'Journée',
+                package: 'Package',
+            };
+        },
+        billingModeLabels() {
+            return {
+                fixed: 'Prix fixe',
+                per_night: 'Par nuit',
+                per_hour: 'Par heure',
+            };
         },
         errors() {
             return this.$page.props.errors || {};
@@ -576,6 +643,57 @@ export default {
         },
     },
     methods: {
+        syncFormFromFields() {
+            const values = this.$refs.offerForm?.values || {};
+
+            this.form = {
+                ...this.form,
+                ...values,
+                kind: values.kind ?? this.form.kind,
+                billing_mode: values.billing_mode ?? this.form.billing_mode,
+                valid_from: values.valid_from ?? this.form.valid_from,
+                valid_to: values.valid_to ?? this.form.valid_to,
+                description: values.description ?? this.form.description,
+                is_active: values.is_active ?? this.form.is_active,
+            };
+        },
+        goToStep(step) {
+            this.syncFormFromFields();
+
+            if (step === 2) {
+                const missing = [];
+                if (!this.form.name) {
+                    missing.push('Nom');
+                }
+                if (!this.form.kind) {
+                    missing.push('Type');
+                }
+                if (!this.form.billing_mode) {
+                    missing.push('Mode de facturation');
+                }
+
+                this.step1Errors = missing;
+
+                if (missing.length) {
+                    return;
+                }
+            } else {
+                this.step1Errors = [];
+            }
+
+            this.currentStep = step;
+        },
+        updateStep1ErrorsFromServer() {
+            const serverErrors = this.errors || {};
+
+            this.step1Errors = Object.values(serverErrors)
+                .map((message) => (Array.isArray(message) ? message[0] : message))
+                .filter(Boolean);
+
+            if (this.step1Errors.length) {
+                this.currentStep = 1;
+            }
+        },
         openCreateModal() {
             if (!this.canCreate) {
                 this.showUnauthorizedAlert();
@@ -587,6 +705,8 @@ export default {
             this.resetForm();
             this.initializeRoomTypePrices();
             this.formKey += 1;
+            this.currentStep = 1;
+            this.step1Errors = [];
             this.showModal = true;
         },
         openEditModal(offer) {
@@ -609,11 +729,15 @@ export default {
             this.initializeTimeConfigDraft(offer);
             this.initializeRoomTypePrices(offer);
             this.formKey += 1;
+            this.currentStep = 1;
+            this.step1Errors = [];
             this.showModal = true;
         },
         closeModal() {
             this.showModal = false;
             this.resetForm();
+            this.currentStep = 1;
+            this.step1Errors = [];
         },
         resetForm() {
             this.form = {
@@ -676,11 +800,16 @@ export default {
             };
         },
         addRoomTypePrice() {
-            if (!this.newPriceRoomTypeId) {
+            if (!this.newPriceRoomType) {
                 return;
             }
 
-            const roomType = (this.roomTypes || []).find((rt) => rt.id === this.newPriceRoomTypeId);
+            const roomTypeId = this.newPriceRoomType?.value ?? null;
+            if (!roomTypeId) {
+                return;
+            }
+
+            const roomType = (this.roomTypes || []).find((rt) => rt.id === roomTypeId);
 
             if (!roomType) {
                 return;
@@ -702,7 +831,7 @@ export default {
                 price: Number.isNaN(Number(this.newPriceValue)) ? '' : Number(this.newPriceValue),
             });
 
-            this.newPriceRoomTypeId = null;
+            this.newPriceRoomType = null;
             this.newPriceValue = '';
         },
         removeRoomTypePrice(roomTypeId) {
@@ -791,6 +920,8 @@ export default {
             return null;
         },
         handleSubmit(values) {
+            this.syncFormFromFields();
+
             if (!this.isEditing && !this.canCreate) {
                 this.showUnauthorizedAlert();
 
@@ -828,10 +959,17 @@ export default {
                     {
                         preserveScroll: true,
                         onSuccess: () => {
+                            if (Object.keys(this.errors).length) {
+                                this.updateStep1ErrorsFromServer();
+
+                                return;
+                            }
+
                             this.closeModal();
                         },
                         onError: () => {
                             this.submitting = false;
+                            this.updateStep1ErrorsFromServer();
                         },
                         onFinish: () => {
                             this.submitting = false;
@@ -845,10 +983,17 @@ export default {
                     {
                         preserveScroll: true,
                         onSuccess: () => {
+                            if (Object.keys(this.errors).length) {
+                                this.updateStep1ErrorsFromServer();
+
+                                return;
+                            }
+
                             this.closeModal();
                         },
                         onError: () => {
                             this.submitting = false;
+                            this.updateStep1ErrorsFromServer();
                         },
                         onFinish: () => {
                             this.submitting = false;

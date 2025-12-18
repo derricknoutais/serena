@@ -31,7 +31,9 @@
                         <td class="px-4 py-3 text-sm text-gray-800">{{ room.number }}</td>
                         <td class="px-4 py-3 text-sm text-gray-600">{{ room.room_type || '—' }}</td>
                         <td class="px-4 py-3 text-sm text-gray-600">{{ room.floor || '—' }}</td>
-                        <td class="px-4 py-3 text-sm text-gray-600">{{ room.status }}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">
+                            {{ statusLabels[room.status] ?? room.status }}
+                        </td>
                         <td class="space-x-3 px-4 py-3 text-sm text-gray-600">
                             <SecondaryButton
                                 v-if="canUpdate"
@@ -231,10 +233,10 @@ export default {
             return this.roomTypes.map((rt) => ({ label: rt.name, value: Number(rt.id) }));
         },
         statusOptions() {
-            return this.statuses.map((s) => ({ label: s, value: s }));
+            return this.statuses.map((s) => ({ label: this.statusLabels[s] ?? s, value: s }));
         },
         hkStatusOptions() {
-            return this.housekeepingStatuses.map((s) => ({ label: s, value: s }));
+            return this.housekeepingStatuses.map((s) => ({ label: this.hkStatusLabels[s] ?? s, value: s }));
         },
         errors() {
             return this.$page.props.errors || {};
@@ -247,6 +249,20 @@ export default {
         },
         canDelete() {
             return this.$page.props.auth?.can?.rooms_delete ?? false;
+        },
+        statusLabels() {
+            return {
+                active: 'Active',
+                inactive: 'Inactive',
+                out_of_order: 'Hors service',
+            };
+        },
+        hkStatusLabels() {
+            return {
+                clean: 'Propre',
+                dirty: 'Sale',
+                inspected: 'Inspectée',
+            };
         },
     },
     methods: {
