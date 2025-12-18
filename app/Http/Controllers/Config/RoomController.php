@@ -129,13 +129,13 @@ class RoomController extends Controller
         $this->authorize('rooms.update');
 
         $request->merge([
-            'room_type_id' => $request->string('room_type_id'),
+            'room_type_id' => $request->integer('room_type_id'),
             'status' => (string) $request->input('status'),
             'hk_status' => (string) $request->input('hk_status'),
         ]);
 
         $data = $request->validate([
-            'room_type_id' => ['required', 'string', 'exists:room_types,id'],
+            'room_type_id' => ['required', 'integer', 'exists:room_types,id'],
             'number' => ['required', 'string'],
             'floor' => ['nullable', 'string'],
             'status' => ['required', 'string'],
