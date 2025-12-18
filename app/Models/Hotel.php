@@ -18,7 +18,7 @@ class Hotel extends Model
     protected $fillable = [
         'tenant_id',
         'name',
-        'code',
+
         'currency',
         'timezone',
         'address',

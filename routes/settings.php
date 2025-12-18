@@ -26,6 +26,10 @@ Route::middleware(['web', InitializeTenancyByDomain::class, PreventAccessFromCen
         ->middleware('role:owner|manager|superadmin')
         ->name('settings.roles.index');
 
+    Route::patch('settings/roles/{role}/permissions', [RolesController::class, 'update'])
+        ->middleware('role:owner|manager|superadmin')
+        ->name('settings.roles.update');
+
     Route::get('settings/appearance', [AppearanceController::class, 'edit'])->name('appearance.edit');
 
     Route::get('settings/two-factor', [TwoFactorAuthenticationController::class, 'show'])

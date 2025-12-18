@@ -50,7 +50,12 @@ test('new tenants and admin users can register', function () {
     Notification::assertSentTo(auth()->user(), VerifyEmail::class, function (VerifyEmail $notification) {
         $mail = $notification->toMail(auth()->user());
 
-        return str_contains($mail->actionUrl, 'http://acme-hotels.saas-template.test/email/verify');
+        expect($mail->subject)->toBe('Confirmez votre adresse e-mail');
+        expect($mail->view)->toBe('mail.verify-email');
+        expect($mail->viewData['userName'])->toBe('Ada Lovelace');
+        expect($mail->viewData['logoUrl'])->toContain('/img/serena_logo.png');
+
+        return str_contains($mail->viewData['verificationUrl'], 'http://acme-hotels.saas-template.test/email/verify');
     });
 });
 

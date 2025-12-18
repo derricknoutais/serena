@@ -15,7 +15,6 @@ return new class extends Migration
             $table->id();
             $table->foreignUuid('tenant_id')->index();
             $table->string('name');
-            $table->string('code');
             $table->string('currency', 3)->default('XAF');
             $table->string('timezone')->default('Africa/Libreville');
             $table->string('address')->nullable();

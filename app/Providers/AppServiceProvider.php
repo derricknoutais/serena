@@ -8,6 +8,7 @@ use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Notifications\ChannelManager;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -33,6 +34,24 @@ class AppServiceProvider extends ServiceProvider
         });
 
         $this->registerPermissionGates();
+
+        VerifyEmail::toMailUsing(function (object $notifiable, string $url): MailMessage {
+            $mailData = [
+                'actionUrl' => $url,
+                'verificationUrl' => $url,
+                'userName' => $notifiable->name ?? $notifiable->email,
+                'logoUrl' => asset('img/serena_logo.png'),
+            ];
+
+            $mailMessage = (new MailMessage)
+                ->subject('Confirmez votre adresse e-mail');
+
+            $mailMessage->actionUrl = $url;
+
+            return $mailMessage
+                ->view('mail.verify-email', $mailData)
+                ->text('mail.verify-email-text', $mailData);
+        });
 
         VerifyEmail::createUrlUsing(function ($notifiable) {
             $tenantDomain = Tenant::query()
