@@ -21,13 +21,14 @@ class RoomController extends Controller
         $this->authorize('rooms.view');
 
         $activeHotelId = $this->activeHotelId($request);
+        $perPage = min(max($request->integer('per_page', 50), 1), 200);
 
         $rooms = Room::query()
             ->with('roomType')
             ->when($activeHotelId, fn ($q) => $q->where('hotel_id', $activeHotelId))
             ->where('tenant_id', $request->user()->tenant_id)
             ->orderBy('number')
-            ->paginate(15)
+            ->paginate($perPage)
             ->through(fn (Room $room) => [
                 'id' => $room->id,
                 'number' => $room->number,
