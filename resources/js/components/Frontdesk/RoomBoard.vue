@@ -51,18 +51,28 @@
                         Floor {{ rooms[0]?.floor ?? '-' }}
                     </h2>
 
-                    <div class="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
-                        <div
-                            v-for="room in rooms"
-                            :key="room.id"
-                            :class="roomClasses(room)"
-                            @click="selectRoom(room)"
-                        >
-                            <div class="mb-1 flex items-center justify-between">
-                                <div class="text-lg font-semibold text-serena-text-main">
-                                    {{ room.number }}
-                                </div>
-                            </div>
+            <div class="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
+                <div
+                    v-for="room in rooms"
+                    :key="room.id"
+                    :class="roomClasses(room)"
+                    class="relative"
+                    @click="selectRoom(room)"
+                >
+                    <div
+                        v-if="loadingRoomId === room.id"
+                        class="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80"
+                    >
+                        <svg class="h-6 w-6 animate-spin text-serena-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                        </svg>
+                    </div>
+                    <div class="mb-1 flex items-center justify-between">
+                        <div class="text-lg font-semibold text-serena-text-main">
+                            {{ room.number }}
+                        </div>
+                    </div>
                             <div class="mb-2 text-sm text-serena-text-muted">
                                 {{ room.room_type_name || 'Type inconnu' }}
                             </div>
@@ -152,7 +162,16 @@
             </div>
 
             <div class="lg:w-1/3">
-                <div class="h-full rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                <div class="relative h-full rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <div
+                        v-if="selectedRoom && loadingRoomId === selectedRoom.id"
+                        class="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80"
+                    >
+                        <svg class="h-6 w-6 animate-spin text-serena-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                        </svg>
+                    </div>
                     <h3 class="text-base font-semibold text-gray-800">
                         Détails de la chambre
                     </h3>
@@ -1082,6 +1101,8 @@ export default {
             folioData: null,
             folioLoading: false,
             folioInitialTab: 'charges',
+            loadingRoomId: null,
+            loadingRoomTimeout: null,
             hkFilter: 'all',
             hkFilterOptions: [
                 { value: 'all', label: 'Toutes' },
@@ -1683,6 +1704,7 @@ export default {
         closeChangeRoomModal() {
             this.showChangeRoomModal = false;
             this.changeRoomSubmitting = false;
+            this.loadingRoomId = null;
         },
         async submitChangeRoom() {
             if (!this.selectedRoom?.current_reservation || !this.changeRoomSelection) {
@@ -1989,7 +2011,17 @@ export default {
                 return;
             }
 
+            if (this.loadingRoomTimeout) {
+                clearTimeout(this.loadingRoomTimeout);
+            }
+
+            this.loadingRoomId = room.id;
+
             this.selectedRoom = this.findRoomById(room.id) ?? room;
+
+            this.loadingRoomTimeout = setTimeout(() => {
+                this.loadingRoomId = null;
+            }, 800);
         },
         openWalkInForRoom(room) {
             if (!room || room.ui_status !== 'available') {
