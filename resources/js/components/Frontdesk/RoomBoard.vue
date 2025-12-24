@@ -2185,6 +2185,18 @@ export default {
             const message = errors.room_id ?? errors.room_type_id ?? null;
 
             if (!message) {
+                const fallbackMessage = this.extractFirstError(errors, null);
+
+                if (!fallbackMessage) {
+                    return;
+                }
+
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erreur de réservation',
+                    text: fallbackMessage,
+                });
+
                 return;
             }
 
