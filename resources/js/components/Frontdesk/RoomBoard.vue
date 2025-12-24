@@ -2017,7 +2017,7 @@ export default {
 
             this.loadingRoomTimeout = setTimeout(() => {
                 this.loadingRoomId = null;
-            }, 800);
+            }, 500);
         },
         openWalkInForRoom(room) {
             if (!room || room.ui_status !== 'available') {
