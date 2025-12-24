@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -48,25 +49,29 @@ class AcceptInvitationController extends Controller
             abort(404);
         }
 
-        $user = User::query()->firstOrCreate(
-            [
-                'tenant_id' => $invitation->tenant_id,
-                'email' => $invitation->email,
-            ],
-            [
-                'name' => $request->string('name')->toString(),
-                'password' => Hash::make($request->string('password')->toString()),
-                'email_verified_at' => now(),
-            ],
-        );
+        $user = DB::transaction(function () use ($invitation, $request): User {
+            $user = User::query()->firstOrCreate(
+                [
+                    'tenant_id' => $invitation->tenant_id,
+                    'email' => $invitation->email,
+                ],
+                [
+                    'name' => $request->string('name')->toString(),
+                    'password' => Hash::make($request->string('password')->toString()),
+                    'email_verified_at' => now(),
+                ],
+            );
 
-        $invitation->forceFill([
-            'accepted_at' => now(),
-            'token' => hash('sha256', Str::random(64)),
-        ])->save();
+            $invitation->forceFill([
+                'accepted_at' => now(),
+                'token' => hash('sha256', Str::random(64)),
+            ])->save();
 
-        Role::findOrCreate('member', config('auth.defaults.guard', 'web'));
-        $user->assignRole('member');
+            Role::findOrCreate('member', config('auth.defaults.guard', 'web'));
+            $user->assignRole('member');
+
+            return $user;
+        });
 
         Auth::login($user);
         $request->session()->regenerate();
