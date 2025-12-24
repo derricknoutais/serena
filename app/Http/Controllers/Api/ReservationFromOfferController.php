@@ -6,21 +6,20 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\OfferNotValidForDateTimeException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreReservationFromOfferRequest;
 use App\Models\Offer;
 use App\Models\Reservation;
 use App\Models\Room;
 use App\Services\Offers\OfferReservationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class ReservationFromOfferController extends Controller
 {
     public function __construct(private readonly OfferReservationService $offerReservationService) {}
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreReservationFromOfferRequest $request): JsonResponse
     {
         $user = $request->user();
         $tenantId = (string) $user->tenant_id;
@@ -30,32 +29,7 @@ class ReservationFromOfferController extends Controller
             abort(404, 'Aucun hôtel actif sélectionné.');
         }
 
-        $data = $request->validate([
-            'offer_id' => [
-                'required',
-                'integer',
-                Rule::exists('offers', 'id')
-                    ->where('tenant_id', $tenantId)
-                    ->where('hotel_id', $hotelId),
-            ],
-            'room_id' => [
-                'required',
-                'uuid',
-                Rule::exists('rooms', 'id')
-                    ->where('tenant_id', $tenantId)
-                    ->where('hotel_id', $hotelId),
-            ],
-            'guest_id' => ['nullable', 'integer', Rule::exists('guests', 'id')->where('tenant_id', $tenantId)],
-            'start_at' => ['nullable', 'date'],
-            'end_at' => ['nullable', 'date'],
-            'status' => ['nullable', 'string', Rule::in(Reservation::statuses())],
-            'code' => ['nullable', 'string', 'max:255'],
-            'notes' => ['nullable', 'string'],
-            'unit_price' => ['nullable', 'numeric', 'min:0'],
-            'base_amount' => ['nullable', 'numeric', 'min:0'],
-            'tax_amount' => ['nullable', 'numeric', 'min:0'],
-            'total_amount' => ['nullable', 'numeric', 'min:0'],
-        ]);
+        $data = $request->validated();
 
         /** @var Offer $offer */
         $offer = Offer::query()

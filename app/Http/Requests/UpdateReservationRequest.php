@@ -1,0 +1,50 @@
+<?php
+
+namespace App\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+
+class UpdateReservationRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    /**
+     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     */
+    public function rules(): array
+    {
+        return [
+            'code' => ['required', 'string'],
+            'guest_id' => ['required', 'integer', 'exists:guests,id'],
+            'room_type_id' => ['required', 'integer', 'exists:room_types,id'],
+            'room_id' => ['nullable', 'uuid', 'exists:rooms,id'],
+            'offer_id' => ['nullable', 'integer', 'exists:offers,id'],
+            'status' => ['prohibited'],
+            'check_in_date' => ['required', 'date'],
+            'check_out_date' => ['required', 'date'],
+            'currency' => ['required', 'string', 'size:3'],
+            'unit_price' => ['required', 'numeric', 'min:0'],
+            'base_amount' => ['required', 'numeric', 'min:0'],
+            'tax_amount' => ['required', 'numeric', 'min:0'],
+            'total_amount' => ['required', 'numeric', 'min:0'],
+            'adults' => ['nullable', 'integer', 'min:0'],
+            'children' => ['nullable', 'integer', 'min:0'],
+            'notes' => ['nullable', 'string'],
+            'source' => ['nullable', 'string', 'max:255'],
+            'expected_arrival_time' => ['nullable', 'date_format:H:i'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'status.prohibited' => 'Le statut doit être modifié via les actions dédiées.',
+        ];
+    }
+}

@@ -29,7 +29,7 @@
                     type="button"
                     class="rounded-lg px-4 py-2 text-sm font-semibold transition cursor-pointer"
                     :class="activeTab === tab.value ? 'bg-serena-primary text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
-                    @click="activeTab = tab.value"
+                    @click="setActiveTab(tab.value)"
                 >
                     {{ tab.label }}
                 </button>
@@ -99,7 +99,17 @@
                 ],
             };
         },
+        mounted() {
+            const initialTab = this.getInitialTab();
+
+            if (initialTab) {
+                this.activeTab = initialTab;
+            }
+        },
         computed: {
+            validTabs() {
+                return this.tabs.map((tab) => tab.value);
+            },
             canViewForecast() {
                 return this.$page?.props?.auth?.can?.night_audit_view ?? false;
             },
@@ -116,6 +126,42 @@
                     departuresToday,
                     inHouse,
                 };
+            },
+        },
+        methods: {
+            setActiveTab(tab) {
+                if (!this.validTabs.includes(tab)) {
+                    return;
+                }
+
+                this.activeTab = tab;
+                localStorage.setItem('frontdesk.activeTab', tab);
+                this.replaceTabInUrl(tab);
+            },
+            getInitialTab() {
+                const fromUrl = this.getTabFromUrl();
+                if (fromUrl && this.validTabs.includes(fromUrl)) {
+                    return fromUrl;
+                }
+
+                const fromStorage = localStorage.getItem('frontdesk.activeTab');
+                if (fromStorage && this.validTabs.includes(fromStorage)) {
+                    this.replaceTabInUrl(fromStorage);
+
+                    return fromStorage;
+                }
+
+                return null;
+            },
+            getTabFromUrl() {
+                const params = new URLSearchParams(window.location.search);
+
+                return params.get('tab');
+            },
+            replaceTabInUrl(tab) {
+                const url = new URL(window.location.href);
+                url.searchParams.set('tab', tab);
+                window.history.replaceState({}, '', url);
             },
         },
     };

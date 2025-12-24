@@ -354,16 +354,22 @@
                             </span>
                         </div>
 
-                        <div>
+                        <div v-if="!editingId">
                             <label class="text-sm font-medium text-gray-700">Statut</label>
                             <select
                                 v-model="form.status"
                                 class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                             >
-                                <option v-for="status in statusOptions" :key="status" :value="status">
+                                <option v-for="status in createStatusOptions" :key="status" :value="status">
                                     {{ statusLabel(status) }}
                                 </option>
                             </select>
+                        </div>
+                        <div v-else>
+                            <label class="text-sm font-medium text-gray-700">Statut</label>
+                            <div class="mt-1 inline-flex items-center rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                                {{ statusLabel(form.status) }}
+                            </div>
                         </div>
 
                         <p v-if="dateError" class="mt-1 text-xs text-red-600">
@@ -899,6 +905,9 @@
                 },
             },
         computed: {
+            createStatusOptions() {
+                return (this.statusOptions || []).filter((status) => ['pending', 'confirmed'].includes(status));
+            },
             filteredRooms() {
                 if (this.selectedRoomType && this.selectedRoomType.id) {
                     return this.rooms.filter(
@@ -2340,6 +2349,7 @@
                     const payload = {
                         ...this.form,
                     };
+                    delete payload.status;
 
                     router.put(`/reservations/${this.editingId}`, payload, {
                         preserveScroll: true,

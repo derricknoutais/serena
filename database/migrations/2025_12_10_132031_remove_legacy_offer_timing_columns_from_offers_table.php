@@ -77,6 +77,10 @@ return new class extends Migration
                 }
             });
 
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         Schema::table('offers', function (Blueprint $table): void {
             $table->dropColumn([
                 'fixed_duration_hours',
@@ -92,6 +96,10 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         Schema::table('offers', function (Blueprint $table): void {
             $table->integer('fixed_duration_hours')->nullable();
             $table->time('check_in_from')->nullable();

@@ -84,8 +84,13 @@ class RoomBoardData
             $currentReservation = null;
             $isOccupied = false;
 
-            if ($room->status === 'out_of_order') {
+            if ($room->status === Room::STATUS_OUT_OF_ORDER) {
                 $uiStatus = 'out_of_order';
+            } elseif ($room->status === Room::STATUS_OCCUPIED) {
+                $uiStatus = 'occupied';
+                $isOccupied = true;
+            } elseif ($room->status === 'inactive') {
+                $uiStatus = 'inactive';
             } elseif ($inHouseReservation !== null) {
                 $uiStatus = 'occupied';
                 $currentReservation = $inHouseReservation;

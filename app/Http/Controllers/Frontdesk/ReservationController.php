@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Frontdesk;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreReservationRequest;
+use App\Http\Requests\UpdateReservationRequest;
 use App\Models\Offer;
 use App\Models\Reservation;
 use App\Services\FolioBillingService;
@@ -44,7 +46,7 @@ class ReservationController extends Controller
     }
 
     public function store(
-        Request $request,
+        StoreReservationRequest $request,
         ReservationAvailabilityService $availability,
         OfferReservationService $offerReservationService,
         ReservationConflictService $conflictService,
@@ -53,26 +55,7 @@ class ReservationController extends Controller
         $tenantId = $request->user()->tenant_id;
         $hotelId = $request->user()->active_hotel_id ?? $request->session()->get('active_hotel_id');
 
-        $data = $request->validate([
-            'code' => ['required', 'string'],
-            'guest_id' => ['required', 'integer', 'exists:guests,id'],
-            'room_type_id' => ['required', 'integer', 'exists:room_types,id'],
-            'room_id' => ['nullable', 'uuid', 'exists:rooms,id'],
-            'offer_id' => ['nullable', 'integer', 'exists:offers,id'],
-            'status' => ['required', 'string'],
-            'check_in_date' => ['required', 'date'],
-            'check_out_date' => ['required', 'date'],
-            'currency' => ['required', 'string', 'size:3'],
-            'unit_price' => ['required', 'numeric', 'min:0'],
-            'base_amount' => ['required', 'numeric', 'min:0'],
-            'tax_amount' => ['required', 'numeric', 'min:0'],
-            'total_amount' => ['required', 'numeric', 'min:0'],
-            'adults' => ['nullable', 'integer', 'min:0'],
-            'children' => ['nullable', 'integer', 'min:0'],
-            'notes' => ['nullable', 'string'],
-            'source' => ['nullable', 'string', 'max:255'],
-            'expected_arrival_time' => ['nullable', 'date_format:H:i'],
-        ]);
+        $data = $request->validated();
 
         $offer = null;
         if (! empty($data['offer_id'])) {
@@ -131,6 +114,7 @@ class ReservationController extends Controller
         $data['booked_by_user_id'] = $request->user()->id;
         $data['adults'] = $data['adults'] ?? 1;
         $data['children'] = $data['children'] ?? 0;
+        $data['status'] = $data['status'] ?? Reservation::STATUS_PENDING;
         $reservationDraft = new Reservation($data);
         if ($offer) {
             $reservationDraft->setRelation('offer', $offer);
@@ -192,7 +176,7 @@ class ReservationController extends Controller
     }
 
     public function update(
-        Request $request,
+        UpdateReservationRequest $request,
         Reservation $reservation,
         FolioBillingService $billingService,
         ReservationAvailabilityService $availability,
@@ -204,26 +188,7 @@ class ReservationController extends Controller
 
         abort_unless($reservation->tenant_id === $tenantId, 404);
 
-        $data = $request->validate([
-            'code' => ['required', 'string'],
-            'guest_id' => ['required', 'integer', 'exists:guests,id'],
-            'room_type_id' => ['required', 'integer', 'exists:room_types,id'],
-            'room_id' => ['nullable', 'uuid', 'exists:rooms,id'],
-            'offer_id' => ['nullable', 'integer', 'exists:offers,id'],
-            'status' => ['required', 'string'],
-            'check_in_date' => ['required', 'date'],
-            'check_out_date' => ['required', 'date'],
-            'currency' => ['required', 'string', 'size:3'],
-            'unit_price' => ['required', 'numeric', 'min:0'],
-            'base_amount' => ['required', 'numeric', 'min:0'],
-            'tax_amount' => ['required', 'numeric', 'min:0'],
-            'total_amount' => ['required', 'numeric', 'min:0'],
-            'adults' => ['nullable', 'integer', 'min:0'],
-            'children' => ['nullable', 'integer', 'min:0'],
-            'notes' => ['nullable', 'string'],
-            'source' => ['nullable', 'string', 'max:255'],
-            'expected_arrival_time' => ['nullable', 'date_format:H:i'],
-        ]);
+        $data = $request->validated();
 
         $offer = null;
         if (! empty($data['offer_id'])) {
@@ -248,7 +213,7 @@ class ReservationController extends Controller
                         'hotel_id' => $reservation->hotel_id,
                         'guest_id' => $data['guest_id'],
                         'code' => $data['code'],
-                        'status' => $data['status'],
+                        'status' => $reservation->status,
                         'notes' => $data['notes'] ?? null,
                         'booked_by_user_id' => $reservation->booked_by_user_id ?? $request->user()->id,
                         'currency' => $data['currency'],

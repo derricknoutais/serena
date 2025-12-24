@@ -51,7 +51,7 @@
                         Floor {{ rooms[0]?.floor ?? '-' }}
                     </h2>
 
-            <div class="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
+            <div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
                 <div
                     v-for="room in rooms"
                     :key="room.id"
@@ -88,6 +88,12 @@
                                     class="rounded-full border px-2 py-0.5 font-medium"
                                     :class="hkBadge(room).classes"
                                 >
+                                    <component
+                                        v-if="hkBadge(room).icon"
+                                        :is="hkBadge(room).icon"
+                                        class="mr-1 inline-block h-3 w-3"
+                                        :class="hkBadge(room).iconClass"
+                                    />
                                     {{ hkBadge(room).label }}
                                 </span>
                                 <span
@@ -114,35 +120,6 @@
                                 </span>
                             </div>
 
-                            <div
-                                v-if="canManageHousekeepingActions"
-                                class="mt-2 flex flex-wrap gap-1 text-[10px]"
-                            >
-                                <button
-                                    v-if="canMarkDirty"
-                                    type="button"
-                                    class="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-gray-600 shadow"
-                                    @click.stop="updateRoomHkStatus(room.id, 'dirty')"
-                                >
-                                    Marquer sale
-                                </button>
-                                <button
-                                    v-if="canMarkClean"
-                                    type="button"
-                                    class="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-gray-600 shadow"
-                                    @click.stop="updateRoomHkStatus(room.id, 'clean')"
-                                >
-                                    Marquer propre
-                                </button>
-                                <button
-                                    v-if="canMarkInspected"
-                                    type="button"
-                                    class="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-gray-600 shadow"
-                                    @click.stop="updateRoomHkStatus(room.id, 'inspected')"
-                                >
-                                    Marquer inspectée
-                                </button>
-                            </div>
 
                             <div
                                 v-if="room.current_reservation"
@@ -203,6 +180,12 @@
                                     class="rounded-full border px-2 py-0.5 font-semibold"
                                     :class="hkBadge(selectedRoom).classes"
                                 >
+                                    <component
+                                        v-if="hkBadge(selectedRoom).icon"
+                                        :is="hkBadge(selectedRoom).icon"
+                                        class="mr-1 inline-block h-3 w-3"
+                                        :class="hkBadge(selectedRoom).iconClass"
+                                    />
                                     {{ hkBadge(selectedRoom).label }}
                                 </span>
                                 <span
@@ -316,6 +299,14 @@
                                     @click="updateRoomHkStatus(selectedRoom.id, 'dirty')"
                                 >
                                     Marquer comme sale
+                                </button>
+                                <button
+                                    v-if="canMarkClean"
+                                    type="button"
+                                    class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                                    @click="updateRoomHkStatus(selectedRoom.id, 'clean')"
+                                >
+                                    Marquer comme propre
                                 </button>
                             </div>
 
@@ -1017,6 +1008,7 @@
 import Swal from 'sweetalert2';
 import axios from 'axios';
 import { router, useForm } from '@inertiajs/vue3';
+import { AlertTriangle, CheckCircle, ShieldCheck, Wrench } from 'lucide-vue-next';
 import Multiselect from 'vue-multiselect';
 import PrimaryButton from '@/components/PrimaryButton.vue';
 import SecondaryButton from '@/components/SecondaryButton.vue';
@@ -1028,6 +1020,10 @@ import { enqueue } from '@/offline/outbox';
 export default {
     name: 'RoomBoard',
     components: {
+        AlertTriangle,
+        CheckCircle,
+        ShieldCheck,
+        Wrench,
         PrimaryButton,
         SecondaryButton,
         TextInput,
@@ -2084,6 +2080,11 @@ export default {
                         timer: 2500,
                         showConfirmButton: false,
                     });
+                    if (Number(this.form.amount_received || 0) > 0) {
+                        window.dispatchEvent(new CustomEvent('cash-session-updated', {
+                            detail: { type: 'frontdesk' },
+                        }));
+                    }
                     this.reloadRoomBoard();
                 },
                 onError: (errors) => {
@@ -2256,7 +2257,7 @@ export default {
         },
         roomClasses(room) {
             const base =
-                'cursor-pointer rounded-xl border p-4 text-sm shadow-sm transition';
+                'cursor-pointer rounded-xl border p-5 text-sm shadow-sm transition';
 
             if (
                 room.status === 'out_of_order' ||
@@ -2271,57 +2272,62 @@ export default {
             if (room.ui_status === 'occupied') {
                 return (
                     base +
-                    ' bg-[#FEE2E2] border-[#EF4444] text-[#991B1B]'
+                    ' bg-sky-50 border-sky-200 text-sky-800'
                 );
             }
 
-            if (room.ui_status === 'available') {
-                switch (room.hk_status) {
-                    case 'inspected':
-                        return (
-                            base +
-                            ' bg-[#D1FADF] border-[#4ADE80] text-[#166534]'
-                        );
-                    case 'dirty':
-                        return (
-                            base +
-                            ' bg-[#FEF3C7] border-[#F59E0B] text-[#92400E]'
-                        );
-                    case 'clean':
-                    default:
-                        return (
-                            base +
-                            ' bg-[#E8F7FD] border-[#25B0EB] text-[#1E8FBE]'
-                        );
-                }
+            if (room.status === 'out_of_order' || room.ui_status === 'out_of_order') {
+                return (
+                    base +
+                    ' bg-slate-100 border-slate-300 text-slate-700'
+                );
+            }
+
+            if (room.status === 'inactive') {
+                return (
+                    base +
+                    ' bg-neutral-100 border-neutral-300 text-neutral-500'
+                );
+            }
+
+            if (room.status === 'active') {
+                return (
+                    base +
+                    ' bg-emerald-50 border-emerald-200 text-emerald-800'
+                );
             }
 
             return (
                 base +
-                ' bg-[#E8F7FD] border-[#25B0EB] text-[#1E8FBE]'
+                ' bg-emerald-50 border-emerald-200 text-emerald-800'
             );
         },
         availabilityBadge(room) {
-            switch (room.ui_status) {
-                case 'occupied':
-                    return {
-                        label: 'Occupée',
-                        classes:
-                            'bg-red-100 text-red-700 border-red-300',
-                    };
-                case 'out_of_order':
-                    return {
-                        label: 'Hors service',
-                        classes:
-                            'bg-gray-200 text-gray-700 border-gray-300',
-                    };
-                default:
-                    return {
-                        label: 'Disponible',
-                        classes:
-                            'bg-[#E8F7FD] text-[#1E8FBE] border-[#25B0EB]',
-                    };
+            if (room.ui_status === 'occupied') {
+                return {
+                    label: 'Occupée',
+                    classes: 'bg-sky-100 text-sky-700 border-sky-300',
+                };
             }
+
+            if (room.status === 'out_of_order' || room.ui_status === 'out_of_order') {
+                return {
+                    label: 'Hors service',
+                    classes: 'bg-slate-200 text-slate-700 border-slate-300',
+                };
+            }
+
+            if (room.status === 'inactive') {
+                return {
+                    label: 'Inactive',
+                    classes: 'bg-neutral-100 text-neutral-500 border-neutral-300',
+                };
+            }
+
+            return {
+                label: 'Disponible',
+                classes: 'bg-emerald-100 text-emerald-700 border-emerald-300',
+            };
         },
         hkStatusLabel(status) {
             switch (status) {
@@ -2336,24 +2342,34 @@ export default {
         },
         hkBadge(room) {
             switch (room.hk_status) {
+                case 'maintenance':
+                    return {
+                        label: 'Maintenance',
+                        classes: 'bg-slate-100 text-slate-700 border-slate-300',
+                        icon: Wrench,
+                        iconClass: 'text-slate-600',
+                    };
                 case 'inspected':
                     return {
                         label: 'Inspectée',
-                        classes:
-                            'bg-green-100 text-green-800 border-green-300',
+                        classes: 'bg-sky-100 text-sky-700 border-sky-300',
+                        icon: ShieldCheck,
+                        iconClass: 'text-sky-600',
                     };
                 case 'dirty':
                     return {
                         label: 'Sale',
-                        classes:
-                            'bg-amber-100 text-amber-700 border-amber-300',
+                        classes: 'bg-amber-100 text-amber-700 border-amber-300',
+                        icon: AlertTriangle,
+                        iconClass: 'text-amber-600',
                     };
                 case 'clean':
                 default:
                     return {
                         label: 'Propre',
-                        classes:
-                            'bg-blue-100 text-blue-700 border-blue-300',
+                        classes: 'bg-emerald-100 text-emerald-700 border-emerald-300',
+                        icon: CheckCircle,
+                        iconClass: 'text-emerald-600',
                     };
             }
         },

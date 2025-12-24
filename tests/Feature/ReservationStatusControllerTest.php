@@ -4,6 +4,7 @@ require_once __DIR__.'/FolioTestHelpers.php';
 
 use App\Models\CashSession;
 use App\Models\Reservation;
+use Spatie\Permission\Models\Permission;
 
 beforeEach(function (): void {
     config([
@@ -12,6 +13,35 @@ beforeEach(function (): void {
         'app.url_scheme' => 'http',
         'tenancy.central_domains' => ['serena.test'],
     ]);
+
+    $guard = config('auth.defaults.guard', 'web');
+    $permissions = [
+        'reservations.override_datetime',
+        'folio_items.void',
+        'housekeeping.mark_inspected',
+        'housekeeping.mark_clean',
+        'housekeeping.mark_dirty',
+        'cash_sessions.open',
+        'cash_sessions.close',
+        'rooms.view', 'rooms.create', 'rooms.update', 'rooms.delete',
+        'room_types.view', 'room_types.create', 'room_types.update', 'room_types.delete',
+        'offers.view', 'offers.create', 'offers.update', 'offers.delete',
+        'products.view', 'products.create', 'products.update', 'products.delete',
+        'product_categories.view', 'product_categories.create', 'product_categories.update', 'product_categories.delete',
+        'taxes.view', 'taxes.create', 'taxes.update', 'taxes.delete',
+        'payment_methods.view', 'payment_methods.create', 'payment_methods.update', 'payment_methods.delete',
+        'maintenance_tickets.view', 'maintenance_tickets.create', 'maintenance_tickets.update', 'maintenance_tickets.close',
+        'invoices.view', 'invoices.create', 'invoices.update', 'invoices.delete',
+        'pos.view', 'pos.create',
+        'night_audit.view', 'night_audit.export',
+    ];
+
+    foreach ($permissions as $permission) {
+        Permission::query()->firstOrCreate([
+            'name' => $permission,
+            'guard_name' => $guard,
+        ]);
+    }
 });
 
 it('confirms a reservation when transition is allowed', function (): void {
@@ -63,6 +93,37 @@ it('rejects an invalid status transition', function (): void {
 
     $response->assertSessionHasErrors('status');
     expect($reservation->fresh()->status)->toBe(Reservation::STATUS_PENDING);
+});
+
+it('creates the stay folio item on check-in', function (): void {
+    [
+        'tenant' => $tenant,
+        'user' => $user,
+        'reservation' => $reservation,
+    ] = setupReservationEnvironment('status-checkin');
+
+    $reservation->update([
+        'status' => Reservation::STATUS_CONFIRMED,
+        'check_in_date' => now()->toDateString(),
+        'check_out_date' => now()->addDay()->toDateString(),
+    ]);
+
+    $response = $this->actingAs($user)->patch(sprintf(
+        'http://%s/reservations/%s/status',
+        tenantDomain($tenant),
+        $reservation->id,
+    ), [
+        'action' => 'check_in',
+        'actual_check_in_at' => now()->setTime(15, 0)->toDateTimeString(),
+    ]);
+
+    $response->assertRedirect();
+
+    $reservation->refresh();
+    $folio = $reservation->mainFolio()->first();
+
+    expect($folio)->not->toBeNull()
+        ->and($folio?->items()->where('is_stay_item', true)->exists())->toBeTrue();
 });
 
 it('requires an open frontdesk cash session when applying a cancellation penalty', function (): void {
