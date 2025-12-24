@@ -8,6 +8,7 @@ use App\Http\Controllers\Auth\CheckTenantSlugController;
 use App\Http\Controllers\Config\ActiveHotelController;
 use App\Http\Controllers\Config\HotelConfigController;
 use App\Http\Controllers\Config\OfferController;
+use App\Http\Controllers\Config\PaymentMethodController;
 use App\Http\Controllers\Config\ProductCategoryController;
 use App\Http\Controllers\Config\ProductController;
 use App\Http\Controllers\Config\RoomController;
@@ -52,7 +53,7 @@ use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
 | They are automatically scoped by stancl/tenancy.
 |
 */
-if(env('APP_ENV') === 'local') {
+if (env('APP_ENV') === 'local') {
     // For local development, we can use a specific tenant ID to avoid creating a new tenant
     // This is useful for testing purposes.
     // config(['tenancy.central_domains' => ['saas-template.test']]);
@@ -292,6 +293,7 @@ Route::middleware([
             Route::resource('rooms', RoomController::class)->except(['show']);
             Route::resource('offers', OfferController::class)->except(['show']);
             Route::resource('taxes', TaxController::class)->except(['show']);
+            Route::resource('payment-methods', PaymentMethodController::class)->except(['show']);
             Route::resource('products', ProductController::class)->except(['show']);
             Route::resource('product-categories', ProductCategoryController::class)->only(['index', 'store', 'update', 'destroy']);
             Route::resource('users', UserConfigController::class)->except(['show']);

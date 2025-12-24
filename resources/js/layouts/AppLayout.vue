@@ -240,6 +240,12 @@ export default defineComponent({
                                 Taxes
                             </Link>
                             <Link
+                                href="/ressources/payment-methods"
+                                class="block rounded-lg px-3 py-1.5 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
+                            >
+                                Méthodes de paiement
+                            </Link>
+                            <Link
                                 href="/ressources/product-categories"
                                 class="block rounded-lg px-3 py-1.5 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
                             >

@@ -22,6 +22,7 @@ import {
     Activity,
     BedDouble,
     Building2,
+    CreditCard,
     LayoutGrid,
     Layers,
     Percent,
@@ -85,6 +86,12 @@ const baseRessourcesNavItems: (NavItem & { requiredPermission?: string })[] = [
         href: '/ressources/taxes',
         icon: Percent,
         requiredPermission: 'taxes_view',
+    },
+    {
+        title: 'Méthodes de paiement',
+        href: '/ressources/payment-methods',
+        icon: CreditCard,
+        requiredPermission: 'payment_methods_view',
     },
     {
         title: 'Catégories de produits',
