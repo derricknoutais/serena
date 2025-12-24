@@ -3,7 +3,7 @@ import { defineComponent, type PropType } from 'vue';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { listOutbox, processOutbox } from '@/offline/outbox';
-import { Link } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
@@ -19,6 +19,7 @@ export default defineComponent({
         AppLogoIcon,
         Breadcrumbs,
         HeaderUserMenu,
+        Head,
         Link,
         PrimaryButton,
     },
@@ -42,9 +43,46 @@ export default defineComponent({
             type: Array as PropType<BreadcrumbItemType[]>,
             default: () => [],
         },
+        title: {
+            type: String,
+            default: null,
+        },
+    },
+    computed: {
+        resolvedTitle(): string {
+            if (this.title) {
+                return this.title;
+            }
+
+            const breadcrumbTitle = this.breadcrumbs[0]?.title ?? null;
+            if (breadcrumbTitle) {
+                return breadcrumbTitle;
+            }
+
+            const component = (this as any)?.$page?.component ?? '';
+            if (component) {
+                return this.formatComponentTitle(component);
+            }
+
+            return 'Serena';
+        },
     },
     methods: {
         frontdeskDashboard,
+        formatComponentTitle(component: string): string {
+            const segment = component.split('/').pop() ?? component;
+            const withSpaces = segment
+                .replace(/[-_]+/g, ' ')
+                .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+                .replace(/\s+/g, ' ')
+                .trim();
+
+            if (!withSpaces) {
+                return 'Serena';
+            }
+
+            return withSpaces;
+        },
         async loadOutbox() {
             this.outboxItems = await listOutbox();
         },
@@ -150,6 +188,7 @@ export default defineComponent({
 </script>
 
 <template>
+    <Head :title="resolvedTitle" />
     <div class="min-h-screen bg-serena-bg-soft text-serena-text-main">
         <div
             v-if="offline"
