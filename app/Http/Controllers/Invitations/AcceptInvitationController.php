@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use Spatie\Permission\Models\Role;
 
 class AcceptInvitationController extends Controller
 {
@@ -64,6 +65,7 @@ class AcceptInvitationController extends Controller
             'token' => hash('sha256', Str::random(64)),
         ])->save();
 
+        Role::findOrCreate('member', config('auth.defaults.guard', 'web'));
         $user->assignRole('member');
 
         Auth::login($user);

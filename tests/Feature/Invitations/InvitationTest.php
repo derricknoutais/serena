@@ -9,6 +9,7 @@ use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
+use Spatie\Permission\Models\Role;
 
 beforeEach(function () {
     config([
@@ -108,6 +109,35 @@ test('invited user can accept and is logged in', function () {
 
     $invitation->refresh();
     expect($invitation->accepted_at)->not->toBeNull();
+});
+
+test('accepting an invitation creates the member role when missing', function () {
+    $tenant = createTenantWithDomain('ember');
+    tenancy()->initialize($tenant);
+
+    $guardName = config('auth.defaults.guard', 'web');
+    Role::query()->where('name', 'member')->where('guard_name', $guardName)->delete();
+
+    $token = Str::random(40);
+    $invitation = Invitation::factory()->create([
+        'tenant_id' => $tenant->id,
+        'email' => 'ember.user@example.com',
+        'token' => hash('sha256', $token),
+        'expires_at' => now()->addDay(),
+    ]);
+
+    $response = $this->post('http://'.$tenant->domains()->value('domain').'/invitations/accept', [
+        'token' => $token,
+        'email' => $invitation->email,
+        'name' => 'Ember User',
+        'password' => 'password123',
+        'password_confirmation' => 'password123',
+    ]);
+
+    $response->assertRedirect(route('dashboard'));
+    $this->assertAuthenticated();
+    expect(auth()->user()->hasRole('member'))->toBeTrue();
+    expect(Role::query()->where('name', 'member')->where('guard_name', $guardName)->exists())->toBeTrue();
 });
 
 test('expired invitations are rejected', function () {
