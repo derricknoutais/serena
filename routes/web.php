@@ -53,7 +53,7 @@ use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
 | They are automatically scoped by stancl/tenancy.
 |
 */
-if (env('APP_ENV') === 'local') {
+if (app()->environment('local') && ! app()->runningInConsole()) {
     // For local development, we can use a specific tenant ID to avoid creating a new tenant
     // This is useful for testing purposes.
     // config(['tenancy.central_domains' => ['saas-template.test']]);
@@ -65,92 +65,90 @@ Route::middleware([
     InitializeTenancyByDomain::class,
     PreventAccessFromCentralDomains::class,
     'ensure_user_tenant_matches_domain',
-    'auth',
 ])->group(function () {
-
-    Route::get('/dashboard', function () {
-        /** @var \App\Models\User $user */
-        $user = request()->user();
-
-        $activeHotelId = session('active_hotel_id', $user?->active_hotel_id);
-
-        if ($user !== null && $activeHotelId !== null) {
-            $belongs = $user->hotels()->where('hotels.id', $activeHotelId)->exists();
-            if (! $belongs) {
-                $activeHotelId = null;
-            }
-        }
-
-        if ($user !== null && $activeHotelId === null) {
-            $firstHotel = $user->hotels()->first();
-            if ($firstHotel) {
-                $activeHotelId = $firstHotel->id;
-                $user->forceFill(['active_hotel_id' => $activeHotelId])->save();
-                session()->put('active_hotel_id', $activeHotelId);
-            }
-        }
-
-        $hotel = null;
-
-        if ($activeHotelId !== null) {
-            $hotel = \App\Models\Hotel::query()
-                ->where('tenant_id', $user->tenant_id)
-                ->where('id', $activeHotelId)
-                ->first();
-        }
-
-        return Inertia::render('Dashboard', [
-            'users' => \App\Models\User::query()
-                ->orderBy('name')
-                ->with(['roles'])
-                ->get()
-                ->map(
-                    fn ($user) => [
-                        'id' => $user->id,
-                        'name' => $user->name,
-                        'email' => $user->email,
-                        'role' => $user->roles->first()?->name,
-                    ],
-                ),
-            'roles' => \Spatie\Permission\Models\Role::query()->orderBy('name')->get()->map(
-                fn ($role) => [
-                    'name' => $role->name,
-                ],
-            ),
-            'hotel' => $hotel?->only([
-                'id',
-                'name',
-                'code',
-                'currency',
-                'timezone',
-                'address',
-                'city',
-                'country',
-                'check_in_time',
-                'check_out_time',
-            ]),
-        ]);
-    })
-        ->middleware(['auth', 'verified'])
-        ->name('dashboard');
-
-    Route::post('/invitations', [InvitationController::class, 'store'])
-        ->middleware(['auth', 'verified'])
-        ->name('invitations.store');
-
     Route::get('/invitations/accept', [AcceptInvitationController::class, 'show'])->name('invitations.accept.show');
 
     Route::post('/invitations/accept', [AcceptInvitationController::class, 'store'])->name('invitations.accept.store');
 
-    Route::get('/resources/hotel', function () {
-        return redirect()->route('ressources.hotel.edit');
-    });
+    Route::middleware('auth')->group(function () {
+        Route::get('/dashboard', function () {
+            /** @var \App\Models\User $user */
+            $user = request()->user();
 
-    Route::patch('/users/{user}/role', UpdateUserRoleController::class)
-        ->middleware(['auth', 'verified', 'role:owner|manager|superadmin'])
-        ->name('users.role.update');
+            $activeHotelId = session('active_hotel_id', $user?->active_hotel_id);
 
-    Route::middleware(['auth'])->group(function () {
+            if ($user !== null && $activeHotelId !== null) {
+                $belongs = $user->hotels()->where('hotels.id', $activeHotelId)->exists();
+                if (! $belongs) {
+                    $activeHotelId = null;
+                }
+            }
+
+            if ($user !== null && $activeHotelId === null) {
+                $firstHotel = $user->hotels()->first();
+                if ($firstHotel) {
+                    $activeHotelId = $firstHotel->id;
+                    $user->forceFill(['active_hotel_id' => $activeHotelId])->save();
+                    session()->put('active_hotel_id', $activeHotelId);
+                }
+            }
+
+            $hotel = null;
+
+            if ($activeHotelId !== null) {
+                $hotel = \App\Models\Hotel::query()
+                    ->where('tenant_id', $user->tenant_id)
+                    ->where('id', $activeHotelId)
+                    ->first();
+            }
+
+            return Inertia::render('Dashboard', [
+                'users' => \App\Models\User::query()
+                    ->orderBy('name')
+                    ->with(['roles'])
+                    ->get()
+                    ->map(
+                        fn ($user) => [
+                            'id' => $user->id,
+                            'name' => $user->name,
+                            'email' => $user->email,
+                            'role' => $user->roles->first()?->name,
+                        ],
+                    ),
+                'roles' => \Spatie\Permission\Models\Role::query()->orderBy('name')->get()->map(
+                    fn ($role) => [
+                        'name' => $role->name,
+                    ],
+                ),
+                'hotel' => $hotel?->only([
+                    'id',
+                    'name',
+                    'code',
+                    'currency',
+                    'timezone',
+                    'address',
+                    'city',
+                    'country',
+                    'check_in_time',
+                    'check_out_time',
+                ]),
+            ]);
+        })
+            ->middleware(['auth', 'verified'])
+            ->name('dashboard');
+
+        Route::post('/invitations', [InvitationController::class, 'store'])
+            ->middleware(['auth', 'verified'])
+            ->name('invitations.store');
+
+        Route::get('/resources/hotel', function () {
+            return redirect()->route('ressources.hotel.edit');
+        });
+
+        Route::patch('/users/{user}/role', UpdateUserRoleController::class)
+            ->middleware(['auth', 'verified', 'role:owner|manager|superadmin'])
+            ->name('users.role.update');
+
         Route::middleware('role:owner|manager|receptionist|accountant|superadmin')->group(function () {
             Route::get('/pos', [PosController::class, 'index'])
                 ->name('pos.index');

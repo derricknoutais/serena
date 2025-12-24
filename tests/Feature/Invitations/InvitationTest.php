@@ -4,6 +4,8 @@ use App\Models\Invitation;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Notifications\InvitationCreated;
+use Database\Seeders\PermissionSeeder;
+use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -15,12 +17,18 @@ beforeEach(function () {
         'app.url_scheme' => 'http',
         'tenancy.central_domains' => ['saas-template.test'],
     ]);
+
+    $this->seed([
+        RoleSeeder::class,
+        PermissionSeeder::class,
+    ]);
 });
 
 function createTenantWithDomain(string $id = 'orchid'): Tenant
 {
     $tenant = Tenant::create([
         'id' => $id,
+        'slug' => $id,
         'data' => ['name' => ucfirst($id)],
     ]);
 
