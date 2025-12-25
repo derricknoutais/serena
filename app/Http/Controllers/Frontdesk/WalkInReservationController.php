@@ -14,6 +14,7 @@ use App\Models\RoomType;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -172,29 +173,47 @@ class WalkInReservationController extends Controller
         $checkOutDate = Carbon::parse($validated['check_out_date'])->toDateString();
 
         /** @var Reservation $reservation */
-        $reservation = Reservation::query()->create([
-            'tenant_id' => $tenantId,
-            'hotel_id' => $hotelId,
-            'guest_id' => $guestId,
-            'room_type_id' => $roomType->id,
-            'room_id' => $room->id,
-            'offer_id' => $offer->id,
-            'code' => $offer->code ?? null,
-            'status' => Reservation::STATUS_CONFIRMED,
-            'source' => 'walk_in',
-            'offer_name' => $offer->name,
-            'offer_kind' => $offer->kind,
-            'adults' => (int) $validated['adults'],
-            'children' => (int) ($validated['children'] ?? 0),
-            'check_in_date' => $checkInDate,
-            'check_out_date' => $checkOutDate,
-            'actual_check_in_at' => null,
-            'currency' => $roomType->currency ?? 'XAF',
-            'unit_price' => $unitPrice,
-            'base_amount' => $baseAmount,
-            'tax_amount' => $taxAmount,
-            'total_amount' => $totalAmount,
-        ]);
+        $reservation = DB::transaction(function () use (
+            $tenantId,
+            $hotelId,
+            $guestId,
+            $roomType,
+            $room,
+            $offer,
+            $unitPrice,
+            $baseAmount,
+            $taxAmount,
+            $totalAmount,
+            $checkInDate,
+            $checkOutDate,
+            $validated
+        ): Reservation {
+            $reservationCode = Reservation::generateCode($tenantId, Carbon::parse($checkInDate));
+
+            return Reservation::query()->create([
+                'tenant_id' => $tenantId,
+                'hotel_id' => $hotelId,
+                'guest_id' => $guestId,
+                'room_type_id' => $roomType->id,
+                'room_id' => $room->id,
+                'offer_id' => $offer->id,
+                'code' => $reservationCode,
+                'status' => Reservation::STATUS_CONFIRMED,
+                'source' => 'walk_in',
+                'offer_name' => $offer->name,
+                'offer_kind' => $offer->kind,
+                'adults' => (int) $validated['adults'],
+                'children' => (int) ($validated['children'] ?? 0),
+                'check_in_date' => $checkInDate,
+                'check_out_date' => $checkOutDate,
+                'actual_check_in_at' => null,
+                'currency' => $roomType->currency ?? 'XAF',
+                'unit_price' => $unitPrice,
+                'base_amount' => $baseAmount,
+                'tax_amount' => $taxAmount,
+                'total_amount' => $totalAmount,
+            ]);
+        });
 
         return redirect()
             ->route('rooms.board', ['date' => $checkInDate])

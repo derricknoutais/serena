@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Models\Offer;
 use App\Models\OfferRoomTypePrice;
 use App\Models\Reservation;
 use App\Models\Room;
@@ -15,6 +16,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class ReservationStayController extends Controller
@@ -46,6 +48,13 @@ class ReservationStayController extends Controller
 
         $data = $request->validate([
             'check_out_date' => ['required', 'date'],
+            'offer_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('offers', 'id')
+                    ->where('tenant_id', $reservation->tenant_id)
+                    ->where('hotel_id', $reservation->hotel_id),
+            ],
         ]);
 
         $newCheckOut = Carbon::parse($data['check_out_date']);
@@ -100,6 +109,34 @@ class ReservationStayController extends Controller
 
         $oldBaseAmount = (float) $reservation->base_amount;
         $oldTotalAmount = (float) $reservation->total_amount;
+
+        $selectedOfferId = $data['offer_id'] ?? null;
+        if ($selectedOfferId) {
+            /** @var Offer $offer */
+            $offer = Offer::query()
+                ->where('tenant_id', $reservation->tenant_id)
+                ->where('hotel_id', $reservation->hotel_id)
+                ->findOrFail((int) $selectedOfferId);
+
+            $offerPrice = OfferRoomTypePrice::query()
+                ->where('tenant_id', $reservation->tenant_id)
+                ->where('hotel_id', $reservation->hotel_id)
+                ->where('room_type_id', $reservation->room_type_id)
+                ->where('offer_id', $offer->id)
+                ->first();
+
+            if (! $offerPrice) {
+                throw ValidationException::withMessages([
+                    'offer_id' => 'Aucun tarif disponible pour cette offre et ce type de chambre.',
+                ]);
+            }
+
+            $reservation->offer_id = $offer->id;
+            $reservation->offer_name = $offer->name;
+            $reservation->offer_kind = $offer->kind;
+            $reservation->unit_price = (float) $offerPrice->price;
+            $reservation->currency = $offerPrice->currency ?? $reservation->currency;
+        }
 
         $previousQuantity = $this->calculateStayQuantity($reservation, $checkIn, $currentCheckOut);
         $reservation->check_out_date = $newCheckOut->toDateTimeString();

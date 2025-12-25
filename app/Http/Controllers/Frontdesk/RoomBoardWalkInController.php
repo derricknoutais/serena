@@ -17,6 +17,7 @@ use App\Services\OfferTimeEngine;
 use App\Services\ReservationConflictService;
 use App\Services\ReservationStateMachine;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -32,7 +33,7 @@ class RoomBoardWalkInController extends Controller
         private readonly ReservationConflictService $conflictService,
     ) {}
 
-    public function store(Request $request): JsonResponse
+    public function store(Request $request): JsonResponse|RedirectResponse
     {
         $user = $request->user();
         $tenantId = (string) $user->tenant_id;
@@ -123,6 +124,8 @@ class RoomBoardWalkInController extends Controller
             $checkOutDate,
             $validated
         ): Reservation {
+            $reservationCode = Reservation::generateCode($tenantId, Carbon::parse($checkInDate));
+
             /** @var Reservation $reservation */
             $reservation = Reservation::query()->create([
                 'tenant_id' => $tenantId,
@@ -131,7 +134,7 @@ class RoomBoardWalkInController extends Controller
                 'room_type_id' => $roomType->id,
                 'room_id' => $room->id,
                 'offer_id' => $offer->id,
-                'code' => $offer->code ?? null,
+                'code' => $reservationCode,
                 'status' => Reservation::STATUS_PENDING,
                 'source' => 'walk_in',
                 'offer_name' => $offer->name,
@@ -150,6 +153,11 @@ class RoomBoardWalkInController extends Controller
 
             $this->stateMachine->confirm($reservation);
             $reservation = $this->stateMachine->checkIn($reservation);
+            $reservation->loadMissing('room');
+            if ($reservation->room) {
+                $reservation->room->hk_status = 'dirty';
+                $reservation->room->save();
+            }
 
             $amountReceived = (float) $validated['amount_received'];
 
@@ -203,12 +211,18 @@ class RoomBoardWalkInController extends Controller
             return $reservation;
         });
 
-        return response()->json([
+        $payload = [
             'reservation_id' => $reservation->id,
             'room_id' => $reservation->room_id,
             'status' => $reservation->status,
             'check_in_date' => $reservation->check_in_date?->toDateString(),
             'check_out_date' => $reservation->check_out_date?->toDateString(),
-        ]);
+        ];
+
+        if ($request->header('X-Inertia')) {
+            return back()->with('walk_in_reservation', $payload);
+        }
+
+        return response()->json($payload);
     }
 }
