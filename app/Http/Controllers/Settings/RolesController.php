@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateRolePermissionsRequest;
+use App\Models\Hotel;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Str;
@@ -27,7 +28,7 @@ class RolesController extends Controller
             ]);
 
         $users = User::query()
-            ->with('roles')
+            ->with(['roles', 'hotels:id,name'])
             ->orderBy('name')
             ->get()
             ->map(fn ($user) => [
@@ -36,7 +37,19 @@ class RolesController extends Controller
                 'email' => $user->email,
                 'role' => $user->roles->first()?->name,
                 'is_owner' => $user->hasRole('owner'),
+                'active_hotel_id' => $user->active_hotel_id,
+                'hotels' => $user->hotels->map(fn ($hotel) => [
+                    'id' => $hotel->id,
+                    'name' => $hotel->name,
+                ])->values(),
             ]);
+
+        $tenantId = tenant()?->getTenantKey() ?? auth()->user()?->tenant_id;
+
+        $hotels = Hotel::query()
+            ->when($tenantId, fn ($query) => $query->where('tenant_id', $tenantId))
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         $permissions = Permission::query()
             ->orderBy('name')
@@ -62,6 +75,7 @@ class RolesController extends Controller
         return Inertia::render('settings/Roles', [
             'roles' => $roles,
             'users' => $users,
+            'hotels' => $hotels,
             'permissionGroups' => $permissions,
         ]);
     }

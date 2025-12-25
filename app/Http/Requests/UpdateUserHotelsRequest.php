@@ -5,14 +5,14 @@ namespace App\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class UpdateUserRoleRequest extends FormRequest
+class UpdateUserHotelsRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
-        return $this->user()?->hasAnyRole(['owner', 'manager', 'superadmin']) ?? false;
+        return true;
     }
 
     /**
@@ -25,7 +25,6 @@ class UpdateUserRoleRequest extends FormRequest
         $tenantId = $this->user()?->tenant_id;
 
         return [
-            'role' => ['required', 'string', 'exists:roles,name'],
             'hotel_ids' => ['array'],
             'hotel_ids.*' => [
                 'integer',
