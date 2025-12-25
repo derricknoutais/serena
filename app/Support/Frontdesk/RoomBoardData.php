@@ -6,6 +6,7 @@ namespace App\Support\Frontdesk;
 
 use App\Models\Guest;
 use App\Models\MaintenanceTicket;
+use App\Models\Offer;
 use App\Models\OfferRoomTypePrice;
 use App\Models\Reservation;
 use App\Models\Room;
@@ -54,8 +55,11 @@ class RoomBoardData
         $reservations = Reservation::query()
             ->forTenant($tenantId)
             ->forHotel($hotelId)
-            ->whereDate('check_in_date', '<=', $dateString)
-            ->whereDate('check_out_date', '>=', $dateString)
+            ->where(function ($query) use ($dateString): void {
+                $query->whereDate('check_in_date', '<=', $dateString)
+                    ->whereDate('check_out_date', '>=', $dateString)
+                    ->orWhere('status', Reservation::STATUS_IN_HOUSE);
+            })
             ->with('guest')
             ->get()
             ->groupBy('room_id');
@@ -89,6 +93,9 @@ class RoomBoardData
             } elseif ($room->status === Room::STATUS_OCCUPIED) {
                 $uiStatus = 'occupied';
                 $isOccupied = true;
+                if ($inHouseReservation !== null) {
+                    $currentReservation = $inHouseReservation;
+                }
             } elseif ($room->status === 'inactive') {
                 $uiStatus = 'inactive';
             } elseif ($inHouseReservation !== null) {
@@ -106,10 +113,19 @@ class RoomBoardData
             $currentReservationSummary = null;
 
             if ($currentReservation instanceof Reservation) {
+                $checkOutDate = $currentReservation->check_out_date
+                    ? Carbon::parse($currentReservation->check_out_date)->toDateString()
+                    : null;
+                $isOverstay = $currentReservation->status === Reservation::STATUS_IN_HOUSE
+                    && $checkOutDate !== null
+                    && $checkOutDate < $dateString;
+
                 $currentReservationSummary = [
                     'id' => $currentReservation->id,
                     'code' => $currentReservation->code,
                     'status' => $currentReservation->status,
+                    'offer_id' => $currentReservation->offer_id,
+                    'offer_name' => $currentReservation->offer_name,
                     'guest_name' => $currentReservation->guest?->name,
                     'check_in_date' => optional($currentReservation->check_in_date)->toDateString(),
                     'check_out_date' => optional($currentReservation->check_out_date)->toDateString(),
@@ -117,6 +133,7 @@ class RoomBoardData
                     'offer_kind' => $currentReservation->offer?->kind ?? $currentReservation->offer_kind ?? 'night',
                     'room_type_id' => $currentReservation->room_type_id,
                     'room_id' => $currentReservation->room_id,
+                    'is_overstay' => $isOverstay,
                 ];
             }
 
@@ -228,6 +245,17 @@ class RoomBoardData
                 ];
             });
 
+        $offers = Offer::query()
+            ->where('tenant_id', $tenantId)
+            ->where('hotel_id', $hotelId)
+            ->orderBy('name')
+            ->get(['id', 'name', 'kind']);
+
+        $offerRoomTypePrices = OfferRoomTypePrice::query()
+            ->where('tenant_id', $tenantId)
+            ->where('hotel_id', $hotelId)
+            ->get(['room_type_id', 'offer_id', 'price', 'currency']);
+
         return [
             'date' => $dateString,
             'roomsByFloor' => $roomsByFloor,
@@ -236,6 +264,8 @@ class RoomBoardData
             'walkInDefaultDates' => $walkInDefaultDates,
             'walkInOffers' => $walkInOffers,
             'walkInSource' => $walkInSource,
+            'offers' => $offers,
+            'offerRoomTypePrices' => $offerRoomTypePrices,
             'canManageHousekeeping' => $canManageHousekeeping,
             'maintenancePermissions' => [
                 'canReport' => $user->can('maintenance_tickets.create'),

@@ -2,7 +2,7 @@
 import Card from '@/components/Card.vue';
 import InputError from '@/components/InputError.vue';
 import PrimaryButton from '@/components/PrimaryButton.vue';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
 import { type BreadcrumbItem } from '@/types';
@@ -10,7 +10,16 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 const props = defineProps<{
     roles: { id: number; name: string; permissions: string[] }[];
-    users: { id: number; name: string; email: string; role: string | null; is_owner: boolean }[];
+    users: {
+        id: number;
+        name: string;
+        email: string;
+        role: string | null;
+        is_owner: boolean;
+        active_hotel_id: number | null;
+        hotels: { id: number; name: string }[];
+    }[];
+    hotels: { id: number; name: string }[];
     permissionGroups: { group: string; items: { name: string; label: string }[] }[];
 }>();
 
@@ -24,24 +33,39 @@ const breadcrumbItems: BreadcrumbItem[] = [
 const form = useForm({
     role: '',
     permissions: [] as string[],
+    hotel_ids: [] as number[],
 });
-const selectedRoles = reactive<Record<number, string>>({});
+const selectedRoles = reactive<Record<number, { id: number; name: string; permissions: string[] } | null>>({});
+const selectedHotels = reactive<Record<number, { id: number; name: string }[]>>({});
 const lastSubmittedUserId = ref<number | null>(null);
 const loadingUserId = ref<number | null>(null);
 const selectedRoleId = ref<number | null>(null);
+const page = usePage();
 
 const selectedRole = computed(() => (selectedRoleId.value ? rolesById.value[selectedRoleId.value] : null));
+const orderedUsers = computed(() => {
+    const currentUserId = page.props.auth?.user?.id;
+    if (!currentUserId) {
+        return props.users;
+    }
 
-const syncSelectedRoles = () => {
+    const currentUser = props.users.find((user) => user.id === currentUserId);
+    const remainingUsers = props.users.filter((user) => user.id !== currentUserId);
+
+    return currentUser ? [currentUser, ...remainingUsers] : props.users;
+});
+
+const syncSelectedInputs = () => {
     props.users.forEach((user) => {
-        selectedRoles[user.id] = user.role ?? '';
+        selectedRoles[user.id] = props.roles.find((role) => role.name === user.role) ?? null;
+        selectedHotels[user.id] = user.hotels.map((hotel) => ({ ...hotel }));
     });
 };
 
-onMounted(syncSelectedRoles);
+onMounted(syncSelectedInputs);
 watch(
     () => props.users,
-    () => syncSelectedRoles(),
+    () => syncSelectedInputs(),
     { deep: true },
 );
 
@@ -75,7 +99,8 @@ const groupNames = computed(() =>
 );
 
 const submitRole = (userId: number) => {
-    form.role = selectedRoles[userId] ?? '';
+    form.role = selectedRoles[userId]?.name ?? '';
+    form.hotel_ids = (selectedHotels[userId] ?? []).map((hotel) => hotel.id);
     lastSubmittedUserId.value = userId;
 
     form.patch(`/users/${userId}/role`, {
@@ -130,7 +155,7 @@ const toggleGroup = (groupKey: string) => {
                     <div class="grid gap-6 pt-4 md:grid-cols-2">
                         <div class="space-y-3">
                             <div
-                                v-for="user in users"
+                                v-for="user in orderedUsers"
                                 :key="user.id"
                                 class="flex flex-col gap-3 rounded-xl border border-serena-border/50 bg-serena-card p-4 shadow-sm"
                             >
@@ -145,30 +170,61 @@ const toggleGroup = (groupKey: string) => {
                                     </div>
                                 </div>
                                 <div class="flex flex-wrap items-center gap-3">
-                                    <select
+                                    <Multiselect
                                         v-model="selectedRoles[user.id]"
+                                        :options="roles"
+                                        label="name"
+                                        track-by="name"
+                                        placeholder="Choisir un rôle"
+                                        :allow-empty="false"
                                         :disabled="user.is_owner || loadingUserId === user.id"
-                                        class="w-44 rounded-lg border border-serena-border bg-white px-3 py-2 text-sm text-serena-text-main transition focus:border-serena-primary focus:ring-2 focus:ring-serena-primary-soft disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                        <option disabled value="">Choisir un rôle</option>
-                                        <option
-                                            v-for="role in roles"
-                                            :key="role.name"
-                                            :value="role.name"
-                                            :disabled="role.name === 'owner'"
-                                        >
-                                            {{ role.name }}
-                                        </option>
-                                    </select>
-                                    <PrimaryButton
-                                        class="px-3 py-1.5 text-xs"
-                                        :disabled="user.is_owner || loadingUserId === user.id || !selectedRoles[user.id]"
-                                        @click="submitRole(user.id)"
-                                    >
-                                        Mettre à jour
-                                    </PrimaryButton>
+                                        class="w-52"
+                                    />
                                 </div>
                                 <InputError v-if="lastSubmittedUserId === user.id" :message="form.errors.role" />
+
+                                <div class="space-y-2">
+                                    <p class="text-xs font-medium uppercase text-serena-text-muted">Hôtels</p>
+                                    <Multiselect
+                                        v-model="selectedHotels[user.id]"
+                                        :options="hotels"
+                                        label="name"
+                                        track-by="id"
+                                        placeholder="Sélectionner les hôtels"
+                                        :multiple="true"
+                                        :close-on-select="false"
+                                        :clear-on-select="false"
+                                        :preserve-search="true"
+                                        :disabled="user.is_owner || loadingUserId === user.id"
+                                        class="mt-1"
+                                    >
+                                        <template #option="{ option }">
+                                            <div class="flex items-center gap-2">
+                                                <input
+                                                    type="checkbox"
+                                                    class="h-4 w-4 rounded border-serena-border text-serena-primary"
+                                                    :checked="selectedHotels[user.id]?.some((hotel) => hotel.id === option.id)"
+                                                    tabindex="-1"
+                                                    aria-hidden="true"
+                                                />
+                                                <span>{{ option.name }}</span>
+                                            </div>
+                                        </template>
+                                    </Multiselect>
+                                    <InputError
+                                        v-if="lastSubmittedUserId === user.id"
+                                        :message="form.errors.hotel_ids"
+                                    />
+                                </div>
+
+                                <PrimaryButton
+                                    class="mt-2 w-full px-3 py-2 text-xs"
+                                    :disabled="user.is_owner || loadingUserId === user.id || !selectedRoles[user.id]"
+                                    @click="submitRole(user.id)"
+                                >
+                                    Mettre à jour
+                                </PrimaryButton>
+
                             </div>
                         </div>
                         <div class="space-y-4">

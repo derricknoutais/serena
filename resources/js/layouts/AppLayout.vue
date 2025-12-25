@@ -48,25 +48,6 @@ export default defineComponent({
             default: null,
         },
     },
-    computed: {
-        resolvedTitle(): string {
-            if (this.title) {
-                return this.title;
-            }
-
-            const breadcrumbTitle = this.breadcrumbs[0]?.title ?? null;
-            if (breadcrumbTitle) {
-                return breadcrumbTitle;
-            }
-
-            const component = (this as any)?.$page?.component ?? '';
-            if (component) {
-                return this.formatComponentTitle(component);
-            }
-
-            return 'Serena';
-        },
-    },
     methods: {
         frontdeskDashboard,
         formatComponentTitle(component: string): string {
@@ -163,6 +144,23 @@ export default defineComponent({
         }
     },
     computed: {
+        resolvedTitle(): string {
+            if (this.title) {
+                return this.title;
+            }
+
+            const breadcrumbTitle = this.breadcrumbs[0]?.title ?? null;
+            if (breadcrumbTitle) {
+                return breadcrumbTitle;
+            }
+
+            const component = (this as any)?.$page?.component ?? '';
+            if (component) {
+                return this.formatComponentTitle(component);
+            }
+
+            return 'Serena';
+        },
         maintenanceLinkVisible(): boolean {
             const permissions = this.$page?.props?.auth?.can ?? {};
 

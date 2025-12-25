@@ -97,6 +97,12 @@
                                     {{ hkBadge(room).label }}
                                 </span>
                                 <span
+                                    v-if="room.current_reservation?.is_overstay"
+                                    class="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 font-medium text-amber-700"
+                                >
+                                    Séjour dépassé
+                                </span>
+                                <span
                                     v-if="room.pending_sync"
                                     class="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 font-semibold text-amber-700"
                                 >
@@ -225,6 +231,12 @@
                                     {{ selectedRoom.current_reservation.status }}
                                 </span>
                             </div>
+                            <div
+                                v-if="selectedRoom.current_reservation.is_overstay"
+                                class="mb-2 rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
+                            >
+                                Séjour dépassé
+                            </div>
                             <div class="space-y-1">
                                 <div>
                                     <span class="font-semibold text-gray-700">Code :</span>
@@ -244,6 +256,13 @@
                                     </span>
                                 </div>
                             </div>
+                            <button
+                                type="button"
+                                class="mt-3 w-full rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+                                @click="viewCurrentReservation(selectedRoom)"
+                            >
+                                Voir la réservation
+                            </button>
                         </div>
 
                         <div
@@ -263,14 +282,6 @@
                                     Nouvelle réservation / Check-in rapide
                                 </button>
 
-                                <button
-                                    v-if="selectedRoom.current_reservation"
-                                    type="button"
-                                    class="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
-                                    @click="viewCurrentReservation(selectedRoom)"
-                                >
-                                    Voir la réservation
-                                </button>
                                 <button
                                     v-if="selectedRoom && selectedRoom.current_reservation"
                                     type="button"
@@ -782,6 +793,153 @@
     </div>
 
     <div
+        v-if="showReservationModal && selectedRoom && selectedRoom.current_reservation"
+        class="fixed inset-0 z-40 flex items-start justify-center bg-black/40 px-4 py-10 sm:items-center"
+        @click.self="closeReservationModal"
+    >
+        <div class="w-full max-w-xl rounded-xl bg-white p-6 shadow-xl">
+            <div class="mb-4 flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900">
+                        Réservation {{ selectedRoom.current_reservation.code }}
+                    </h3>
+                    <p class="text-xs text-gray-500">
+                        Chambre {{ selectedRoom.number }} · {{ selectedRoom.room_type_name || 'Type inconnu' }}
+                    </p>
+                </div>
+                <button type="button" class="text-sm text-gray-500 hover:text-gray-700" @click="closeReservationModal">
+                    Fermer
+                </button>
+            </div>
+
+            <div class="space-y-3 text-sm text-gray-700">
+                <div class="flex flex-wrap items-center gap-2">
+                    <span
+                        class="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold"
+                        :class="statusClass(selectedRoom.current_reservation.status)"
+                    >
+                        {{ statusLabel(selectedRoom.current_reservation.status) }}
+                    </span>
+                    <span
+                        v-if="selectedRoom.current_reservation.is_overstay"
+                        class="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
+                    >
+                        Séjour dépassé
+                    </span>
+                </div>
+
+                <div v-if="selectedRoom.current_reservation.guest_name">
+                    <p class="text-xs font-semibold text-gray-500">Client</p>
+                    <p class="text-sm text-gray-800">{{ selectedRoom.current_reservation.guest_name }}</p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <p class="text-xs font-semibold text-gray-500">Arrivée</p>
+                        <p>{{ selectedRoom.current_reservation.check_in_date }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-semibold text-gray-500">Départ</p>
+                        <p>{{ selectedRoom.current_reservation.check_out_date }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 space-y-3">
+                <div class="flex flex-wrap gap-2">
+                    <button
+                        v-if="selectedRoom.current_reservation.status === 'pending'"
+                        type="button"
+                        class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+                        :disabled="statusSubmitting"
+                        @click="changeStatus('confirm')"
+                    >
+                        Confirmer
+                    </button>
+                    <button
+                        v-if="selectedRoom.current_reservation.status === 'pending'"
+                        type="button"
+                        class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
+                        :disabled="statusSubmitting"
+                        @click="changeStatus('cancel')"
+                    >
+                        Annuler
+                    </button>
+                    <button
+                        v-if="selectedRoom.current_reservation.status === 'confirmed'"
+                        type="button"
+                        class="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-green-700 disabled:opacity-60"
+                        :disabled="statusSubmitting"
+                        @click="changeStatus('check_in')"
+                    >
+                        Check-in
+                    </button>
+                    <button
+                        v-if="selectedRoom.current_reservation.status === 'confirmed'"
+                        type="button"
+                        class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
+                        :disabled="statusSubmitting"
+                        @click="changeStatus('cancel')"
+                    >
+                        Annuler
+                    </button>
+                    <button
+                        v-if="selectedRoom.current_reservation.status === 'confirmed'"
+                        type="button"
+                        class="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-amber-700 disabled:opacity-60"
+                        :disabled="statusSubmitting"
+                        @click="changeStatus('no_show')"
+                    >
+                        No-show
+                    </button>
+                    <button
+                        v-if="selectedRoom.current_reservation.status === 'in_house'"
+                        type="button"
+                        class="rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-gray-900 disabled:opacity-60"
+                        :disabled="statusSubmitting"
+                        @click="changeStatus('check_out')"
+                    >
+                        Check-out
+                    </button>
+                </div>
+
+                <button
+                    type="button"
+                    class="w-full rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-70"
+                    :disabled="folioLoading"
+                    @click="openFolioFromRoom('payments')"
+                >
+                    {{ folioLoading ? 'Ouverture du folio...' : 'Encaisser / Folio' }}
+                </button>
+
+                <div class="flex flex-wrap gap-2">
+                    <button
+                        type="button"
+                        class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                        @click="openStayModal('extend')"
+                    >
+                        Prolonger
+                    </button>
+                    <button
+                        type="button"
+                        class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                        @click="openStayModal('shorten')"
+                    >
+                        Raccourcir
+                    </button>
+                    <button
+                        type="button"
+                        class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                        @click="openChangeRoomModal"
+                    >
+                        Changer de chambre
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div
         v-if="showStayModal && selectedRoom && selectedRoom.current_reservation"
         class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4"
     >
@@ -810,6 +968,18 @@
                         <p class="text-xs font-semibold text-gray-500">Départ actuel</p>
                         <p>{{ selectedRoom.current_reservation.check_out_date }}</p>
                     </div>
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-gray-500">Offre</label>
+                    <Multiselect
+                        v-model="stayModalOffer"
+                        :options="stayOfferOptions"
+                        label="label"
+                        track-by="id"
+                        placeholder="Choisir une offre"
+                        :allow-empty="true"
+                        class="mt-1"
+                    />
                 </div>
                 <div>
                     <label class="text-xs font-semibold text-gray-500">Nouveau départ</label>
@@ -1059,6 +1229,14 @@ export default {
             type: String,
             default: 'walk_in',
         },
+        offers: {
+            type: Array,
+            default: () => [],
+        },
+        offerRoomTypePrices: {
+            type: Array,
+            default: () => [],
+        },
         guests: {
             type: Array,
             default: () => [],
@@ -1106,9 +1284,11 @@ export default {
                 { value: 'dirty', label: 'Sale' },
                 { value: 'inspected', label: 'Inspectée' },
             ],
+            showReservationModal: false,
             showStayModal: false,
             stayModalMode: 'extend',
             stayModalDate: '',
+            stayModalOffer: null,
             stayModalSubmitting: false,
             showChangeRoomModal: false,
             changeRoomSelection: null,
@@ -1204,17 +1384,57 @@ export default {
             }
 
             const reservation = this.selectedRoom.current_reservation;
+            const offerKind = (this.stayModalOffer?.kind ?? reservation.offer_kind) || 'night';
+            const unitPrice = this.stayModalOfferPrice?.price ?? Number(reservation.unit_price ?? 0);
             const nights = this.calculateStayUnits(
-                reservation.offer_kind || 'night',
+                offerKind,
                 reservation.check_in_date,
                 this.stayModalDate,
             );
-            const unitPrice = Number(reservation.unit_price || 0);
 
             return {
                 nights,
                 total: nights * unitPrice,
             };
+        },
+        stayOfferOptions() {
+            const roomTypeId = this.selectedRoom?.current_reservation?.room_type_id;
+            if (!roomTypeId) {
+                return [];
+            }
+
+            return this.offerRoomTypePrices
+                .filter((price) => price.room_type_id === roomTypeId)
+                .map((price) => {
+                    const offer = this.offers.find((item) => item.id === price.offer_id);
+                    if (!offer) {
+                        return null;
+                    }
+
+                    return {
+                        id: offer.id,
+                        name: offer.name,
+                        kind: offer.kind,
+                        price: price.price,
+                        currency: price.currency,
+                        label: `${offer.name} · ${this.formatAmount(price.price)}`,
+                    };
+                })
+                .filter(Boolean);
+        },
+        stayModalOfferPrice() {
+            if (!this.stayModalOffer?.id) {
+                return null;
+            }
+
+            const roomTypeId = this.selectedRoom?.current_reservation?.room_type_id;
+            if (!roomTypeId) {
+                return null;
+            }
+
+            return this.offerRoomTypePrices.find(
+                (price) => price.room_type_id === roomTypeId && price.offer_id === this.stayModalOffer.id,
+            ) ?? null;
         },
         permissionFlags() {
             return this.$page?.props?.auth?.can ?? {};
@@ -1232,13 +1452,13 @@ export default {
             return this.canMarkClean || this.canMarkDirty || this.canMarkInspected;
         },
         canReportMaintenance() {
-            return (this.permissionFlags.maintenance_tickets_create ?? this.maintenancePermissions?.canReport) || false;
+            return this.permissionFlags.maintenance_tickets_create ?? this.maintenancePermissions?.canReport ?? false;
         },
         canHandleMaintenance() {
-            return (this.permissionFlags.maintenance_tickets_close ?? this.maintenancePermissions?.canHandle) || false;
+            return this.permissionFlags.maintenance_tickets_close ?? this.maintenancePermissions?.canHandle ?? false;
         },
         canProgressMaintenance() {
-            return (this.permissionFlags.maintenance_tickets_update ?? this.maintenancePermissions?.canProgress) || false;
+            return this.permissionFlags.maintenance_tickets_update ?? this.maintenancePermissions?.canProgress ?? false;
         },
         changeRoomOptions() {
             if (!this.selectedRoom?.current_reservation) {
@@ -1470,7 +1690,7 @@ export default {
                         ...g,
                         full_name:
                             g.full_name
-                            || `${g.last_name ?? ''} ${g.first_name ?? ''}`.trim(),
+                            || `${(g.last_name ?? '')} ${(g.first_name ?? '')}`.trim(),
                     }));
 
                     if (this.selectedWalkInGuest && !this.localGuests.find((g) => g.id === this.selectedWalkInGuest.id)) {
@@ -1576,7 +1796,7 @@ export default {
                     ...newGuest,
                     full_name:
                         newGuest.full_name
-                        || `${newGuest.last_name ?? ''} ${newGuest.first_name ?? ''}`.trim(),
+                        || `${(newGuest.last_name ?? '')} ${(newGuest.first_name ?? '')}`.trim(),
                 };
 
                 this.localGuests.push(guestWithName);
@@ -1636,8 +1856,13 @@ export default {
                 return;
             }
 
+            this.showReservationModal = false;
             this.stayModalMode = mode;
             const currentDeparture = this.selectedRoom.current_reservation.check_out_date;
+            const currentOfferId = this.selectedRoom.current_reservation.offer_id;
+            this.stayModalOffer = this.stayOfferOptions.find((offer) => offer.id === currentOfferId)
+                ?? this.stayOfferOptions[0]
+                ?? null;
 
             if (mode === 'extend') {
                 this.stayModalDate = this.addDays(currentDeparture, 1);
@@ -1649,7 +1874,11 @@ export default {
         },
         closeStayModal() {
             this.showStayModal = false;
+            this.stayModalOffer = null;
             this.stayModalSubmitting = false;
+        },
+        closeReservationModal() {
+            this.showReservationModal = false;
         },
         async submitStayModal() {
             if (!this.selectedRoom?.current_reservation || !this.stayModalDate) {
@@ -1663,6 +1892,7 @@ export default {
                     `/reservations/${this.selectedRoom.current_reservation.id}/stay/dates`,
                     {
                         check_out_date: this.stayModalDate,
+                        offer_id: this.stayModalOffer?.id ?? null,
                     },
                 );
 
@@ -1695,6 +1925,7 @@ export default {
             }
 
             this.changeRoomSelection = null;
+            this.showReservationModal = false;
             this.showChangeRoomModal = true;
         },
         closeChangeRoomModal() {
@@ -1964,6 +2195,7 @@ export default {
                 return;
             }
 
+            this.showReservationModal = false;
             this.folioLoading = true;
             this.folioInitialTab = tab || 'charges';
 
@@ -2038,7 +2270,8 @@ export default {
                 return;
             }
 
-            router.get(`/reservations/${room.current_reservation.id}`);
+            this.selectedRoom = this.findRoomById(room.id) ?? room;
+            this.showReservationModal = true;
         },
         async onOfferChange() {
             if (!this.form) {
@@ -2088,7 +2321,14 @@ export default {
                     this.reloadRoomBoard();
                 },
                 onError: (errors) => {
-                    this.handleAvailabilityErrors(errors);
+                    const handled = this.handleAvailabilityErrors(errors);
+                    if (!handled) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Erreur',
+                            text: "Impossible d'enregistrer la réservation walk-in.",
+                        });
+                    }
                 },
             });
         },
@@ -2136,7 +2376,8 @@ export default {
             }
 
             try {
-                const response = await window.axios.patch(
+                const http = window.axios ?? axios;
+                const response = await http.patch(
                     `/frontdesk/rooms/${roomId}/hk-status`,
                     {
                         hk_status: hkStatus,
@@ -2180,7 +2421,7 @@ export default {
         },
         handleAvailabilityErrors(errors) {
             if (!errors) {
-                return;
+                return false;
             }
 
             const message = errors.room_id ?? errors.room_type_id ?? null;
@@ -2189,7 +2430,7 @@ export default {
                 const fallbackMessage = this.extractFirstError(errors, null);
 
                 if (!fallbackMessage) {
-                    return;
+                    return false;
                 }
 
                 Swal.fire({
@@ -2198,7 +2439,7 @@ export default {
                     text: fallbackMessage,
                 });
 
-                return;
+                return true;
             }
 
             const text = Array.isArray(message) ? message[0] : message;
@@ -2208,6 +2449,8 @@ export default {
                 title: 'Indisponible',
                 text,
             });
+
+            return true;
         },
         async loadRoomActivity() {
             if (!this.selectedRoom?.id) {
@@ -2265,21 +2508,14 @@ export default {
             ) {
                 return (
                     base +
-                    ' bg-[#E5E7EB] border-[#6B7280] text-[#374151] opacity-80'
+                    ' bg-black border-black text-white'
                 );
             }
 
             if (room.ui_status === 'occupied') {
                 return (
                     base +
-                    ' bg-sky-50 border-sky-200 text-sky-800'
-                );
-            }
-
-            if (room.status === 'out_of_order' || room.ui_status === 'out_of_order') {
-                return (
-                    base +
-                    ' bg-slate-100 border-slate-300 text-slate-700'
+                    ' bg-red-50 border-red-200 text-red-800'
                 );
             }
 
@@ -2287,6 +2523,13 @@ export default {
                 return (
                     base +
                     ' bg-neutral-100 border-neutral-300 text-neutral-500'
+                );
+            }
+
+            if (room.hk_status === 'dirty') {
+                return (
+                    base +
+                    ' bg-gray-100 border-gray-300 text-gray-700'
                 );
             }
 
@@ -2306,14 +2549,14 @@ export default {
             if (room.ui_status === 'occupied') {
                 return {
                     label: 'Occupée',
-                    classes: 'bg-sky-100 text-sky-700 border-sky-300',
+                    classes: 'bg-red-100 text-red-700 border-red-300',
                 };
             }
 
             if (room.status === 'out_of_order' || room.ui_status === 'out_of_order') {
                 return {
                     label: 'Hors service',
-                    classes: 'bg-slate-200 text-slate-700 border-slate-300',
+                    classes: 'bg-black text-white border-black',
                 };
             }
 
@@ -2321,6 +2564,13 @@ export default {
                 return {
                     label: 'Inactive',
                     classes: 'bg-neutral-100 text-neutral-500 border-neutral-300',
+                };
+            }
+
+            if (room.hk_status === 'dirty') {
+                return {
+                    label: 'Disponible',
+                    classes: 'bg-gray-200 text-gray-700 border-gray-300',
                 };
             }
 
@@ -2371,6 +2621,42 @@ export default {
                         icon: CheckCircle,
                         iconClass: 'text-emerald-600',
                     };
+            }
+        },
+        statusLabel(status) {
+            switch (status) {
+                case 'pending':
+                    return 'En attente';
+                case 'confirmed':
+                    return 'Confirmée';
+                case 'in_house':
+                    return 'En séjour';
+                case 'checked_out':
+                    return 'Terminée';
+                case 'cancelled':
+                    return 'Annulée';
+                case 'no_show':
+                    return 'No-show';
+                default:
+                    return status ?? '';
+            }
+        },
+        statusClass(status) {
+            switch (status) {
+                case 'pending':
+                    return 'bg-amber-100 text-amber-700';
+                case 'confirmed':
+                    return 'bg-blue-100 text-blue-700';
+                case 'in_house':
+                    return 'bg-emerald-100 text-emerald-700';
+                case 'checked_out':
+                    return 'bg-slate-100 text-slate-700';
+                case 'cancelled':
+                    return 'bg-rose-100 text-rose-700';
+                case 'no_show':
+                    return 'bg-orange-100 text-orange-700';
+                default:
+                    return 'bg-slate-100 text-slate-700';
             }
         },
         maintenanceSeverityLabel(severity) {

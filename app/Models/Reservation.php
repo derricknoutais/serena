@@ -99,6 +99,26 @@ class Reservation extends Model
         ];
     }
 
+    public static function generateCode(string $tenantId, Carbon $date): string
+    {
+        $prefix = sprintf('RSV-%s', $date->format('ym'));
+
+        $lastCode = self::query()
+            ->where('tenant_id', $tenantId)
+            ->where('code', 'like', $prefix.'%')
+            ->orderBy('code', 'desc')
+            ->lockForUpdate()
+            ->value('code');
+
+        $lastSequence = 0;
+        if (is_string($lastCode)) {
+            $suffix = substr($lastCode, strlen($prefix));
+            $lastSequence = (int) ltrim($suffix, '0');
+        }
+
+        return sprintf('%s%03d', $prefix, $lastSequence + 1);
+    }
+
     public function canTransition(string $to): bool
     {
         return app(ReservationStateMachine::class)->canTransition($this->status, $to);

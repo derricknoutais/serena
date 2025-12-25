@@ -1,20 +1,8 @@
 <template>
     <AppLayout title="Frontdesk">
         <div class="space-y-6">
-            <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <div class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Arrivées aujourd’hui</p>
-                    <p class="mt-2 text-2xl font-bold text-gray-800">{{ quickStats.arrivalsToday }}</p>
-                </div>
-                <div class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Départs aujourd’hui</p>
-                    <p class="mt-2 text-2xl font-bold text-gray-800">{{ quickStats.departuresToday }}</p>
-                </div>
-                <div class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">En séjour</p>
-                    <p class="mt-2 text-2xl font-bold text-gray-800">{{ quickStats.inHouse }}</p>
-                </div>
-                <div class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm flex items-center justify-between">
+            <div class="grid gap-4">
+                <div class="flex flex-col gap-3 rounded-xl border border-gray-100 bg-white p-4 shadow-sm xl:p-3">
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Caisse FrontDesk</p>
                     </div>

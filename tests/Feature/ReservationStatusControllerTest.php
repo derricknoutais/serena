@@ -4,7 +4,9 @@ require_once __DIR__.'/FolioTestHelpers.php';
 
 use App\Models\CashSession;
 use App\Models\Reservation;
+use App\Services\FolioBillingService;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 beforeEach(function (): void {
     config([
@@ -178,4 +180,83 @@ it('requires an open frontdesk cash session when applying a cancellation penalty
     ]);
 
     $response->assertRedirect();
+});
+
+it('blocks check-out when the folio has an outstanding balance', function (): void {
+    [
+        'tenant' => $tenant,
+        'user' => $user,
+        'reservation' => $reservation,
+    ] = setupReservationEnvironment('status-checkout-balance');
+
+    $reservation->update([
+        'status' => Reservation::STATUS_IN_HOUSE,
+        'check_in_date' => now()->toDateString(),
+        'check_out_date' => now()->addDay()->toDateString(),
+    ]);
+
+    $folio = app(FolioBillingService::class)->ensureMainFolioForReservation($reservation);
+    $folio->addCharge([
+        'description' => 'Room balance',
+        'quantity' => 1,
+        'unit_price' => 15000,
+        'tax_amount' => 0,
+        'type' => 'stay',
+    ]);
+
+    $response = $this->actingAs($user)->from(sprintf(
+        'http://%s/reservations',
+        tenantDomain($tenant),
+    ))->patch(sprintf(
+        'http://%s/reservations/%s/status',
+        tenantDomain($tenant),
+        $reservation->id,
+    ), [
+        'action' => 'check_out',
+    ]);
+
+    $response->assertSessionHasErrors('check_out');
+    expect($reservation->fresh()->status)->toBe(Reservation::STATUS_IN_HOUSE);
+});
+
+it('allows managers to check out even when the folio has a balance', function (): void {
+    [
+        'tenant' => $tenant,
+        'user' => $user,
+        'reservation' => $reservation,
+    ] = setupReservationEnvironment('status-checkout-manager');
+
+    $guard = config('auth.defaults.guard', 'web');
+    Role::query()->firstOrCreate([
+        'name' => 'manager',
+        'guard_name' => $guard,
+    ]);
+
+    $user->assignRole('manager');
+
+    $reservation->update([
+        'status' => Reservation::STATUS_IN_HOUSE,
+        'check_in_date' => now()->toDateString(),
+        'check_out_date' => now()->addDay()->toDateString(),
+    ]);
+
+    $folio = app(FolioBillingService::class)->ensureMainFolioForReservation($reservation);
+    $folio->addCharge([
+        'description' => 'Room balance',
+        'quantity' => 1,
+        'unit_price' => 15000,
+        'tax_amount' => 0,
+        'type' => 'stay',
+    ]);
+
+    $response = $this->actingAs($user)->patch(sprintf(
+        'http://%s/reservations/%s/status',
+        tenantDomain($tenant),
+        $reservation->id,
+    ), [
+        'action' => 'check_out',
+    ]);
+
+    $response->assertRedirect();
+    expect($reservation->fresh()->status)->toBe(Reservation::STATUS_CHECKED_OUT);
 });

@@ -174,6 +174,13 @@ class ReservationStateMachine
 
         $reservation->loadMissing(['room', 'guest', 'mainFolio']);
 
+        $mainFolio = $reservation->mainFolio;
+        if ($mainFolio && $mainFolio->balance > 0.01 && ! $canOverrideFees) {
+            throw ValidationException::withMessages([
+                'check_out' => 'Le folio doit être soldé avant le check-out.',
+            ]);
+        }
+
         $actualCheckOutAt = $actualAt ?? now();
         $actualCheckIn = $reservation->actual_check_in_at
             ?? ($reservation->check_in_date ? Carbon::parse($reservation->check_in_date) : $actualCheckOutAt);

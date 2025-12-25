@@ -33,6 +33,7 @@ use App\Http\Controllers\NightAuditController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\ReservationFolioController;
 use App\Http\Controllers\ReservationStayController;
+use App\Http\Controllers\Users\UpdateUserHotelsController;
 use App\Http\Controllers\Users\UpdateUserRoleController;
 use App\Models\Tenant;
 use Illuminate\Http\Request;
@@ -148,6 +149,10 @@ Route::middleware([
         Route::patch('/users/{user}/role', UpdateUserRoleController::class)
             ->middleware(['auth', 'verified', 'role:owner|manager|superadmin'])
             ->name('users.role.update');
+
+        Route::patch('/users/{user}/hotels', UpdateUserHotelsController::class)
+            ->middleware(['auth', 'verified', 'role:owner|manager|superadmin'])
+            ->name('users.hotels.update');
 
         Route::middleware('role:owner|manager|receptionist|accountant|superadmin')->group(function () {
             Route::get('/pos', [PosController::class, 'index'])
