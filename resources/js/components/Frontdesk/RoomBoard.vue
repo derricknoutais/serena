@@ -703,6 +703,7 @@
                                     id="check_in_at"
                                     v-model="form.check_in_at"
                                     type="datetime-local"
+                                    @input="onWalkInArrivalChange"
                                     class="w-full rounded-lg border border-serena-border bg-white px-3 py-2 text-sm text-serena-text-main shadow-sm focus:border-serena-primary focus:outline-none focus:ring-2 focus:ring-serena-primary-soft"
                                 />
                             </div>
@@ -2368,6 +2369,35 @@ export default {
                 this.form.check_in_at = this.toDateTimeLocal(start);
                 this.form.check_out_at = this.toDateTimeLocal(end);
             }
+        },
+        async onWalkInArrivalChange() {
+            if (!this.form) {
+                return;
+            }
+
+            const selected = this.walkInOffers.find(
+                (offer) => offer.id === this.form.offer_id,
+            );
+
+            if (!selected) {
+                return;
+            }
+
+            const start = this.form.check_in_at
+                ? new Date(this.form.check_in_at)
+                : null;
+
+            if (!start || Number.isNaN(start.getTime())) {
+                return;
+            }
+
+            let end = await this.computeWalkInEndDate(start, selected);
+
+            if (!(end instanceof Date) || Number.isNaN(end.getTime())) {
+                end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+            }
+
+            this.form.check_out_at = this.toDateTimeLocal(end);
         },
         submitWalkIn() {
             if (!this.form) {
