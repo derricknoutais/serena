@@ -149,6 +149,12 @@ class ReservationStatusController extends Controller
                 'reason' => $decision['late_reason'],
                 'policy' => $decision['late_policy'],
                 'blocked' => $decision['late_blocked'],
+                'fee_type' => $decision['late_fee_type'],
+                'fee_value' => $decision['late_fee_value'],
+                'minutes' => $decision['late_minutes'],
+                'grace_minutes' => $decision['late_grace_minutes'],
+                'expected_checkout_at' => $decision['late_expected_at'],
+                'actual_checkout_at' => $data['action'] === 'check_out' ? $actual->toDateTimeString() : null,
             ],
             'currency' => $decision['currency'],
         ]);

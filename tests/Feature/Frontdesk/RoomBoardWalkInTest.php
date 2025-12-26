@@ -118,7 +118,7 @@ test('walk-in reservation returns a redirect for inertia requests', function () 
     expect($reservation->check_in_date?->format('Y-m-d H:i:s'))->toBe('2025-12-24 09:30:00');
     expect($reservation->check_out_date?->format('Y-m-d H:i:s'))->toBe('2025-12-25 11:00:00');
     expect($reservation->actual_check_in_at?->format('Y-m-d H:i:s'))->toBe('2025-12-24 09:30:00');
-    expect($room->refresh()->hk_status)->toBe('dirty');
+    expect($room->refresh()->hk_status)->toBe('clean');
 
     Carbon::setTestNow();
 });

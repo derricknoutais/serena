@@ -27,6 +27,11 @@ class StayAdjustmentService
      *     late_reason: ?string,
      *     late_policy: string,
      *     late_blocked: bool,
+     *     late_fee_type: string|null,
+     *     late_fee_value: float,
+     *     late_minutes: int,
+     *     late_grace_minutes: int,
+     *     late_expected_at: string|null,
      *     currency: string|null
      * }
      */
@@ -41,6 +46,8 @@ class StayAdjustmentService
         $earlyConfig = $settings['early_checkin'] ?? [];
         $lateConfig = $settings['late_checkout'] ?? [];
 
+        $offerLateConfig = $reservation->offer?->time_config['late_checkout'] ?? null;
+
         $decision = [
             'is_early_checkin' => false,
             'early_fee_amount' => 0.0,
@@ -52,6 +59,11 @@ class StayAdjustmentService
             'late_reason' => null,
             'late_policy' => $lateConfig['policy'] ?? 'free',
             'late_blocked' => false,
+            'late_fee_type' => $lateConfig['fee_type'] ?? 'flat',
+            'late_fee_value' => (float) ($lateConfig['fee_value'] ?? 0),
+            'late_minutes' => 0,
+            'late_grace_minutes' => 0,
+            'late_expected_at' => null,
             'currency' => $reservation->currency,
         ];
 
@@ -86,14 +98,52 @@ class StayAdjustmentService
             }
         }
 
-        if ($actualCheckOutAt && $checkOutTime && $actualCheckOutAt->gt($checkOutTime)) {
+        $lateCheckOutAt = null;
+        $latePolicy = $decision['late_policy'];
+        $lateFeeType = $lateConfig['fee_type'] ?? 'flat';
+        $lateFeeValue = (float) ($lateConfig['fee_value'] ?? 0);
+        $lateMaxTime = $lateConfig['max_time'] ?? null;
+        $lateMinutes = 0;
+
+        $expectedCheckout = $reservation->check_out_date
+            ? Carbon::parse($reservation->check_out_date)
+            : null;
+        if ($expectedCheckout) {
+            $decision['late_expected_at'] = $expectedCheckout->toDateTimeString();
+        }
+
+        $useOfferLateConfig = $actualCheckOutAt
+            && $expectedCheckout
+            && is_array($offerLateConfig)
+            && (($offerLateConfig['policy'] ?? null) !== 'inherit');
+
+        if ($useOfferLateConfig) {
+            $offerPolicy = $offerLateConfig['policy'] ?? 'free';
+            $latePolicy = $offerPolicy;
+            $lateFeeType = $offerLateConfig['fee_type'] ?? $lateFeeType;
+            $lateFeeValue = (float) ($offerLateConfig['fee_value'] ?? $lateFeeValue);
+
+            $graceMinutes = (int) ($offerLateConfig['grace_minutes'] ?? 0);
+            $decision['late_grace_minutes'] = $graceMinutes;
+            $lateCheckOutAt = $expectedCheckout->copy()->addMinutes($graceMinutes);
+            if ($actualCheckOutAt->gt($lateCheckOutAt)) {
+                $decision['is_late_checkout'] = true;
+                $decision['late_reason'] = $graceMinutes > 0
+                    ? sprintf('Départ après la tolérance (%s).', $lateCheckOutAt->format('H:i'))
+                    : sprintf('Départ après l’heure prévue (%s).', $expectedCheckout->format('H:i'));
+                $lateMinutes = (int) $lateCheckOutAt->diffInMinutes($actualCheckOutAt);
+            }
+        }
+
+        if (! $useOfferLateConfig && $actualCheckOutAt && $checkOutTime && $actualCheckOutAt->gt($checkOutTime)) {
             $decision['is_late_checkout'] = true;
             $decision['late_reason'] = sprintf(
                 'Départ après l’heure standard (%s).',
                 $checkOutTime->format('H:i')
             );
+            $lateMinutes = (int) $checkOutTime->diffInMinutes($actualCheckOutAt);
 
-            $maxTime = $lateConfig['max_time'] ?? null;
+            $maxTime = $lateMaxTime;
             if ($maxTime) {
                 $maxTimeParsed = $this->timeOnDate($actualCheckOutAt, $maxTime);
                 if ($maxTimeParsed && $actualCheckOutAt->gt($maxTimeParsed)) {
@@ -103,14 +153,23 @@ class StayAdjustmentService
                     );
                 }
             }
+        }
 
+        if ($decision['is_late_checkout']) {
+            $decision['late_policy'] = $latePolicy ?? $decision['late_policy'];
+            $decision['late_fee_type'] = $lateFeeType;
+            $decision['late_fee_value'] = (float) $lateFeeValue;
+            $decision['late_minutes'] = $lateMinutes;
             $policy = $decision['late_policy'];
             if ($policy === 'forbidden') {
                 $decision['late_blocked'] = true;
             } elseif ($policy === 'paid') {
-                $feeType = $lateConfig['fee_type'] ?? 'flat';
-                $feeValue = (float) ($lateConfig['fee_value'] ?? 0);
-                $decision['late_fee_amount'] = $this->calculateFee($feeType, $feeValue, (float) $reservation->base_amount);
+                $decision['late_fee_amount'] = $this->calculateLateFee(
+                    $lateFeeType,
+                    $lateFeeValue,
+                    (float) $reservation->base_amount,
+                    $lateMinutes,
+                );
             }
         }
 
@@ -197,6 +256,20 @@ class StayAdjustmentService
         }
 
         return round($value, 2);
+    }
+
+    private function calculateLateFee(string $type, float $value, float $baseAmount, int $minutesLate): float
+    {
+        if ($minutesLate <= 0) {
+            return 0.0;
+        }
+
+        return match ($type) {
+            'per_hour' => round((int) ceil($minutesLate / 60) * $value, 2),
+            'per_day' => round((int) ceil($minutesLate / 1440) * $value, 2),
+            'percent' => round($baseAmount * ($value / 100), 2),
+            default => round($value, 2),
+        };
     }
 
     private function timeOnDate(Carbon $dateTime, string $timeString): ?Carbon

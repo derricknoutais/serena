@@ -317,3 +317,137 @@ it('does not block check-out previews with early check-in rules', function (): v
 
     $response->assertOk();
 });
+
+it('uses offer late checkout policy when configured', function (): void {
+    [
+        'tenant' => $tenant,
+        'user' => $user,
+        'reservation' => $reservation,
+        'hotel' => $hotel,
+    ] = setupReservationEnvironment('status-checkout-offer-late');
+
+    $hotel->update([
+        'stay_settings' => [
+            'standard_checkin_time' => '14:00',
+            'standard_checkout_time' => '12:00',
+            'late_checkout' => [
+                'policy' => 'free',
+            ],
+        ],
+    ]);
+
+    $offer = Offer::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Détente 3h',
+        'kind' => 'hourly',
+        'billing_mode' => 'fixed',
+        'time_rule' => 'rolling',
+        'time_config' => [
+            'duration_minutes' => 180,
+            'late_checkout' => [
+                'policy' => 'paid',
+                'grace_minutes' => 15,
+                'fee_type' => 'flat',
+                'fee_value' => 5000,
+            ],
+        ],
+        'is_active' => true,
+    ]);
+
+    $reservation->update([
+        'status' => Reservation::STATUS_IN_HOUSE,
+        'offer_id' => $offer->id,
+        'offer_name' => $offer->name,
+        'offer_kind' => $offer->kind,
+        'check_in_date' => '2025-12-25 14:15:00',
+        'check_out_date' => '2025-12-25 17:15:00',
+        'actual_check_in_at' => '2025-12-25 14:15:00',
+        'base_amount' => 10000,
+    ]);
+
+    $response = $this->actingAs($user)->post(sprintf(
+        'http://%s/reservations/%s/stay-adjustments/preview',
+        tenantDomain($tenant),
+        $reservation->id,
+    ), [
+        'action' => 'check_out',
+        'actual_datetime' => '2025-12-25 17:55:00',
+    ]);
+
+    $response->assertOk();
+    $response->assertJsonPath('late.is_late_checkout', true);
+    $response->assertJsonPath('late.fee', 5000);
+    $response->assertJsonPath('late.policy', 'paid');
+    $response->assertJsonPath('late.fee_type', 'flat');
+    $response->assertJsonPath('late.fee_value', 5000);
+    $response->assertJsonPath('late.minutes', 25);
+    $response->assertJsonPath('late.expected_checkout_at', '2025-12-25 17:15:00');
+    $response->assertJsonPath('late.actual_checkout_at', '2025-12-25 17:55:00');
+});
+
+it('calculates late checkout fee per hour for offer policy', function (): void {
+    [
+        'tenant' => $tenant,
+        'user' => $user,
+        'reservation' => $reservation,
+        'hotel' => $hotel,
+    ] = setupReservationEnvironment('status-checkout-offer-late-hour');
+
+    $hotel->update([
+        'stay_settings' => [
+            'late_checkout' => [
+                'policy' => 'free',
+            ],
+        ],
+    ]);
+
+    $offer = Offer::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Détente 3h',
+        'kind' => 'hourly',
+        'billing_mode' => 'fixed',
+        'time_rule' => 'rolling',
+        'time_config' => [
+            'duration_minutes' => 180,
+            'late_checkout' => [
+                'policy' => 'paid',
+                'grace_minutes' => 15,
+                'fee_type' => 'per_hour',
+                'fee_value' => 1000,
+            ],
+        ],
+        'is_active' => true,
+    ]);
+
+    $reservation->update([
+        'status' => Reservation::STATUS_IN_HOUSE,
+        'offer_id' => $offer->id,
+        'offer_name' => $offer->name,
+        'offer_kind' => $offer->kind,
+        'check_in_date' => '2025-12-25 14:15:00',
+        'check_out_date' => '2025-12-25 17:15:00',
+        'actual_check_in_at' => '2025-12-25 14:15:00',
+        'base_amount' => 10000,
+    ]);
+
+    $response = $this->actingAs($user)->post(sprintf(
+        'http://%s/reservations/%s/stay-adjustments/preview',
+        tenantDomain($tenant),
+        $reservation->id,
+    ), [
+        'action' => 'check_out',
+        'actual_datetime' => '2025-12-25 18:40:00',
+    ]);
+
+    $response->assertOk();
+    $response->assertJsonPath('late.is_late_checkout', true);
+    $response->assertJsonPath('late.fee', 2000);
+    $response->assertJsonPath('late.policy', 'paid');
+    $response->assertJsonPath('late.fee_type', 'per_hour');
+    $response->assertJsonPath('late.fee_value', 1000);
+    $response->assertJsonPath('late.minutes', 70);
+    $response->assertJsonPath('late.expected_checkout_at', '2025-12-25 17:15:00');
+    $response->assertJsonPath('late.actual_checkout_at', '2025-12-25 18:40:00');
+});

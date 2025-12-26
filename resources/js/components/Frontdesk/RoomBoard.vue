@@ -3135,8 +3135,7 @@ export default {
                     if (late.is_late_checkout && (late.fee ?? 0) > 0) {
                         const latePrompt = await Swal.fire({
                             title: 'Départ tardif détecté',
-                            text: late.reason
-                                || `Supplément de ${this.formatFeeAmount(late.fee, currency)}.`,
+                            html: this.buildLateCheckoutHtml(late, currency),
                             icon: 'info',
                             input: this.canOverrideFees ? 'number' : null,
                             inputValue: late.fee ?? 0,
@@ -3187,6 +3186,48 @@ export default {
                 minimumFractionDigits: 0,
                 maximumFractionDigits: 2,
             })} ${cur}`;
+        },
+        buildLateCheckoutHtml(late, currency) {
+            const reason = late?.reason || 'Départ au-delà de l’heure prévue.';
+            const fee = Number(late?.fee ?? 0);
+            const feeType = late?.fee_type || 'flat';
+            const feeValue = Number(late?.fee_value ?? 0);
+            const minutes = Number(late?.minutes ?? 0);
+            const expected = late?.expected_checkout_at ? this.formatDateTime(late.expected_checkout_at) : '';
+            const actual = late?.actual_checkout_at ? this.formatDateTime(late.actual_checkout_at) : '';
+            const graceMinutes = Number(late?.grace_minutes ?? 0);
+            const formattedFee = this.formatFeeAmount(fee, currency);
+            let calculation = '';
+
+            if (fee > 0) {
+                if (feeType === 'per_hour') {
+                    const hours = Math.max(1, Math.ceil(minutes / 60));
+                    calculation = `Calcul : ${hours} h × ${this.formatFeeAmount(feeValue, currency)} = ${formattedFee}`;
+                } else if (feeType === 'per_day') {
+                    const days = Math.max(1, Math.ceil(minutes / 1440));
+                    calculation = `Calcul : ${days} j × ${this.formatFeeAmount(feeValue, currency)} = ${formattedFee}`;
+                } else if (feeType === 'percent') {
+                    calculation = `Calcul : ${feeValue}% = ${formattedFee}`;
+                } else {
+                    calculation = `Montant fixe : ${formattedFee}`;
+                }
+            }
+
+            const toleranceDate = late?.expected_checkout_at && graceMinutes > 0
+                ? new Date(new Date(late.expected_checkout_at).getTime() + graceMinutes * 60000)
+                : null;
+            const detailLines = [
+                expected ? `<div>Heure prévue : ${expected}</div>` : '',
+                toleranceDate
+                    ? `<div>Heure avec tolérance : ${this.formatDateTime(toleranceDate)}</div>`
+                    : '',
+                actual ? `<div>Check-out saisi : ${actual}</div>` : '',
+                minutes > 0 ? `<div>Différence avec tolérance : ${minutes} min</div>` : '',
+            ].filter(Boolean).join('');
+
+            const lines = `${detailLines ? `<div class="mt-1 text-xs text-gray-600">${detailLines}</div>` : ''}${calculation ? `<div class="mt-1 text-xs text-gray-600">${calculation}</div>` : ''}`;
+
+            return `<div class="text-left text-sm"><div>${reason}</div>${lines}</div>`;
         },
         getActionLabel(action) {
             switch (action) {

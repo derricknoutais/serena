@@ -316,6 +316,61 @@
                             </div>
                         </div>
 
+                        <div class="md:col-span-2 mt-4 rounded-lg border border-gray-100 bg-gray-50 p-4">
+                            <h3 class="mb-2 text-sm font-semibold text-gray-800">
+                                Départ tardif (par offre)
+                            </h3>
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Politique</label>
+                                    <select
+                                        v-model="timeConfigDraft.late_checkout.policy"
+                                        class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                    >
+                                        <option value="inherit">Utiliser la politique de l’hôtel</option>
+                                        <option value="free">Toléré (gratuit)</option>
+                                        <option value="paid">Payant</option>
+                                        <option value="forbidden">Interdit</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Tolérance (minutes)</label>
+                                    <input
+                                        v-model.number="timeConfigDraft.late_checkout.grace_minutes"
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                    />
+                                </div>
+                                <div v-if="timeConfigDraft.late_checkout.policy === 'paid'">
+                                    <label class="text-sm font-medium text-gray-700">Type de frais</label>
+                                    <select
+                                        v-model="timeConfigDraft.late_checkout.fee_type"
+                                        class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                    >
+                                        <option value="flat">Montant fixe</option>
+                                        <option value="per_hour">Par heure</option>
+                                        <option value="per_day">Par jour</option>
+                                        <option value="percent">Pourcentage</option>
+                                    </select>
+                                </div>
+                                <div v-if="timeConfigDraft.late_checkout.policy === 'paid'">
+                                    <label class="text-sm font-medium text-gray-700">Valeur des frais</label>
+                                    <input
+                                        v-model.number="timeConfigDraft.late_checkout.fee_value"
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                    />
+                                </div>
+                            </div>
+                            <p class="mt-2 text-xs text-gray-500">
+                                Exemple : tolérance 15 min, puis frais si le client dépasse l’heure prévue.
+                            </p>
+                        </div>
+
                         <Field name="valid_from" v-slot="{ field }">
                             <div>
                                 <label class="text-sm font-medium text-gray-700">Valide à partir du</label>
@@ -554,6 +609,12 @@ export default {
                 checkout: {
                     time: '12:00',
                     max_days_after_checkin: 2,
+                },
+                late_checkout: {
+                    policy: 'inherit',
+                    grace_minutes: 0,
+                    fee_type: 'flat',
+                    fee_value: 0,
                 },
             },
             roomTypePrices: [],
@@ -797,6 +858,12 @@ export default {
                     max_days_after_checkin: 2,
                 },
                 night_cutoff_time: '',
+                late_checkout: {
+                    policy: 'inherit',
+                    grace_minutes: 0,
+                    fee_type: 'flat',
+                    fee_value: 0,
+                },
             };
         },
         addRoomTypePrice() {
@@ -870,17 +937,34 @@ export default {
                 this.timeConfigDraft.checkout.time = cfg.checkout?.time || '12:00';
                 this.timeConfigDraft.checkout.max_days_after_checkin = cfg.checkout?.max_days_after_checkin || 2;
             }
+
+            if (cfg.late_checkout) {
+                this.timeConfigDraft.late_checkout.policy = cfg.late_checkout.policy || 'inherit';
+                this.timeConfigDraft.late_checkout.grace_minutes = Number(cfg.late_checkout.grace_minutes || 0);
+                this.timeConfigDraft.late_checkout.fee_type = cfg.late_checkout.fee_type || 'flat';
+                this.timeConfigDraft.late_checkout.fee_value = Number(cfg.late_checkout.fee_value || 0);
+            }
         },
         buildTimeConfigPayload() {
             if (!this.form.time_rule) {
                 return null;
             }
 
+            const lateCheckoutPolicy = this.timeConfigDraft.late_checkout.policy;
+
             if (this.form.time_rule === 'rolling') {
                 const minutes = Math.max(1, Number(this.timeConfigDraft.duration_hours || 0)) * 60;
 
                 return {
                     duration_minutes: minutes,
+                    late_checkout: lateCheckoutPolicy === 'inherit'
+                        ? null
+                        : {
+                            policy: lateCheckoutPolicy,
+                            grace_minutes: Math.max(0, Number(this.timeConfigDraft.late_checkout.grace_minutes || 0)),
+                            fee_type: this.timeConfigDraft.late_checkout.fee_type || 'flat',
+                            fee_value: Number(this.timeConfigDraft.late_checkout.fee_value || 0),
+                        },
                 };
             }
 
@@ -888,6 +972,14 @@ export default {
                 return {
                     start_time: this.timeConfigDraft.start_time,
                     end_time: this.timeConfigDraft.end_time,
+                    late_checkout: lateCheckoutPolicy === 'inherit'
+                        ? null
+                        : {
+                            policy: lateCheckoutPolicy,
+                            grace_minutes: Math.max(0, Number(this.timeConfigDraft.late_checkout.grace_minutes || 0)),
+                            fee_type: this.timeConfigDraft.late_checkout.fee_type || 'flat',
+                            fee_value: Number(this.timeConfigDraft.late_checkout.fee_value || 0),
+                        },
                 };
             }
 
@@ -896,6 +988,14 @@ export default {
                     checkout_time: this.timeConfigDraft.checkout_time,
                     day_offset: Math.max(1, Number(this.timeConfigDraft.day_offset || 1)),
                     night_cutoff_time: this.timeConfigDraft.night_cutoff_time || null,
+                    late_checkout: lateCheckoutPolicy === 'inherit'
+                        ? null
+                        : {
+                            policy: lateCheckoutPolicy,
+                            grace_minutes: Math.max(0, Number(this.timeConfigDraft.late_checkout.grace_minutes || 0)),
+                            fee_type: this.timeConfigDraft.late_checkout.fee_type || 'flat',
+                            fee_value: Number(this.timeConfigDraft.late_checkout.fee_value || 0),
+                        },
                 };
             }
 
@@ -914,6 +1014,14 @@ export default {
                             Number(this.timeConfigDraft.checkout.max_days_after_checkin || 1),
                         ),
                     },
+                    late_checkout: lateCheckoutPolicy === 'inherit'
+                        ? null
+                        : {
+                            policy: lateCheckoutPolicy,
+                            grace_minutes: Math.max(0, Number(this.timeConfigDraft.late_checkout.grace_minutes || 0)),
+                            fee_type: this.timeConfigDraft.late_checkout.fee_type || 'flat',
+                            fee_value: Number(this.timeConfigDraft.late_checkout.fee_value || 0),
+                        },
                 };
             }
 

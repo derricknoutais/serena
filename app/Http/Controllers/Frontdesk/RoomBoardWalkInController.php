@@ -160,11 +160,6 @@ class RoomBoardWalkInController extends Controller
                 $reservation,
                 Carbon::parse($checkInDate),
             );
-            $reservation->loadMissing('room');
-            if ($reservation->room) {
-                $reservation->room->hk_status = 'dirty';
-                $reservation->room->save();
-            }
 
             $amountReceived = (float) $validated['amount_received'];
 
