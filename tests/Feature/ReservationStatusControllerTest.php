@@ -280,3 +280,40 @@ it('allows managers to check out even when the folio has a balance', function ()
     $response->assertRedirect();
     expect($reservation->fresh()->status)->toBe(Reservation::STATUS_CHECKED_OUT);
 });
+
+it('does not block check-out previews with early check-in rules', function (): void {
+    [
+        'tenant' => $tenant,
+        'user' => $user,
+        'reservation' => $reservation,
+        'hotel' => $hotel,
+    ] = setupReservationEnvironment('status-checkout-preview');
+
+    $hotel->update([
+        'stay_settings' => [
+            'standard_checkin_time' => '14:00',
+            'early_checkin' => [
+                'policy' => 'forbidden',
+                'cutoff_time' => '12:00',
+            ],
+        ],
+    ]);
+
+    $reservation->update([
+        'status' => Reservation::STATUS_IN_HOUSE,
+        'check_in_date' => '2025-12-25 08:30:00',
+        'check_out_date' => '2025-12-25 11:30:00',
+        'actual_check_in_at' => '2025-12-25 08:30:00',
+    ]);
+
+    $response = $this->actingAs($user)->post(sprintf(
+        'http://%s/reservations/%s/stay-adjustments/preview',
+        tenantDomain($tenant),
+        $reservation->id,
+    ), [
+        'action' => 'check_out',
+        'actual_datetime' => '2025-12-25 11:30:00',
+    ]);
+
+    $response->assertOk();
+});

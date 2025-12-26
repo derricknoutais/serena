@@ -123,7 +123,7 @@ class ReservationStatusController extends Controller
             $data['action'] === 'check_out' ? $actual : null,
         );
 
-        if ($decision['early_blocked'] && ! $canOverrideFees) {
+        if ($data['action'] === 'check_in' && $decision['early_blocked'] && ! $canOverrideFees) {
             throw ValidationException::withMessages([
                 'action' => $decision['early_reason'] ?? 'Arrivée anticipée non autorisée.',
             ]);
