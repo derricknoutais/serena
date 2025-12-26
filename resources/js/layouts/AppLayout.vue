@@ -3,13 +3,15 @@ import { defineComponent, type PropType } from 'vue';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { listOutbox, processOutbox } from '@/offline/outbox';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
 import HeaderUserMenu from '@/components/HeaderUserMenu.vue';
 import PrimaryButton from '@/components/PrimaryButton.vue';
 import { dashboard as frontdeskDashboard } from '@/routes/frontdesk';
+import { logout } from '@/routes';
+import { edit } from '@/routes/profile/index';
 import type { BreadcrumbItemType } from '@/types';
 
 
@@ -51,6 +53,8 @@ export default defineComponent({
     },
     methods: {
         frontdeskDashboard,
+        logout,
+        edit,
         formatComponentTitle(component: string): string {
             const segment = component.split('/').pop() ?? component;
             const withSpaces = segment
@@ -119,6 +123,10 @@ export default defineComponent({
                 console.error(error);
             }
         },
+        handleLogout() {
+            router.flushAll();
+            this.mobileNavOpen = false;
+        },
         handleNetworkChange() {
             this.offline = !navigator.onLine;
             if (!this.offline) {
@@ -181,6 +189,15 @@ export default defineComponent({
             const roles = this.$page?.props?.auth?.user?.roles || [];
 
             return roles.some((role: any) => ['owner', 'manager', 'superadmin'].includes(role.name));
+        },
+        currentUser() {
+            return (this.$page?.props as any)?.auth?.user ?? null;
+        },
+        hotels() {
+            return (this.$page?.props as any)?.auth?.hotels ?? [];
+        },
+        activeHotel() {
+            return (this.$page?.props as any)?.auth?.activeHotel ?? null;
         },
     },
 });
@@ -553,6 +570,51 @@ export default defineComponent({
                         <Link href="/activity" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
                             Journal d’activités
                         </Link>
+                    </div>
+                </div>
+
+                <div v-if="currentUser" class="space-y-2">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-serena-text-muted">Compte</p>
+                    <div class="rounded-xl border border-serena-border/60 bg-serena-card p-3 text-sm">
+                        <p class="font-semibold text-serena-text-main">{{ currentUser.name }}</p>
+                        <p class="text-xs text-serena-text-muted">{{ currentUser.email }}</p>
+                        <div v-if="hotels.length" class="mt-3">
+                            <p class="text-[11px] font-semibold uppercase tracking-wide text-serena-text-muted">Hôtel actif</p>
+                            <div class="mt-2 flex flex-col gap-2">
+                                <button
+                                    v-for="hotel in hotels"
+                                    :key="hotel.id"
+                                    type="button"
+                                    class="flex items-center justify-between rounded-lg border border-serena-border/60 px-3 py-2 text-left text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary"
+                                    @click="switchHotel(hotel.id)"
+                                >
+                                    <span>{{ hotel.name }}</span>
+                                    <span
+                                        v-if="activeHotel && activeHotel.id === hotel.id"
+                                        class="text-[11px] font-semibold text-serena-primary"
+                                    >
+                                        Actif
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mt-3 flex flex-col gap-2">
+                            <Link
+                                :href="edit()"
+                                class="rounded-lg border border-serena-border/60 px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary"
+                                @click="mobileNavOpen = false"
+                            >
+                                Paramètres
+                            </Link>
+                            <Link
+                                :href="logout()"
+                                class="rounded-lg border border-serena-border/60 px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary"
+                                as="button"
+                                @click="handleLogout"
+                            >
+                                Déconnexion
+                            </Link>
+                        </div>
                     </div>
                 </div>
             </div>
