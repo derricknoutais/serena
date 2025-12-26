@@ -77,6 +77,45 @@ it('honors the provided checkout time when updating stay dates', function (): vo
         ->toBe('2025-05-03 11:30');
 });
 
+it('rounds stay quantities up when checkout time adds a partial day', function (): void {
+    [
+        'tenant' => $tenant,
+        'reservation' => $reservation,
+        'user' => $user,
+    ] = setupReservationEnvironment('stay-rounding');
+
+    $user->assignRole('owner');
+
+    $reservation->update([
+        'check_in_date' => '2025-05-01 10:00:00',
+        'check_out_date' => '2025-05-02 10:00:00',
+        'unit_price' => 10000,
+        'base_amount' => 10000,
+        'total_amount' => 10000,
+    ]);
+
+    $this->mock(ReservationAvailabilityService::class)
+        ->shouldReceive('ensureAvailable')
+        ->once()
+        ->andReturnTrue();
+
+    $this->mock(FolioBillingService::class)
+        ->shouldReceive('addStayAdjustment')
+        ->once();
+
+    $response = $this->actingAs($user)->patch(sprintf(
+        'http://%s/reservations/%s/stay/dates',
+        tenantDomain($tenant),
+        $reservation->id,
+    ), [
+        'check_out_date' => '2025-05-02T22:00:00',
+    ]);
+
+    $response->assertOk();
+
+    expect($reservation->fresh()->base_amount)->toBe(20000);
+});
+
 it('allows changing the offer when extending a stay', function (): void {
     [
         'tenant' => $tenant,

@@ -288,7 +288,8 @@ class ReservationStayController extends Controller
     private function calculateStayQuantity(Reservation $reservation, Carbon $checkIn, Carbon $checkOut): float
     {
         $kind = $reservation->offer?->kind ?? $reservation->offer_kind ?? 'night';
-        $nights = max(1, $checkIn->diffInDays($checkOut));
+        $minutes = max(1, $checkIn->diffInMinutes($checkOut));
+        $nights = max(1, (int) ceil($minutes / 1440));
 
         return match ($kind) {
             'short_stay' => 1,

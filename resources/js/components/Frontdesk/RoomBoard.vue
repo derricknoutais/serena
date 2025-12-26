@@ -986,10 +986,11 @@
                     <label class="text-xs font-semibold text-gray-500">Nouveau départ</label>
                     <input
                         v-model="stayModalDate"
-                        type="date"
+                        type="datetime-local"
                         class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                         :min="stayModalMin"
                         :max="stayModalMax"
+                        @input="onStayModalDateChange"
                     />
                 </div>
                 <div class="rounded-lg bg-gray-50 p-3">
@@ -1642,6 +1643,36 @@ export default {
 
             return `${year}-${month}-${day}T${hours}:${minutes}`;
         },
+        extractTime(value) {
+            if (!value) {
+                return '';
+            }
+
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) {
+                return '';
+            }
+
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+
+            return `${hours}:${minutes}`;
+        },
+        onStayModalDateChange() {
+            if (!this.stayModalDate) {
+                return;
+            }
+
+            const [datePart, timePart] = this.stayModalDate.split('T');
+            const normalizedTime = timePart || this.stayModalTime;
+
+            if (!normalizedTime) {
+                return;
+            }
+
+            this.stayModalDate = `${datePart}T${normalizedTime}`;
+            this.stayModalTime = normalizedTime;
+        },
         showUnauthorizedAlert() {
             Swal.fire({
                 icon: 'error',
@@ -1923,16 +1954,20 @@ export default {
 
             this.showReservationModal = false;
             this.stayModalMode = mode;
-            const currentDeparture = this.selectedRoom.current_reservation.check_out_date;
+            const currentDeparture = this.selectedRoom.current_reservation.check_out_at
+                || this.selectedRoom.current_reservation.check_out_date;
             const currentOfferId = this.selectedRoom.current_reservation.offer_id;
             this.stayModalOffer = this.stayOfferOptions.find((offer) => offer.id === currentOfferId)
                 ?? this.stayOfferOptions[0]
                 ?? null;
 
+            this.stayModalTime = this.extractTime(currentDeparture);
+            const currentDepartureValue = this.toDateTimeLocal(currentDeparture);
+
             if (mode === 'extend') {
-                this.stayModalDate = this.addDays(currentDeparture, 1);
+                this.stayModalDate = this.addDays(currentDepartureValue, 1);
             } else {
-                this.stayModalDate = currentDeparture;
+                this.stayModalDate = currentDepartureValue;
             }
 
             this.showStayModal = true;
@@ -1941,6 +1976,8 @@ export default {
             this.showStayModal = false;
             this.stayModalOffer = null;
             this.stayModalSubmitting = false;
+            this.stayModalDate = '';
+            this.stayModalTime = '';
         },
         closeReservationModal() {
             this.showReservationModal = false;
@@ -2213,7 +2250,7 @@ export default {
             }
 
             const msPerDay = 1000 * 60 * 60 * 24;
-            const nights = Math.max(1, Math.round((endDate - startDate) / msPerDay));
+            const nights = Math.max(1, Math.ceil((endDate - startDate) / msPerDay));
 
             switch (kind) {
                 case 'short_stay':
@@ -2265,12 +2302,7 @@ export default {
             }
 
             date.setDate(date.getDate() + days);
-
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-
-            return `${year}-${month}-${day}`;
+            return this.toDateTimeLocal(date);
         },
         async openFolioFromRoom(tab = 'charges') {
             if (!this.selectedRoom || !this.selectedRoom.current_reservation) {
