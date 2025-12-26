@@ -36,6 +36,7 @@ export default defineComponent({
             notificationTimer: null as number | null,
             operationsOpen: false,
             financeOpen: false,
+            mobileNavOpen: false,
         };
     },
     props: {
@@ -228,7 +229,21 @@ export default defineComponent({
                     </Link>
                 </div>
 
-                <nav class="flex items-center space-x-4 text-sm">
+                <button
+                    type="button"
+                    class="inline-flex items-center justify-center rounded-full border border-serena-border/60 bg-white/70 p-2 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary lg:hidden"
+                    aria-label="Ouvrir le menu"
+                    @click="mobileNavOpen = !mobileNavOpen"
+                >
+                    <svg v-if="!mobileNavOpen" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                    <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+
+                <nav class="hidden items-center space-x-4 text-sm lg:flex">
                     <!-- Ressources -->
                     <div class="relative" aria-label="Ressources">
                         <PrimaryButton
@@ -473,6 +488,75 @@ export default defineComponent({
                 </nav>
             </div>
         </header>
+        <div
+            v-if="mobileNavOpen"
+            class="border-b border-serena-border bg-white lg:hidden"
+        >
+            <div class="page-container space-y-3 py-4 text-sm">
+                <div class="space-y-2">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-serena-text-muted">Navigation</p>
+                    <div class="flex flex-col gap-2">
+                        <Link href="/guests" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
+                            Guests
+                        </Link>
+                        <Link :href="frontdeskDashboard()" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
+                            FrontDesk
+                        </Link>
+                        <Link href="/housekeeping" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
+                            Housekeeping
+                        </Link>
+                        <Link v-if="maintenanceLinkVisible" href="/maintenance" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
+                            Maintenance
+                        </Link>
+                        <Link v-if="posLinkVisible" href="/pos" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
+                            Point de Vente
+                        </Link>
+                        <Link v-if="cashLinkVisible" href="/cash" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
+                            Caisse
+                        </Link>
+                        <Link v-if="analyticsLinkVisible" href="/analytics" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
+                            Analytics
+                        </Link>
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-serena-text-muted">Ressources</p>
+                    <div class="grid grid-cols-2 gap-2">
+                        <Link href="/ressources/hotel" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
+                            Hôtel
+                        </Link>
+                        <Link href="/ressources/room-types" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
+                            Types de chambres
+                        </Link>
+                        <Link href="/ressources/rooms" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
+                            Chambres
+                        </Link>
+                        <Link href="/ressources/offers" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
+                            Offres
+                        </Link>
+                        <Link href="/ressources/taxes" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
+                            Taxes
+                        </Link>
+                        <Link href="/ressources/payment-methods" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
+                            Méthodes de paiement
+                        </Link>
+                        <Link href="/ressources/product-categories" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
+                            Catégories de produits
+                        </Link>
+                        <Link href="/ressources/products" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
+                            Produits
+                        </Link>
+                        <Link href="/ressources/users" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
+                            Utilisateurs
+                        </Link>
+                        <Link href="/activity" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
+                            Journal d’activités
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <main class="py-6">
             <div class="page-container space-y-4">
