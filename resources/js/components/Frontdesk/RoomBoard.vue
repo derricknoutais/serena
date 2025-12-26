@@ -145,7 +145,7 @@
             </div>
 
             <div class="lg:w-1/3">
-                <div class="relative h-full rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                <div class="relative rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:sticky lg:top-6 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
                     <div
                         v-if="selectedRoom && loadingRoomId === selectedRoom.id"
                         class="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80"
@@ -1507,6 +1507,12 @@ export default {
         walkInRoom: {
             immediate: true,
             async handler(newRoom) {
+                if (newRoom && this.form && this.form.room_id === newRoom.id) {
+                    this.isWalkInOpen = true;
+
+                    return;
+                }
+
                 if (newRoom && this.walkInDefaultDates && this.walkInOffers) {
                     const initialOffer = this.walkInOffers.length
                         ? this.walkInOffers[0]
@@ -1728,6 +1734,14 @@ export default {
         },
         async onWalkInGuestTag(inputValue) {
             const parsed = this.parseGuestName(inputValue);
+            const documentTypes = [
+                'Passeport',
+                "Carte d'identité",
+                'Permis',
+                'Carte de Séjour',
+                'Carte Professionnelle',
+                'Autre',
+            ];
 
             const { value: formValues, isConfirmed } = await Swal.fire({
                 title: 'Créer un nouveau client',
@@ -1739,22 +1753,58 @@ export default {
                     + `<input id="swal-guest-first-name" type="text" class="swal2-input" value="${parsed.first_name ?? ''}">`
                     + '<label class="block text-xs font-semibold text-gray-600">Téléphone</label>'
                     + '<input id="swal-guest-phone" type="text" class="swal2-input" value="">'
+                    + '<label class="block text-xs font-semibold text-gray-600">Type de document</label>'
+                    + `<select id="swal-guest-document-type" class="swal2-select">${documentTypes.map((type) => `<option value="${type}">${type}</option>`).join('')}</select>`
+                    + '<div id="swal-guest-document-other" class="hidden">'
+                    + '<label class="block text-xs font-semibold text-gray-600">Préciser le document</label>'
+                    + '<input id="swal-guest-document-other-input" type="text" class="swal2-input" value="">'
+                    + '</div>'
+                    + '<label class="block text-xs font-semibold text-gray-600">Numéro de document</label>'
+                    + '<input id="swal-guest-document-number" type="text" class="swal2-input" value="">'
                     + '</div>',
                 focusConfirm: false,
                 showCancelButton: true,
                 confirmButtonText: 'Créer',
                 cancelButtonText: 'Annuler',
+                didOpen: () => {
+                    const typeSelect = document.getElementById('swal-guest-document-type');
+                    const otherWrapper = document.getElementById('swal-guest-document-other');
+
+                    if (!typeSelect || !otherWrapper) {
+                        return;
+                    }
+
+                    const toggleOther = () => {
+                        const showOther = typeSelect.value === 'Autre';
+                        otherWrapper.classList.toggle('hidden', !showOther);
+                    };
+
+                    toggleOther();
+                    typeSelect.addEventListener('change', toggleOther);
+                },
                 preConfirm: () => {
                     const lastNameInput = document.getElementById('swal-guest-last-name');
                     const firstNameInput = document.getElementById('swal-guest-first-name');
                     const phoneInput = document.getElementById('swal-guest-phone');
+                    const typeSelect = document.getElementById('swal-guest-document-type');
+                    const otherInput = document.getElementById('swal-guest-document-other-input');
+                    const numberInput = document.getElementById('swal-guest-document-number');
 
                     const last_name = (lastNameInput?.value ?? '').toString().trim();
                     const first_name = (firstNameInput?.value ?? '').toString().trim();
                     const phone = (phoneInput?.value ?? '').toString().trim();
+                    const selectedType = (typeSelect?.value ?? '').toString().trim();
+                    const otherType = (otherInput?.value ?? '').toString().trim();
+                    const document_number = (numberInput?.value ?? '').toString().trim();
 
                     if (!last_name) {
                         Swal.showValidationMessage('Le nom est obligatoire.');
+
+                        return false;
+                    }
+
+                    if (selectedType === 'Autre' && !otherType) {
+                        Swal.showValidationMessage('Veuillez préciser le document.');
 
                         return false;
                     }
@@ -1763,6 +1813,8 @@ export default {
                         last_name,
                         first_name,
                         phone,
+                        document_type: selectedType === 'Autre' ? otherType : selectedType,
+                        document_number,
                     };
                 },
             });
@@ -1778,6 +1830,8 @@ export default {
                         first_name: formValues.first_name,
                         last_name: formValues.last_name,
                         phone: formValues.phone || null,
+                        document_type: formValues.document_type || null,
+                        document_number: formValues.document_number || null,
                     },
                     {
                         headers: {
@@ -2320,7 +2374,23 @@ export default {
                 return;
             }
 
+            this.syncWalkInFormState();
+            const guestId = this.selectedWalkInGuest?.id ?? this.form.guest_id ?? null;
+            if (!guestId) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erreur',
+                    text: 'Le client est obligatoire.',
+                });
+
+                return;
+            }
+
+            this.form.guest_id = guestId;
+
             this.form.post('/frontdesk/room-board/walk-in', {
+                preserveState: true,
+                preserveScroll: true,
                 onSuccess: () => {
                     this.isWalkInOpen = false;
                     Swal.fire({
@@ -2338,6 +2408,7 @@ export default {
                     this.reloadRoomBoard();
                 },
                 onError: (errors) => {
+                    this.syncWalkInFormState();
                     const handled = this.handleAvailabilityErrors(errors);
                     if (!handled) {
                         Swal.fire({
@@ -2348,6 +2419,24 @@ export default {
                     }
                 },
             });
+        },
+        syncWalkInFormState() {
+            if (!this.form) {
+                return;
+            }
+
+            if (this.selectedWalkInGuest?.id) {
+                this.form.guest_id = this.selectedWalkInGuest.id;
+            }
+
+            if (this.form.offer_id) {
+                const selected = this.walkInOffers.find(
+                    (offer) => offer.id === this.form.offer_id,
+                );
+                if (selected) {
+                    this.form.offer_price_id = selected.offer_price_id;
+                }
+            }
         },
         closeWalkIn() {
             this.isWalkInOpen = false;

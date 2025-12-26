@@ -1201,6 +1201,14 @@
             },
             async onGuestTag(inputValue) {
                 const parsed = this.parseGuestName(inputValue);
+                const documentTypes = [
+                    'Passeport',
+                    "Carte d'identité",
+                    'Permis',
+                    'Carte de Séjour',
+                    'Carte Professionnelle',
+                    'Autre',
+                ];
 
                 const { value: formValues, isConfirmed } = await Swal.fire({
                     title: 'Créer un nouveau client',
@@ -1212,22 +1220,58 @@
                         + `<input id="swal-guest-first-name" type="text" class="swal2-input" value="${parsed.first_name ?? ''}">`
                         + '<label class="block text-xs font-semibold text-gray-600">Téléphone</label>'
                         + '<input id="swal-guest-phone" type="text" class="swal2-input" value="">'
+                        + '<label class="block text-xs font-semibold text-gray-600">Type de document</label>'
+                        + `<select id="swal-guest-document-type" class="swal2-select">${documentTypes.map((type) => `<option value="${type}">${type}</option>`).join('')}</select>`
+                        + '<div id="swal-guest-document-other" class="hidden">'
+                        + '<label class="block text-xs font-semibold text-gray-600">Préciser le document</label>'
+                        + '<input id="swal-guest-document-other-input" type="text" class="swal2-input" value="">'
+                        + '</div>'
+                        + '<label class="block text-xs font-semibold text-gray-600">Numéro de document</label>'
+                        + '<input id="swal-guest-document-number" type="text" class="swal2-input" value="">'
                         + '</div>',
                     focusConfirm: false,
                     showCancelButton: true,
                     confirmButtonText: 'Créer',
                     cancelButtonText: 'Annuler',
+                    didOpen: () => {
+                        const typeSelect = document.getElementById('swal-guest-document-type');
+                        const otherWrapper = document.getElementById('swal-guest-document-other');
+
+                        if (!typeSelect || !otherWrapper) {
+                            return;
+                        }
+
+                        const toggleOther = () => {
+                            const showOther = typeSelect.value === 'Autre';
+                            otherWrapper.classList.toggle('hidden', !showOther);
+                        };
+
+                        toggleOther();
+                        typeSelect.addEventListener('change', toggleOther);
+                    },
                     preConfirm: () => {
                         const lastNameInput = document.getElementById('swal-guest-last-name');
                         const firstNameInput = document.getElementById('swal-guest-first-name');
                         const phoneInput = document.getElementById('swal-guest-phone');
+                        const typeSelect = document.getElementById('swal-guest-document-type');
+                        const otherInput = document.getElementById('swal-guest-document-other-input');
+                        const numberInput = document.getElementById('swal-guest-document-number');
 
                         const last_name = (lastNameInput?.value ?? '').toString().trim();
                         const first_name = (firstNameInput?.value ?? '').toString().trim();
                         const phone = (phoneInput?.value ?? '').toString().trim();
+                        const selectedType = (typeSelect?.value ?? '').toString().trim();
+                        const otherType = (otherInput?.value ?? '').toString().trim();
+                        const document_number = (numberInput?.value ?? '').toString().trim();
 
                         if (!last_name) {
                             Swal.showValidationMessage('Le nom est obligatoire.');
+
+                            return false;
+                        }
+
+                        if (selectedType === 'Autre' && !otherType) {
+                            Swal.showValidationMessage('Veuillez préciser le document.');
 
                             return false;
                         }
@@ -1236,6 +1280,8 @@
                             last_name,
                             first_name,
                             phone,
+                            document_type: selectedType === 'Autre' ? otherType : selectedType,
+                            document_number,
                         };
                     },
                 });
@@ -1251,6 +1297,8 @@
                             first_name: formValues.first_name,
                             last_name: formValues.last_name,
                             phone: formValues.phone || null,
+                            document_type: formValues.document_type || null,
+                            document_number: formValues.document_number || null,
                         },
                         {
                             headers: {

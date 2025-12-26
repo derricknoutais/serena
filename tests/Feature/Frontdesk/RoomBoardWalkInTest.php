@@ -122,3 +122,95 @@ test('walk-in reservation returns a redirect for inertia requests', function () 
 
     Carbon::setTestNow();
 });
+
+test('walk-in reservation requires amount received', function () {
+    $this->seed([
+        RoleSeeder::class,
+        PermissionSeeder::class,
+    ]);
+
+    $tenant = Tenant::query()->create([
+        'id' => (string) Str::uuid(),
+        'name' => 'Walkin Hotel',
+        'slug' => 'walkin-hotel-amount',
+        'plan' => 'standard',
+        'contact_email' => 'contact@walkin.test',
+        'data' => [
+            'name' => 'Walkin Hotel',
+            'slug' => 'walkin-hotel-amount',
+        ],
+    ]);
+    $tenant->domains()->create(['domain' => 'walkin-amount.serena.test']);
+
+    $hotel = Hotel::query()->create([
+        'tenant_id' => $tenant->getKey(),
+        'name' => 'Walkin Main',
+    ]);
+
+    $roomType = RoomType::query()->create([
+        'tenant_id' => $tenant->getKey(),
+        'hotel_id' => $hotel->id,
+        'name' => 'Standard',
+        'capacity_adults' => 2,
+        'capacity_children' => 1,
+        'base_price' => 10000,
+    ]);
+
+    $room = Room::query()->create([
+        'id' => (string) Str::uuid(),
+        'tenant_id' => $tenant->getKey(),
+        'hotel_id' => $hotel->id,
+        'room_type_id' => $roomType->id,
+        'number' => '101',
+        'status' => 'active',
+        'hk_status' => 'clean',
+    ]);
+
+    $offer = Offer::query()->create([
+        'tenant_id' => $tenant->getKey(),
+        'hotel_id' => $hotel->id,
+        'name' => 'Tarif standard',
+        'kind' => 'night',
+        'billing_mode' => 'fixed',
+        'time_rule' => 'rolling',
+        'time_config' => ['duration_minutes' => 1440],
+        'is_active' => true,
+    ]);
+
+    $offerPrice = OfferRoomTypePrice::query()->create([
+        'tenant_id' => $tenant->getKey(),
+        'hotel_id' => $hotel->id,
+        'offer_id' => $offer->id,
+        'room_type_id' => $roomType->id,
+        'currency' => 'XAF',
+        'price' => 12000,
+    ]);
+
+    $guest = Guest::query()->create([
+        'tenant_id' => $tenant->getKey(),
+        'first_name' => 'Jean',
+        'last_name' => 'Walkin',
+        'email' => 'walkin@example.com',
+    ]);
+
+    $user = User::factory()->create([
+        'tenant_id' => $tenant->getKey(),
+        'email' => 'frontdesk@walkin.test',
+        'active_hotel_id' => $hotel->id,
+    ]);
+    $user->assignRole('receptionist');
+
+    $response = $this->actingAs($user)
+        ->withHeader('X-Inertia', 'true')
+        ->post('http://walkin-amount.serena.test/frontdesk/room-board/walk-in', [
+            'guest_id' => $guest->id,
+            'room_id' => $room->id,
+            'room_type_id' => $roomType->id,
+            'offer_id' => $offer->id,
+            'offer_price_id' => $offerPrice->id,
+            'adults' => 1,
+            'children' => 0,
+        ]);
+
+    $response->assertSessionHasErrors(['amount_received']);
+});
