@@ -93,10 +93,14 @@ class RoomBoardWalkInController extends Controller
         $taxAmount = 0.0;
         $totalAmount = $baseAmount + $taxAmount;
 
-        $arrivalAt = Carbon::now();
+        $arrivalAt = isset($validated['check_in_at'])
+            ? Carbon::parse($validated['check_in_at'])
+            : Carbon::now();
         $period = $this->offerTimeEngine->computeStayPeriod($offer, $arrivalAt);
-        $checkInDate = $period['arrival_at']->toDateString();
-        $checkOutDate = $period['departure_at']->toDateString();
+        $checkInDate = $arrivalAt->toDateTimeString();
+        $checkOutDate = isset($validated['check_out_at'])
+            ? Carbon::parse($validated['check_out_at'])->toDateTimeString()
+            : $period['departure_at']->toDateTimeString();
 
         $this->conflictService->validateOrThrowRoomConflict(
             $hotelId,
@@ -152,7 +156,10 @@ class RoomBoardWalkInController extends Controller
             ]);
 
             $this->stateMachine->confirm($reservation);
-            $reservation = $this->stateMachine->checkIn($reservation);
+            $reservation = $this->stateMachine->checkIn(
+                $reservation,
+                Carbon::parse($checkInDate),
+            );
             $reservation->loadMissing('room');
             if ($reservation->room) {
                 $reservation->room->hk_status = 'dirty';

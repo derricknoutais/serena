@@ -3,6 +3,7 @@
 require_once __DIR__.'/FolioTestHelpers.php';
 
 use App\Models\CashSession;
+use App\Models\Offer;
 use App\Models\Reservation;
 use App\Services\FolioBillingService;
 use Spatie\Permission\Models\Permission;
@@ -102,12 +103,27 @@ it('creates the stay folio item on check-in', function (): void {
         'tenant' => $tenant,
         'user' => $user,
         'reservation' => $reservation,
+        'hotel' => $hotel,
     ] = setupReservationEnvironment('status-checkin');
+
+    $offer = Offer::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Offre Test',
+        'kind' => 'night',
+        'billing_mode' => 'per_stay',
+        'time_rule' => 'rolling',
+        'time_config' => ['duration_minutes' => 1440],
+        'is_active' => true,
+    ]);
 
     $reservation->update([
         'status' => Reservation::STATUS_CONFIRMED,
         'check_in_date' => now()->toDateString(),
         'check_out_date' => now()->addDay()->toDateString(),
+        'offer_id' => $offer->id,
+        'offer_name' => $offer->name,
+        'offer_kind' => $offer->kind,
     ]);
 
     $response = $this->actingAs($user)->patch(sprintf(
@@ -123,9 +139,13 @@ it('creates the stay folio item on check-in', function (): void {
 
     $reservation->refresh();
     $folio = $reservation->mainFolio()->first();
+    $stayItem = $folio?->items()->where('is_stay_item', true)->first();
 
     expect($folio)->not->toBeNull()
-        ->and($folio?->items()->where('is_stay_item', true)->exists())->toBeTrue();
+        ->and($stayItem)->not->toBeNull()
+        ->and($stayItem?->type)->toBe('stay')
+        ->and($stayItem?->meta['offer_id'] ?? null)->toBe($offer->id)
+        ->and($stayItem?->meta['offer_name'] ?? null)->toBe('Offre Test');
 });
 
 it('requires an open frontdesk cash session when applying a cancellation penalty', function (): void {

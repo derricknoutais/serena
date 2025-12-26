@@ -129,6 +129,8 @@ class RoomBoardData
                     'guest_name' => $currentReservation->guest?->name,
                     'check_in_date' => optional($currentReservation->check_in_date)->toDateString(),
                     'check_out_date' => optional($currentReservation->check_out_date)->toDateString(),
+                    'check_in_at' => optional($currentReservation->check_in_date)->toDateTimeString(),
+                    'check_out_at' => optional($currentReservation->check_out_date)->toDateTimeString(),
                     'unit_price' => (float) $currentReservation->unit_price,
                     'offer_kind' => $currentReservation->offer?->kind ?? $currentReservation->offer_kind ?? 'night',
                     'room_type_id' => $currentReservation->room_type_id,

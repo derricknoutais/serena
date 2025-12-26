@@ -133,6 +133,12 @@ class FolioBillingService
 
         $description = $this->buildStayDescription($offerKind, $offerName, $checkIn, $checkOut);
         $unitPrice = (float) $reservation->unit_price;
+        $stayMeta = [
+            'reservation_id' => $reservation->id,
+            'offer_id' => $reservation->offer_id,
+            'offer_name' => $offerName,
+            'offer_kind' => $offerKind,
+        ];
 
         $stayItem = $folio->items()->where('is_stay_item', true)->first();
 
@@ -142,6 +148,8 @@ class FolioBillingService
                 'hotel_id' => $folio->hotel_id,
                 'is_stay_item' => true,
                 'description' => $description,
+                'type' => 'stay',
+                'meta' => $stayMeta,
                 'quantity' => $quantity,
                 'unit_price' => $unitPrice,
                 'tax_amount' => 0,
@@ -152,6 +160,8 @@ class FolioBillingService
             $stayItem->description = $description;
         }
 
+        $stayItem->type = 'stay';
+        $stayItem->meta = $stayMeta;
         $stayItem->quantity = $quantity;
         $stayItem->unit_price = $unitPrice;
         $stayItem->discount_percent = 0;

@@ -193,6 +193,8 @@ it('includes current reservation details for occupied rooms', function (): void 
 
     expect($payload['current_reservation'])->not->toBeNull();
     expect($payload['current_reservation']['code'])->toBe('RSV-2512001');
+    expect($payload['current_reservation']['check_in_at'])->toBe(now()->startOfDay()->toDateTimeString());
+    expect($payload['current_reservation']['check_out_at'])->toBe(now()->addDay()->startOfDay()->toDateTimeString());
 });
 
 it('shows in-house reservations even after the checkout date', function (): void {

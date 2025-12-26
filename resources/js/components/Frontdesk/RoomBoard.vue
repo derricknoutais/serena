@@ -135,8 +135,8 @@
                                     {{ room.current_reservation.guest_name || 'Réservation' }}
                                 </p>
                                 <p>
-                                    {{ room.current_reservation.check_in_date }} →
-                                    {{ room.current_reservation.check_out_date }}
+                                    {{ formatDateTime(room.current_reservation.check_in_at || room.current_reservation.check_in_date) }} →
+                                    {{ formatDateTime(room.current_reservation.check_out_at || room.current_reservation.check_out_date) }}
                                 </p>
                             </div>
                         </div>
@@ -251,8 +251,8 @@
                                 <div>
                                     <span class="font-semibold text-gray-700">Séjour :</span>
                                     <span class="ml-1">
-                                        {{ selectedRoom.current_reservation.check_in_date }} →
-                                        {{ selectedRoom.current_reservation.check_out_date }}
+                                        {{ formatDateTime(selectedRoom.current_reservation.check_in_at || selectedRoom.current_reservation.check_in_date) }} →
+                                        {{ formatDateTime(selectedRoom.current_reservation.check_out_at || selectedRoom.current_reservation.check_out_date) }}
                                     </span>
                                 </div>
                             </div>
@@ -836,11 +836,11 @@
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <p class="text-xs font-semibold text-gray-500">Arrivée</p>
-                        <p>{{ selectedRoom.current_reservation.check_in_date }}</p>
+                        <p>{{ formatDateTime(selectedRoom.current_reservation.check_in_at || selectedRoom.current_reservation.check_in_date) }}</p>
                     </div>
                     <div>
                         <p class="text-xs font-semibold text-gray-500">Départ</p>
-                        <p>{{ selectedRoom.current_reservation.check_out_date }}</p>
+                        <p>{{ formatDateTime(selectedRoom.current_reservation.check_out_at || selectedRoom.current_reservation.check_out_date) }}</p>
                     </div>
                 </div>
             </div>
@@ -962,11 +962,11 @@
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <p class="text-xs font-semibold text-gray-500">Arrivée</p>
-                        <p>{{ selectedRoom.current_reservation.check_in_date }}</p>
+                        <p>{{ formatDateTime(selectedRoom.current_reservation.check_in_at || selectedRoom.current_reservation.check_in_date) }}</p>
                     </div>
                     <div>
                         <p class="text-xs font-semibold text-gray-500">Départ actuel</p>
-                        <p>{{ selectedRoom.current_reservation.check_out_date }}</p>
+                        <p>{{ formatDateTime(selectedRoom.current_reservation.check_out_at || selectedRoom.current_reservation.check_out_date) }}</p>
                     </div>
                 </div>
                 <div>
@@ -2174,7 +2174,24 @@ export default {
                 return value;
             }
 
-            return date.toLocaleString();
+            const formatter = new Intl.DateTimeFormat('fr-FR', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+            });
+            const parts = formatter.formatToParts(date);
+            const day = parts.find((part) => part.type === 'day')?.value ?? '';
+            const year = parts.find((part) => part.type === 'year')?.value ?? '';
+            let month = parts.find((part) => part.type === 'month')?.value ?? '';
+            month = month.replace('.', '');
+            if (month.length > 0) {
+                month = `${month.charAt(0).toUpperCase()}${month.slice(1)}`;
+            }
+
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+
+            return `${day} ${month} ${year} ${hours}h${minutes}`.trim();
         },
         addDays(dateStr, days) {
             const date = new Date(dateStr);
