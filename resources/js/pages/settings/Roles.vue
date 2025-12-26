@@ -5,6 +5,7 @@ import PrimaryButton from '@/components/PrimaryButton.vue';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
+import { update as updateRolePermissions } from '@/routes/settings/roles';
 import { type BreadcrumbItem } from '@/types';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 
@@ -118,7 +119,7 @@ const submitPermissions = () => {
         return;
     }
 
-    form.patch(route('settings.roles.update', selectedRoleId.value));
+    form.patch(updateRolePermissions(selectedRoleId.value).url);
 };
 
 const isGroupFullyChecked = (groupKey: string) => {

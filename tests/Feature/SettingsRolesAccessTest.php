@@ -2,12 +2,16 @@
 
 use App\Models\Tenant;
 use App\Models\User;
+use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 
 it('allows owner and manager to access roles settings', function (string $role) {
-    $this->seed(RoleSeeder::class);
+    $this->seed([
+        RoleSeeder::class,
+        PermissionSeeder::class,
+    ]);
 
     $tenant = Tenant::query()->create([
         'id' => (string) Str::uuid(),
@@ -40,7 +44,10 @@ it('allows owner and manager to access roles settings', function (string $role) 
 ]);
 
 it('isolates roles settings per tenant domain', function () {
-    $this->seed(RoleSeeder::class);
+    $this->seed([
+        RoleSeeder::class,
+        PermissionSeeder::class,
+    ]);
 
     $tenantA = Tenant::query()->create([
         'id' => (string) Str::uuid(),
