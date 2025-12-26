@@ -134,6 +134,15 @@ class Notifier
                 'title' => 'Chambre vendue mais sale',
                 'message' => sprintf('Chambre %s vendue alors qu’elle est sale', $payload['room_number'] ?? ''),
             ],
+            'room.hk_status_updated' => [
+                'title' => 'Statut ménage mis à jour',
+                'message' => sprintf(
+                    'Chambre %s : %s → %s',
+                    $payload['room_number'] ?? '',
+                    $payload['from_status'] ?? '',
+                    $payload['to_status'] ?? ''
+                ),
+            ],
             'folio.balance_remaining_on_checkout' => [
                 'title' => 'Solde restant au départ',
                 'message' => sprintf(

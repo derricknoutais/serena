@@ -51,6 +51,7 @@ class NotificationRecipientResolver
             'reservation.checked_out',
             'reservation.conflict_detected' => array_merge($ownerManager, $receptionOps),
             'room.sold_but_dirty' => array_merge($ownerManager, $receptionOps, $housekeeping),
+            'room.hk_status_updated' => array_merge($ownerManager, $receptionOps, $housekeeping),
             default => $ownerManager,
         };
     }

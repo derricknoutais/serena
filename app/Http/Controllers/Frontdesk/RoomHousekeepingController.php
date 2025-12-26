@@ -6,12 +6,15 @@ namespace App\Http\Controllers\Frontdesk;
 
 use App\Http\Controllers\Controller;
 use App\Models\Room;
+use App\Services\Notifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 
 class RoomHousekeepingController extends Controller
 {
+    public function __construct(private readonly Notifier $notifier) {}
+
     public function updateStatus(Request $request, Room $room): JsonResponse
     {
         $data = $request->validate([
@@ -48,6 +51,18 @@ class RoomHousekeepingController extends Controller
             ])
             ->event('hk_updated')
             ->log('hk_updated');
+
+        $this->notifier->notify('room.hk_status_updated', $room->hotel_id, [
+            'tenant_id' => $room->tenant_id,
+            'room_id' => $room->id,
+            'room_number' => $room->number,
+            'from_status' => $fromStatus,
+            'to_status' => $room->hk_status,
+            'user_name' => $user->name,
+        ], [
+            'cta_route' => 'rooms.board',
+            'cta_params' => ['date' => now()->toDateString()],
+        ]);
 
         return response()->json([
             'success' => true,

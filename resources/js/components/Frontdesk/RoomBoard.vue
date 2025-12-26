@@ -1289,6 +1289,7 @@ export default {
             showStayModal: false,
             stayModalMode: 'extend',
             stayModalDate: '',
+            stayModalTime: '',
             stayModalOffer: null,
             stayModalSubmitting: false,
             showChangeRoomModal: false,
@@ -1360,10 +1361,16 @@ export default {
             }
 
             if (this.stayModalMode === 'extend') {
-                return this.selectedRoom.current_reservation.check_out_date;
+                return this.toDateTimeLocal(
+                    this.selectedRoom.current_reservation.check_out_at
+                    || this.selectedRoom.current_reservation.check_out_date,
+                );
             }
 
-            return this.selectedRoom.current_reservation.check_in_date;
+            return this.toDateTimeLocal(
+                this.selectedRoom.current_reservation.check_in_at
+                || this.selectedRoom.current_reservation.check_in_date,
+            );
         },
         stayModalMax() {
             if (!this.selectedRoom?.current_reservation) {
@@ -1371,7 +1378,10 @@ export default {
             }
 
             if (this.stayModalMode === 'shorten') {
-                return this.selectedRoom.current_reservation.check_out_date;
+                return this.toDateTimeLocal(
+                    this.selectedRoom.current_reservation.check_out_at
+                    || this.selectedRoom.current_reservation.check_out_date,
+                );
             }
 
             return undefined;
@@ -1389,7 +1399,7 @@ export default {
             const unitPrice = this.stayModalOfferPrice?.price ?? Number(reservation.unit_price ?? 0);
             const nights = this.calculateStayUnits(
                 offerKind,
-                reservation.check_in_date,
+                reservation.check_in_at || reservation.check_in_date,
                 this.stayModalDate,
             );
 
