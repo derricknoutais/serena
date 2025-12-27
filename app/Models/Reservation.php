@@ -147,12 +147,6 @@ class Reservation extends Model
 
         switch ($this->offer_kind) {
             case 'hourly':
-                if ($checkIn->toDateString() !== $checkOut->toDateString()) {
-                    throw ValidationException::withMessages([
-                        'check_out_date' => 'Cette offre horaire doit commencer et se terminer le même jour.',
-                    ]);
-                }
-
                 break;
 
             case 'night':

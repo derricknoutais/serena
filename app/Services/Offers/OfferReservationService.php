@@ -105,6 +105,10 @@ class OfferReservationService
                 $startLimit = $dt->copy()->setTime($inH, $inM);
                 $endLimit = $dt->copy()->setTime($outH, $outM);
 
+                if ($endLimit->lessThanOrEqualTo($startLimit)) {
+                    $endLimit->addDay();
+                }
+
                 if ($dt->lt($startLimit)) {
                     $start = $startLimit;
                 } elseif ($dt->gt($endLimit)) {
@@ -124,6 +128,10 @@ class OfferReservationService
             if ($offer->check_out_until) {
                 [$outH, $outM] = $this->parseTimeString($offer->check_out_until);
                 $limit = $start->copy()->setTime($outH, $outM);
+
+                if ($limit->lessThanOrEqualTo($start)) {
+                    $limit->addDay();
+                }
 
                 if ($end->gt($limit)) {
                     return $returnMessage ? 'La durée de cette offre dépasse l’heure limite de départ.' : 'invalid';

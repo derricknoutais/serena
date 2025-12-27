@@ -2,6 +2,7 @@
 
 require_once __DIR__.'/FolioTestHelpers.php';
 
+use App\Models\Offer;
 use App\Models\Reservation;
 use Spatie\Permission\Models\Permission;
 
@@ -117,6 +118,52 @@ it('allows pending or confirmed status on reservation creation', function (strin
     'pending' => Reservation::STATUS_PENDING,
     'confirmed' => Reservation::STATUS_CONFIRMED,
 ]);
+
+it('allows hourly offers to pass midnight', function (): void {
+    [
+        'tenant' => $tenant,
+        'user' => $user,
+        'guest' => $guest,
+        'roomType' => $roomType,
+        'room' => $room,
+        'hotel' => $hotel,
+    ] = setupReservationEnvironment('reservation-hourly-midnight');
+
+    $offer = Offer::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Détente 3h',
+        'kind' => 'hourly',
+        'fixed_duration_hours' => 3,
+        'billing_mode' => 'per_stay',
+        'check_in_from' => '14:00',
+        'check_out_until' => '01:00',
+        'is_active' => true,
+    ]);
+
+    $payload = reservationPayload([
+        'code' => 'RSV-TEST-HOURLY',
+        'guest_id' => $guest->id,
+        'room_type_id' => $roomType->id,
+        'room_id' => $room->id,
+        'offer_id' => $offer->id,
+        'check_in_date' => '2025-05-01 22:00:00',
+        'check_out_date' => '2025-05-02 01:00:00',
+    ]);
+
+    $response = actingAs($user)->post(sprintf(
+        'http://%s/reservations',
+        tenantDomain($tenant),
+    ), $payload);
+
+    $response->assertRedirect();
+    $response->assertSessionHasNoErrors();
+
+    $reservation = Reservation::query()->where('code', 'RSV-TEST-HOURLY')->first();
+
+    expect($reservation)->not->toBeNull();
+    expect($reservation->offer_kind)->toBe('hourly');
+});
 
 it('prevents status changes via reservation update', function (): void {
     [
