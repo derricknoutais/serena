@@ -2026,37 +2026,37 @@
                     const currency = response.data?.currency || this.defaults.currency || 'XAF';
                     const overrides = {};
 
-                    if (early.blocked && !this.canOverrideFees) {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Arrivée anticipée non autorisée',
-                            text: early.reason || 'Arrivée anticipée refusée.',
-                        });
+                if (action === 'check_in' && early.blocked && !this.canOverrideFees) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Arrivée anticipée non autorisée',
+                        text: early.reason || 'Arrivée anticipée refusée.',
+                    });
 
-                        return { continue: false, overrides: {} };
-                    }
+                    return { continue: false, overrides: {} };
+                }
 
-                    if (early.blocked && this.canOverrideFees) {
-                        const confirmOverride = await Swal.fire({
-                            icon: 'warning',
-                            title: 'Arrivée anticipée',
-                            text: early.reason || 'Arrivée avant l’heure standard.',
-                            showCancelButton: true,
-                            confirmButtonText: 'Continuer',
-                            cancelButtonText: 'Annuler',
+                if (action === 'check_in' && early.blocked && this.canOverrideFees) {
+                    const confirmOverride = await Swal.fire({
+                        icon: 'warning',
+                        title: 'Arrivée anticipée',
+                        text: early.reason || 'Arrivée avant l’heure standard.',
+                        showCancelButton: true,
+                        confirmButtonText: 'Continuer',
+                        cancelButtonText: 'Annuler',
                         });
 
                         if (!confirmOverride.isConfirmed) {
                             return { continue: false, overrides: {} };
-                        }
                     }
+                }
 
-                    if (early.is_early_checkin && (early.fee ?? 0) > 0) {
-                        const message = early.reason
-                            || `Un supplément sera appliqué (${this.formatFeeAmount(early.fee, currency)}).`;
-                        const feePrompt = await Swal.fire({
-                            title: 'Arrivée anticipée détectée',
-                            text: message,
+                if (action === 'check_in' && early.is_early_checkin && (early.fee ?? 0) > 0) {
+                    const message = early.reason
+                        || `Un supplément sera appliqué (${this.formatFeeAmount(early.fee, currency)}).`;
+                    const feePrompt = await Swal.fire({
+                        title: 'Arrivée anticipée détectée',
+                        text: message,
                             icon: 'info',
                             input: this.canOverrideFees ? 'number' : null,
                             inputValue: early.fee ?? 0,
@@ -2070,16 +2070,16 @@
                             return { continue: false, overrides: {} };
                         }
 
-                        if (this.canOverrideFees) {
-                            const overrideValue = Number(feePrompt.value ?? early.fee ?? 0);
-                            overrides.early_fee_override = Number.isFinite(overrideValue) ? overrideValue : early.fee;
-                        }
-                    } else if (early.is_early_checkin && early.reason) {
-                        await Swal.fire({
-                            icon: 'info',
-                            title: 'Arrivée anticipée',
-                            text: early.reason,
-                            confirmButtonText: 'OK',
+                    if (this.canOverrideFees) {
+                        const overrideValue = Number(feePrompt.value ?? early.fee ?? 0);
+                        overrides.early_fee_override = Number.isFinite(overrideValue) ? overrideValue : early.fee;
+                    }
+                } else if (action === 'check_in' && early.is_early_checkin && early.reason) {
+                    await Swal.fire({
+                        icon: 'info',
+                        title: 'Arrivée anticipée',
+                        text: early.reason,
+                        confirmButtonText: 'OK',
                         });
                     }
 

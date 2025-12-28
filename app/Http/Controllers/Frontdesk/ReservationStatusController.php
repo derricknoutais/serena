@@ -135,14 +135,24 @@ class ReservationStatusController extends Controller
             ]);
         }
 
-        return response()->json([
-            'early' => [
+        $earlyPayload = $data['action'] === 'check_in'
+            ? [
                 'is_early_checkin' => $decision['is_early_checkin'],
                 'fee' => $decision['early_fee_amount'],
                 'reason' => $decision['early_reason'],
                 'policy' => $decision['early_policy'],
                 'blocked' => $decision['early_blocked'],
-            ],
+            ]
+            : [
+                'is_early_checkin' => false,
+                'fee' => 0,
+                'reason' => null,
+                'policy' => $decision['early_policy'],
+                'blocked' => false,
+            ];
+
+        return response()->json([
+            'early' => $earlyPayload,
             'late' => [
                 'is_late_checkout' => $decision['is_late_checkout'],
                 'fee' => $decision['late_fee_amount'],

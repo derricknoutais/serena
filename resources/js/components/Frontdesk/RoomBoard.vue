@@ -3091,7 +3091,7 @@ export default {
                 const currency = response.data?.currency || this.selectedRoom?.current_reservation?.currency || 'XAF';
                 const overrides = {};
 
-                if (early.blocked && !this.canOverrideFees) {
+                if (action === 'check_in' && early.blocked && !this.canOverrideFees) {
                     Swal.fire({
                         icon: 'error',
                         title: 'Arrivée anticipée non autorisée',
@@ -3101,7 +3101,7 @@ export default {
                     return { continue: false, overrides: {} };
                 }
 
-                if (early.blocked && this.canOverrideFees) {
+                if (action === 'check_in' && early.blocked && this.canOverrideFees) {
                     const confirmOverride = await Swal.fire({
                         icon: 'warning',
                         title: 'Arrivée anticipée',
@@ -3116,7 +3116,7 @@ export default {
                     }
                 }
 
-                if (early.is_early_checkin && (early.fee ?? 0) > 0) {
+                if (action === 'check_in' && early.is_early_checkin && (early.fee ?? 0) > 0) {
                     const message = early.reason
                         || `Un supplément sera appliqué (${this.formatFeeAmount(early.fee, currency)}).`;
                     const feePrompt = await Swal.fire({
@@ -3139,7 +3139,7 @@ export default {
                         const overrideValue = Number(feePrompt.value ?? early.fee ?? 0);
                         overrides.early_fee_override = Number.isFinite(overrideValue) ? overrideValue : early.fee;
                     }
-                } else if (early.is_early_checkin && early.reason) {
+                } else if (action === 'check_in' && early.is_early_checkin && early.reason) {
                     await Swal.fire({
                         icon: 'info',
                         title: 'Arrivée anticipée',

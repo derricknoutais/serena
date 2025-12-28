@@ -316,6 +316,8 @@ it('does not block check-out previews with early check-in rules', function (): v
     ]);
 
     $response->assertOk();
+    $response->assertJsonPath('early.is_early_checkin', false);
+    $response->assertJsonPath('early.blocked', false);
 });
 
 it('uses offer late checkout policy when configured', function (): void {
