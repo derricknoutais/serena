@@ -31,6 +31,7 @@ class Room extends Model
         'floor',
         'status',
         'hk_status',
+        'block_sale_after_checkout'
     ];
 
     /**
