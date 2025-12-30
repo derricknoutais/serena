@@ -36,12 +36,24 @@ class UpdateMaintenanceTicketRequest extends FormRequest
                     MaintenanceTicket::STATUS_CLOSED,
                 ]),
             ],
+            'severity' => [
+                'sometimes',
+                'required',
+                'string',
+                Rule::in([
+                    MaintenanceTicket::SEVERITY_LOW,
+                    MaintenanceTicket::SEVERITY_MEDIUM,
+                    MaintenanceTicket::SEVERITY_HIGH,
+                    MaintenanceTicket::SEVERITY_CRITICAL,
+                ]),
+            ],
             'assigned_to_user_id' => [
                 'nullable',
                 'integer',
                 Rule::exists('users', 'id')->where('tenant_id', $tenantId),
             ],
             'description' => ['nullable', 'string'],
+            'blocks_sale' => ['nullable', 'boolean'],
             'restore_room_status' => ['sometimes', 'boolean'],
         ];
     }

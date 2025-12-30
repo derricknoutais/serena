@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Models\MaintenanceTicket;
 use App\Models\Reservation;
 use App\Models\Room;
 use Illuminate\Support\Carbon;
@@ -200,7 +201,21 @@ class ReservationStateMachine
         if ($reservation->room) {
             $this->roomStateMachine->markAvailable($reservation->room);
             $reservation->room->hk_status = 'dirty';
+            $shouldBlockAfterCheckout = (bool) $reservation->room->block_sale_after_checkout;
+            $reservation->room->block_sale_after_checkout = false;
             $reservation->room->save();
+
+            $hasBlockingMaintenance = $reservation->room->maintenanceTickets()
+                ->whereIn('status', [
+                    MaintenanceTicket::STATUS_OPEN,
+                    MaintenanceTicket::STATUS_IN_PROGRESS,
+                ])
+                ->where('blocks_sale', true)
+                ->exists();
+
+            if ($hasBlockingMaintenance || $shouldBlockAfterCheckout) {
+                $this->roomStateMachine->markOutOfService($reservation->room);
+            }
         }
 
         $fromStatus = $reservation->status;

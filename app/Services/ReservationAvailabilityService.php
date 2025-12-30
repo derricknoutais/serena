@@ -20,6 +20,12 @@ class ReservationAvailabilityService
             ]);
         }
 
+        if ($this->roomIsBlockedByMaintenance($data)) {
+            throw ValidationException::withMessages([
+                'room_id' => ['La chambre sélectionnée est bloquée par la maintenance.'],
+            ]);
+        }
+
         if ($this->exceedsRoomTypeCapacity($data, $ignoreReservationId)) {
             throw ValidationException::withMessages([
                 'room_type_id' => ['Aucune chambre disponible pour ce type sur cette période.'],
@@ -64,7 +70,7 @@ class ReservationAvailabilityService
             ->where('tenant_id', $tenantId)
             ->where('hotel_id', $hotelId)
             ->where('room_type_id', $roomTypeId)
-            ->where('status', 'active')
+            ->sellable()
             ->count();
 
         if ($activeRooms <= 0) {
@@ -84,6 +90,24 @@ class ReservationAvailabilityService
             ->count();
 
         return $overlappingReservations >= $activeRooms;
+    }
+
+    protected function roomIsBlockedByMaintenance(array $data): bool
+    {
+        $roomId = $data['room_id'] ?? null;
+        $tenantId = $data['tenant_id'] ?? null;
+        $hotelId = $data['hotel_id'] ?? null;
+
+        if (! $roomId || ! $tenantId || ! $hotelId) {
+            return false;
+        }
+
+        return ! Room::query()
+            ->where('tenant_id', $tenantId)
+            ->where('hotel_id', $hotelId)
+            ->where('id', $roomId)
+            ->sellable()
+            ->exists();
     }
 
     private function isActiveStatus(?string $status): bool

@@ -85,6 +85,12 @@
                                     {{ availabilityBadge(room).label }}
                                 </span>
                                 <span
+                                    v-if="room.maintenance_blocking_count > 0"
+                                    class="rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 font-medium text-rose-700"
+                                >
+                                    Bloque vente
+                                </span>
+                                <span
                                     class="rounded-full border px-2 py-0.5 font-medium"
                                     :class="hkBadge(room).classes"
                                 >
@@ -182,6 +188,12 @@
                                     {{ availabilityBadge(selectedRoom).label }}
                                 </span>
                                 <span
+                                    v-if="selectedRoom.maintenance_blocking_count > 0"
+                                    class="rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 font-semibold text-rose-700"
+                                >
+                                    Bloque vente
+                                </span>
+                                <span
                                     v-if="hkBadge(selectedRoom)"
                                     class="rounded-full border px-2 py-0.5 font-semibold"
                                     :class="hkBadge(selectedRoom).classes"
@@ -218,6 +230,12 @@
                             <div>
                                 <span class="font-semibold text-gray-700">Statut ménage :</span>
                                 <span class="ml-1">{{ selectedRoom.hk_status }}</span>
+                            </div>
+                            <div>
+                                <span class="font-semibold text-gray-700">Vente :</span>
+                                <span class="ml-1">
+                                    {{ selectedRoom.is_sellable ? 'Vendable' : 'Bloquée' }}
+                                </span>
                             </div>
                         </div>
 
@@ -330,14 +348,14 @@
                                         Maintenance
                                     </h4>
                                     <p
-                                        v-if="selectedRoomMaintenance?.opened_at"
+                                        v-if="selectedRoomMaintenanceTickets.length"
                                         class="text-[11px] text-amber-700"
                                     >
-                                        Ticket ouvert le {{ formatDateTime(selectedRoomMaintenance.opened_at) }}
+                                        {{ selectedRoomMaintenanceTickets.length }} ticket(s) ouvert(s)
                                     </p>
                                 </div>
                                 <button
-                                    v-if="canReportMaintenance && !selectedRoomMaintenance"
+                                    v-if="canReportMaintenance"
                                     type="button"
                                     class="rounded-lg border border-amber-300 bg-white px-3 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-50"
                                     @click="openMaintenanceModal(selectedRoom)"
@@ -347,84 +365,111 @@
                             </div>
 
                             <div
-                                v-if="selectedRoomMaintenance"
-                                class="space-y-2 text-xs text-amber-900"
+                                v-if="selectedRoomMaintenanceTickets.length"
+                                class="space-y-3 text-xs text-amber-900"
                             >
-                                <div class="flex flex-wrap items-center gap-2">
-                                    <span class="font-semibold">Statut :</span>
-                                    <span class="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-amber-900">
-                                        {{ maintenanceStatusLabel(selectedRoomMaintenance.status) }}
-                                    </span>
-                                    <span class="font-semibold">Sévérité :</span>
-                                    <span
-                                        class="rounded-full px-2 py-0.5 text-[11px] font-semibold"
-                                        :class="maintenanceBadge(selectedRoomMaintenance).classes"
-                                    >
-                                        {{ maintenanceSeverityLabel(selectedRoomMaintenance.severity) }}
-                                    </span>
-                                </div>
-                                <div class="text-[11px]">
-                                    <span class="font-semibold">Titre :</span>
-                                    <span class="ml-1">{{ selectedRoomMaintenance.title }}</span>
-                                </div>
                                 <div
-                                    v-if="selectedRoomMaintenance.description"
-                                    class="text-[11px]"
+                                    v-for="ticket in selectedRoomMaintenanceTickets"
+                                    :key="ticket.id"
+                                    class="rounded-lg border border-amber-200 bg-white/80 p-3"
                                 >
-                                    <span class="font-semibold">Description :</span>
-                                    <span class="ml-1">{{ selectedRoomMaintenance.description }}</span>
-                                </div>
-                                <div class="text-[11px]">
-                                    <span class="font-semibold">Déclaré par :</span>
-                                    <span class="ml-1">{{ selectedRoomMaintenance.reported_by?.name || 'N/A' }}</span>
-                                </div>
-                                <div class="text-[11px]">
-                                    <span class="font-semibold">Assigné à :</span>
-                                    <span class="ml-1">
-                                        {{ selectedRoomMaintenance.assigned_to?.name || 'Non assigné' }}
-                                    </span>
-                                </div>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="font-semibold">Statut :</span>
+                                        <span class="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+                                            {{ maintenanceStatusLabel(ticket.status) }}
+                                        </span>
+                                        <span class="font-semibold">Sévérité :</span>
+                                        <span
+                                            class="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                                            :class="maintenanceBadge(ticket).classes"
+                                        >
+                                            {{ maintenanceSeverityLabel(ticket.severity) }}
+                                        </span>
+                                        <span
+                                            v-if="ticket.blocks_sale"
+                                            class="rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700"
+                                        >
+                                            Bloque vente
+                                        </span>
+                                    </div>
+                                    <div class="text-[11px]">
+                                        <span class="font-semibold">Titre :</span>
+                                        <span class="ml-1">{{ ticket.title }}</span>
+                                    </div>
+                                    <div
+                                        v-if="ticket.description"
+                                        class="text-[11px]"
+                                    >
+                                        <span class="font-semibold">Description :</span>
+                                        <span class="ml-1">{{ ticket.description }}</span>
+                                    </div>
+                                    <div class="text-[11px]">
+                                        <span class="font-semibold">Déclaré par :</span>
+                                        <span class="ml-1">{{ ticket.reported_by?.name || 'N/A' }}</span>
+                                    </div>
+                                    <div class="text-[11px]">
+                                        <span class="font-semibold">Assigné à :</span>
+                                        <span class="ml-1">
+                                            {{ ticket.assigned_to?.name || 'Non assigné' }}
+                                        </span>
+                                    </div>
 
-                                <div
-                                    v-if="selectedRoomMaintenance && (canProgressMaintenance || canHandleMaintenance)"
-                                    class="flex flex-wrap gap-2 pt-2"
-                                >
-                                    <button
-                                        v-if="canHandleMaintenance && selectedRoomMaintenance && (!selectedRoomMaintenance.assigned_to || selectedRoomMaintenance.assigned_to.id !== currentUserId)"
-                                        type="button"
-                                        class="rounded-lg border border-amber-300 bg-white px-3 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-60"
-                                        :disabled="maintenanceStatusSubmitting"
-                                        @click="assignMaintenanceToSelf"
+                                    <div
+                                        v-if="canOverrideMaintenanceBlocks"
+                                        class="pt-2"
                                     >
-                                        Me l'assigner
-                                    </button>
-                                    <button
-                                        v-if="canProgressMaintenance && selectedRoomMaintenance.status === 'open'"
-                                        type="button"
-                                        class="rounded-lg border border-amber-300 bg-white px-3 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-60"
-                                        :disabled="maintenanceStatusSubmitting"
-                                        @click="updateMaintenanceStatus('in_progress')"
+                                        <button
+                                            type="button"
+                                            class="rounded-lg border px-3 py-1 text-[11px] font-semibold"
+                                            :class="ticket.blocks_sale ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-slate-300 bg-white text-slate-700'"
+                                            :disabled="maintenanceStatusSubmitting"
+                                            @click="toggleMaintenanceBlocksSale(ticket)"
+                                        >
+                                            {{ ticket.blocks_sale ? 'Ne bloque pas la vente' : 'Marquer bloquant' }}
+                                        </button>
+                                    </div>
+
+                                    <div
+                                        v-if="canProgressMaintenance || canHandleMaintenance"
+                                        class="flex flex-wrap gap-2 pt-2"
                                     >
-                                        Mettre en cours
-                                    </button>
-                                    <button
-                                        v-if="canHandleMaintenance && ['open', 'in_progress'].includes(selectedRoomMaintenance.status)"
-                                        type="button"
-                                        class="rounded-lg border border-green-300 bg-green-50 px-3 py-1 text-[11px] font-semibold text-green-700 hover:bg-green-100 disabled:opacity-60"
-                                        :disabled="maintenanceStatusSubmitting"
-                                        @click="updateMaintenanceStatus('resolved')"
-                                    >
-                                        Résoudre
-                                    </button>
-                                    <button
-                                        v-if="canHandleMaintenance && selectedRoomMaintenance.status !== 'closed'"
-                                        type="button"
-                                        class="rounded-lg border border-gray-300 bg-gray-50 px-3 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
-                                        :disabled="maintenanceStatusSubmitting"
-                                        @click="updateMaintenanceStatus('closed')"
-                                    >
-                                        Clôturer
-                                    </button>
+                                        <button
+                                            v-if="canHandleMaintenance && (!ticket.assigned_to || ticket.assigned_to.id !== currentUserId)"
+                                            type="button"
+                                            class="rounded-lg border border-amber-300 bg-white px-3 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-60"
+                                            :disabled="maintenanceStatusSubmitting"
+                                            @click="assignMaintenanceToSelf(ticket)"
+                                        >
+                                            Me l'assigner
+                                        </button>
+                                        <button
+                                            v-if="canProgressMaintenance && ticket.status === 'open'"
+                                            type="button"
+                                            class="rounded-lg border border-amber-300 bg-white px-3 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-60"
+                                            :disabled="maintenanceStatusSubmitting"
+                                            @click="updateMaintenanceStatus(ticket, 'in_progress')"
+                                        >
+                                            Mettre en cours
+                                        </button>
+                                        <button
+                                            v-if="canHandleMaintenance && ['open', 'in_progress'].includes(ticket.status)"
+                                            type="button"
+                                            class="rounded-lg border border-green-300 bg-green-50 px-3 py-1 text-[11px] font-semibold text-green-700 hover:bg-green-100 disabled:opacity-60"
+                                            :disabled="maintenanceStatusSubmitting"
+                                            @click="updateMaintenanceStatus(ticket, 'resolved')"
+                                        >
+                                            Résoudre
+                                        </button>
+                                        <button
+                                            v-if="canHandleMaintenance && ticket.status !== 'closed'"
+                                            type="button"
+                                            class="rounded-lg border border-gray-300 bg-gray-50 px-3 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
+                                            :disabled="maintenanceStatusSubmitting"
+                                            @click="updateMaintenanceStatus(ticket, 'closed')"
+                                        >
+                                            Clôturer
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1128,6 +1173,20 @@
                         {{ maintenanceFormErrors.severity }}
                     </p>
                 </div>
+                <div v-if="canOverrideMaintenanceBlocks">
+                    <label class="text-xs font-semibold text-gray-500">Blocage des ventes</label>
+                    <div class="mt-2 flex items-center gap-2 text-xs text-gray-700">
+                        <input
+                            id="maintenance-blocks-sale"
+                            v-model="maintenanceForm.blocks_sale"
+                            type="checkbox"
+                            class="h-4 w-4 rounded border-gray-300 text-rose-600 focus:ring-rose-500"
+                        />
+                        <label for="maintenance-blocks-sale">
+                            Bloquer la vente pour ce ticket
+                        </label>
+                    </div>
+                </div>
                 <div>
                     <label class="text-xs font-semibold text-gray-500">Description</label>
                     <textarea
@@ -1300,6 +1359,7 @@ export default {
             maintenanceForm: {
                 title: '',
                 severity: 'medium',
+                blocks_sale: false,
                 description: '',
             },
             maintenanceFormErrors: {},
@@ -1307,6 +1367,7 @@ export default {
                 { value: 'low', label: 'Gravité basse' },
                 { value: 'medium', label: 'Gravité moyenne' },
                 { value: 'high', label: 'Gravité haute' },
+                { value: 'critical', label: 'Gravité critique' },
             ],
             maintenanceSubmitting: false,
             maintenanceStatusSubmitting: false,
@@ -1463,6 +1524,11 @@ export default {
         canManageHousekeepingActions() {
             return this.canMarkClean || this.canMarkDirty || this.canMarkInspected;
         },
+        canOverrideMaintenanceBlocks() {
+            const roles = this.$page?.props?.auth?.user?.roles || [];
+
+            return roles.some((role) => ['owner', 'manager'].includes(role.name));
+        },
         canReportMaintenance() {
             return this.permissionFlags.maintenance_tickets_create ?? this.maintenancePermissions?.canReport ?? false;
         },
@@ -1501,8 +1567,19 @@ export default {
                     return room.current_reservation.id === reservationId;
                 });
         },
+        selectedRoomMaintenanceTickets() {
+            if (!this.selectedRoom) {
+                return [];
+            }
+
+            if (Array.isArray(this.selectedRoom.maintenance_tickets)) {
+                return this.selectedRoom.maintenance_tickets;
+            }
+
+            return this.selectedRoom.maintenance_ticket ? [this.selectedRoom.maintenance_ticket] : [];
+        },
         selectedRoomMaintenance() {
-            return this.selectedRoom?.maintenance_ticket ?? null;
+            return this.selectedRoomMaintenanceTickets[0] ?? null;
         },
         currentUserId() {
             return this.currentUser?.id ?? null;
@@ -2088,9 +2165,13 @@ export default {
             this.maintenanceFormErrors = {};
         },
         resetMaintenanceForm() {
+            const defaultSeverity = 'medium';
+            const defaultBlocksSale = ['high', 'critical'].includes(defaultSeverity);
+
             this.maintenanceForm = {
                 title: '',
-                severity: 'medium',
+                severity: defaultSeverity,
+                blocks_sale: defaultBlocksSale,
                 description: '',
             };
             this.maintenanceFormErrors = {};
@@ -2104,16 +2185,34 @@ export default {
             this.maintenanceFormErrors = {};
 
             try {
-                const response = await axios.post('/maintenance-tickets', {
+                const payload = {
                     room_id: this.selectedRoom.id,
                     ...this.maintenanceForm,
+                };
+
+                if (!this.canOverrideMaintenanceBlocks) {
+                    delete payload.blocks_sale;
+                }
+
+                const response = await axios.post('/maintenance-tickets', {
+                    ...payload,
                 });
 
                 const ticket = response.data?.ticket ?? null;
 
                 if (ticket) {
+                    const tickets = [
+                        ticket,
+                        ...this.selectedRoomMaintenanceTickets.filter((item) => item.id !== ticket.id),
+                    ];
+                    const blockingCount = tickets.filter((item) => item.blocks_sale).length;
+
                     this.applyRoomPatch(this.selectedRoom.id, {
                         maintenance_ticket: ticket,
+                        maintenance_tickets: tickets,
+                        maintenance_open_count: tickets.length,
+                        maintenance_blocking_count: blockingCount,
+                        is_sellable: blockingCount === 0,
                     });
                 }
 
@@ -2151,17 +2250,17 @@ export default {
                 this.maintenanceSubmitting = false;
             }
         },
-        async assignMaintenanceToSelf() {
-            if (!this.selectedRoomMaintenance || !this.currentUserId) {
+        async assignMaintenanceToSelf(ticket) {
+            if (!ticket || !this.currentUserId) {
                 return;
             }
 
-            await this.updateMaintenanceStatus(this.selectedRoomMaintenance.status, {
+            await this.updateMaintenanceStatus(ticket, ticket.status, {
                 assigned_to_user_id: this.currentUserId,
             });
         },
-        async updateMaintenanceStatus(status, extra = {}) {
-            if (!this.selectedRoomMaintenance) {
+        async updateMaintenanceStatus(ticket, status, extra = {}) {
+            if (!ticket) {
                 return;
             }
 
@@ -2199,15 +2298,26 @@ export default {
 
             try {
                 const response = await axios.patch(
-                    `/maintenance-tickets/${this.selectedRoomMaintenance.id}`,
+                    `/maintenance-tickets/${ticket.id}`,
                     payload,
                 );
 
-                const ticket = response.data?.ticket ?? null;
+                const updatedTicket = response.data?.ticket ?? null;
 
-                if (ticket) {
+                if (updatedTicket) {
+                    const tickets = this.selectedRoomMaintenanceTickets
+                        .filter((item) => item.id !== updatedTicket.id)
+                        .concat(['open', 'in_progress'].includes(updatedTicket.status) ? updatedTicket : []);
+                    const blockingCount = tickets.filter((item) => item.blocks_sale).length;
+
+                    const primaryTicket = tickets[0] ?? null;
+
                     this.applyRoomPatch(this.selectedRoom.id, {
-                        maintenance_ticket: ticket,
+                        maintenance_ticket: primaryTicket,
+                        maintenance_tickets: tickets,
+                        maintenance_open_count: tickets.length,
+                        maintenance_blocking_count: blockingCount,
+                        is_sellable: blockingCount === 0,
                     });
                 }
 
@@ -2229,6 +2339,55 @@ export default {
                     icon: 'error',
                     title: 'Erreur',
                     text: error.response?.data?.message ?? 'Impossible de mettre à jour le ticket.',
+                });
+            } finally {
+                this.maintenanceStatusSubmitting = false;
+            }
+        },
+        async toggleMaintenanceBlocksSale(ticket) {
+            if (!ticket || !this.canOverrideMaintenanceBlocks) {
+                return;
+            }
+
+            this.maintenanceStatusSubmitting = true;
+
+            try {
+                const response = await axios.patch(
+                    `/maintenance-tickets/${ticket.id}`,
+                    {
+                        blocks_sale: !ticket.blocks_sale,
+                    },
+                );
+
+                const updatedTicket = response.data?.ticket ?? null;
+
+                if (updatedTicket) {
+                    const tickets = this.selectedRoomMaintenanceTickets.map((item) => (
+                        item.id === updatedTicket.id ? updatedTicket : item
+                    ));
+                    const blockingCount = tickets.filter((item) => item.blocks_sale).length;
+
+                    this.applyRoomPatch(this.selectedRoom.id, {
+                        maintenance_ticket: updatedTicket,
+                        maintenance_tickets: tickets,
+                        maintenance_open_count: tickets.length,
+                        maintenance_blocking_count: blockingCount,
+                        is_sellable: blockingCount === 0,
+                    });
+                }
+
+                this.reloadRoomBoard();
+            } catch (error) {
+                if (error?.response?.status === 403) {
+                    this.showUnauthorizedAlert();
+
+                    return;
+                }
+
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erreur',
+                    text: error.response?.data?.message ?? 'Impossible de modifier le blocage.',
                 });
             } finally {
                 this.maintenanceStatusSubmitting = false;
@@ -2745,6 +2904,13 @@ export default {
                 };
             }
 
+            if (room.is_sellable === false) {
+                return {
+                    label: 'Non vendable',
+                    classes: 'bg-rose-100 text-rose-700 border-rose-300',
+                };
+            }
+
             if (room.hk_status === 'dirty') {
                 return {
                     label: 'Disponible',
@@ -2839,6 +3005,8 @@ export default {
         },
         maintenanceSeverityLabel(severity) {
             switch (severity) {
+                case 'critical':
+                    return 'Gravité critique';
                 case 'high':
                     return 'Gravité haute';
                 case 'low':
@@ -2871,6 +3039,12 @@ export default {
             }
 
             switch (ticket.severity) {
+                case 'critical':
+                    return {
+                        label: 'Maintenance critique',
+                        classes: 'border-rose-400 bg-rose-50 text-rose-800',
+                        dotClass: 'bg-rose-500',
+                    };
                 case 'high':
                     return {
                         label: 'Maintenance critique',

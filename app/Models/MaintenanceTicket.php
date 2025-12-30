@@ -24,6 +24,8 @@ class MaintenanceTicket extends Model
 
     public const SEVERITY_HIGH = 'high';
 
+    public const SEVERITY_CRITICAL = 'critical';
+
     /**
      * @var list<string>
      */
@@ -35,6 +37,7 @@ class MaintenanceTicket extends Model
         'assigned_to_user_id',
         'status',
         'severity',
+        'blocks_sale',
         'title',
         'description',
         'opened_at',
@@ -49,7 +52,13 @@ class MaintenanceTicket extends Model
         return [
             'opened_at' => 'datetime',
             'closed_at' => 'datetime',
+            'blocks_sale' => 'boolean',
         ];
+    }
+
+    public static function defaultBlocksSaleFromSeverity(?string $severity): bool
+    {
+        return in_array($severity, [self::SEVERITY_HIGH, self::SEVERITY_CRITICAL], true);
     }
 
     public function room(): BelongsTo

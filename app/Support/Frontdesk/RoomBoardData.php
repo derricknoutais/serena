@@ -139,7 +139,12 @@ class RoomBoardData
                 ];
             }
 
-            $activeTicket = $activeTickets->get($room->id)?->first();
+            $roomTickets = $activeTickets->get($room->id, collect());
+            $blockingTickets = $roomTickets->where('blocks_sale', true);
+            $activeTicket = $roomTickets->first();
+            $isSellable = $blockingTickets->isEmpty()
+                && ! $room->block_sale_after_checkout
+                && ! in_array($room->status, [Room::STATUS_OUT_OF_ORDER, 'inactive'], true);
 
             return [
                 'id' => $room->id,
@@ -150,11 +155,29 @@ class RoomBoardData
                 'hk_status' => $room->hk_status,
                 'ui_status' => $uiStatus,
                 'is_occupied' => $isOccupied,
+                'is_sellable' => $isSellable,
+                'block_sale_after_checkout' => (bool) $room->block_sale_after_checkout,
+                'maintenance_open_count' => $roomTickets->count(),
+                'maintenance_blocking_count' => $blockingTickets->count(),
                 'current_reservation' => $currentReservationSummary,
+                'maintenance_tickets' => $roomTickets->map(function (MaintenanceTicket $ticket): array {
+                    return [
+                        'id' => $ticket->id,
+                        'status' => $ticket->status,
+                        'severity' => $ticket->severity,
+                        'blocks_sale' => (bool) $ticket->blocks_sale,
+                        'title' => $ticket->title,
+                        'description' => $ticket->description,
+                        'opened_at' => optional($ticket->opened_at)?->toDateTimeString(),
+                        'assigned_to' => $ticket->assignedTo?->only(['id', 'name']),
+                        'reported_by' => $ticket->reportedBy?->only(['id', 'name']),
+                    ];
+                })->values(),
                 'maintenance_ticket' => $activeTicket ? [
                     'id' => $activeTicket->id,
                     'status' => $activeTicket->status,
                     'severity' => $activeTicket->severity,
+                    'blocks_sale' => (bool) $activeTicket->blocks_sale,
                     'title' => $activeTicket->title,
                     'description' => $activeTicket->description,
                     'opened_at' => optional($activeTicket->opened_at)?->toDateTimeString(),

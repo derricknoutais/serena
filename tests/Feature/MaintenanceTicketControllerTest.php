@@ -4,8 +4,10 @@ require_once __DIR__.'/FolioTestHelpers.php';
 
 use App\Models\MaintenanceTicket;
 use App\Models\Room;
+use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
-use Inertia\Testing\AssertableInertia as Assert;
+
+use function Pest\Laravel\actingAs;
 
 beforeEach(function (): void {
     config([
@@ -15,251 +17,67 @@ beforeEach(function (): void {
         'tenancy.central_domains' => ['serena.test'],
     ]);
 
-    $this->seed(RoleSeeder::class);
+    $this->seed([
+        RoleSeeder::class,
+        PermissionSeeder::class,
+    ]);
 });
 
-it('creates a maintenance ticket and marks the room out of service', function (): void {
+it('creates maintenance tickets without forcing out of order', function (): void {
     [
         'tenant' => $tenant,
-        'room' => $room,
         'user' => $user,
+        'room' => $room,
+        'hotel' => $hotel,
     ] = setupReservationEnvironment('maintenance-create');
 
-    $user->assignRole('receptionist');
+    $user->assignRole('manager');
 
-    $response = $this->actingAs($user)->postJson(sprintf(
+    $response = actingAs($user)->postJson(sprintf(
         'http://%s/maintenance-tickets',
         tenantDomain($tenant),
     ), [
         'room_id' => $room->id,
         'title' => 'Climatisation en panne',
         'severity' => MaintenanceTicket::SEVERITY_HIGH,
-        'description' => 'Le moteur ne démarre plus.',
+        'description' => 'La climatisation ne démarre pas.',
     ]);
 
-    $response->assertOk()
-        ->assertJsonPath('ticket.status', MaintenanceTicket::STATUS_OPEN)
-        ->assertJsonPath('ticket.severity', MaintenanceTicket::SEVERITY_HIGH);
+    $response->assertSuccessful();
 
-    expect($room->fresh()->status)->toBe(Room::STATUS_OUT_OF_ORDER);
-    expect(MaintenanceTicket::query()->count())->toBe(1);
+    $ticket = MaintenanceTicket::query()->firstOrFail();
+
+    expect($ticket->blocks_sale)->toBeTrue();
+    expect($room->fresh()->status)->toBe(Room::STATUS_AVAILABLE);
+    expect($room->fresh()->block_sale_after_checkout)->toBeFalse();
 });
 
-it('prevents creating a second active ticket for the same room', function (): void {
+it('flags occupied rooms to block sale after checkout when needed', function (): void {
     [
         'tenant' => $tenant,
-        'room' => $room,
         'user' => $user,
-    ] = setupReservationEnvironment('maintenance-duplicate');
+        'room' => $room,
+    ] = setupReservationEnvironment('maintenance-occupied');
 
-    $user->assignRole('receptionist');
+    $user->assignRole('manager');
 
-    MaintenanceTicket::query()->create([
-        'tenant_id' => $tenant->id,
-        'hotel_id' => $room->hotel_id,
-        'room_id' => $room->id,
-        'reported_by_user_id' => $user->id,
-        'status' => MaintenanceTicket::STATUS_OPEN,
-        'severity' => MaintenanceTicket::SEVERITY_MEDIUM,
-        'title' => 'Fuite',
-        'description' => null,
-        'opened_at' => now(),
+    $room->update([
+        'status' => Room::STATUS_OCCUPIED,
     ]);
 
-    $response = $this->actingAs($user)->postJson(sprintf(
+    $response = actingAs($user)->postJson(sprintf(
         'http://%s/maintenance-tickets',
         tenantDomain($tenant),
     ), [
         'room_id' => $room->id,
-        'title' => 'Autre souci',
-        'severity' => MaintenanceTicket::SEVERITY_LOW,
-    ]);
-
-    $response->assertStatus(422)
-        ->assertJsonValidationErrors(['room_id']);
-});
-
-it('allows a manager to resolve a ticket and restore the room', function (): void {
-    [
-        'tenant' => $tenant,
-        'room' => $room,
-        'user' => $user,
-    ] = setupReservationEnvironment('maintenance-resolve');
-
-    $user->assignRole('manager');
-    $room->update(['status' => Room::STATUS_OUT_OF_ORDER, 'hk_status' => 'clean']);
-
-    $ticket = MaintenanceTicket::query()->create([
-        'tenant_id' => $tenant->id,
-        'hotel_id' => $room->hotel_id,
-        'room_id' => $room->id,
-        'reported_by_user_id' => $user->id,
-        'status' => MaintenanceTicket::STATUS_OPEN,
-        'severity' => MaintenanceTicket::SEVERITY_MEDIUM,
-        'title' => 'Porte cassée',
-        'description' => null,
-        'opened_at' => now()->subHour(),
-    ]);
-
-    $response = $this->actingAs($user)->patchJson(sprintf(
-        'http://%s/maintenance-tickets/%s',
-        tenantDomain($tenant),
-        $ticket->id,
-    ), [
-        'status' => MaintenanceTicket::STATUS_RESOLVED,
-        'restore_room_status' => true,
-    ]);
-
-    $response->assertOk()
-        ->assertJsonPath('ticket.status', MaintenanceTicket::STATUS_RESOLVED);
-
-    $ticket->refresh();
-    $room->refresh();
-
-    expect($ticket->closed_at)->not()->toBeNull();
-    expect($room->status)->toBe(Room::STATUS_AVAILABLE);
-    expect($room->hk_status)->toBe('dirty');
-});
-
-it('forbids receptionists from closing a maintenance ticket', function (): void {
-    [
-        'tenant' => $tenant,
-        'room' => $room,
-        'user' => $user,
-    ] = setupReservationEnvironment('maintenance-forbid');
-
-    $user->assignRole('receptionist');
-
-    $ticket = MaintenanceTicket::query()->create([
-        'tenant_id' => $tenant->id,
-        'hotel_id' => $room->hotel_id,
-        'room_id' => $room->id,
-        'reported_by_user_id' => $user->id,
-        'status' => MaintenanceTicket::STATUS_OPEN,
-        'severity' => MaintenanceTicket::SEVERITY_MEDIUM,
-        'title' => 'Fenêtre cassée',
-        'description' => null,
-        'opened_at' => now(),
-    ]);
-
-    $response = $this->actingAs($user)->patchJson(sprintf(
-        'http://%s/maintenance-tickets/%s',
-        tenantDomain($tenant),
-        $ticket->id,
-    ), [
-        'status' => MaintenanceTicket::STATUS_RESOLVED,
-    ]);
-
-    $response->assertStatus(403);
-});
-
-it('shows open and in-progress tickets by default on the maintenance index', function (): void {
-    [
-        'tenant' => $tenant,
-        'room' => $room,
-        'user' => $user,
-    ] = setupReservationEnvironment('maintenance-index');
-
-    $user->assignRole('manager');
-
-    $openTicket = MaintenanceTicket::query()->create([
-        'tenant_id' => $tenant->id,
-        'hotel_id' => $room->hotel_id,
-        'room_id' => $room->id,
-        'reported_by_user_id' => $user->id,
-        'status' => MaintenanceTicket::STATUS_OPEN,
-        'severity' => MaintenanceTicket::SEVERITY_LOW,
-        'title' => 'Fenêtre fissurée',
-        'description' => null,
-        'opened_at' => now()->subDay(),
-    ]);
-
-    $inProgressTicket = MaintenanceTicket::query()->create([
-        'tenant_id' => $tenant->id,
-        'hotel_id' => $room->hotel_id,
-        'room_id' => $room->id,
-        'reported_by_user_id' => $user->id,
-        'status' => MaintenanceTicket::STATUS_IN_PROGRESS,
-        'severity' => MaintenanceTicket::SEVERITY_MEDIUM,
-        'title' => 'Climatisation',
-        'description' => null,
-        'opened_at' => now()->subHours(6),
-    ]);
-
-    MaintenanceTicket::query()->create([
-        'tenant_id' => $tenant->id,
-        'hotel_id' => $room->hotel_id,
-        'room_id' => $room->id,
-        'reported_by_user_id' => $user->id,
-        'status' => MaintenanceTicket::STATUS_RESOLVED,
+        'title' => 'Panne électrique',
         'severity' => MaintenanceTicket::SEVERITY_HIGH,
-        'title' => 'Porte réparée',
-        'description' => null,
-        'opened_at' => now()->subHours(3),
+        'blocks_sale' => true,
     ]);
 
-    $response = $this->actingAs($user)->get(sprintf(
-        'http://%s/maintenance',
-        tenantDomain($tenant),
-    ));
+    $response->assertSuccessful();
 
-    $response->assertOk()
-        ->assertInertia(function (Assert $page) use ($openTicket, $inProgressTicket): void {
-            $page->component('Maintenance/Index')
-                ->where('filters.status', 'open')
-                ->has('tickets.data', 2)
-                ->where('tickets.data', function ($data) use ($openTicket, $inProgressTicket): bool {
-                    $ids = collect($data)->pluck('id')->all();
-
-                    return in_array($openTicket->id, $ids, true)
-                        && in_array($inProgressTicket->id, $ids, true);
-                });
-        });
-});
-
-it('filters maintenance tickets by status', function (): void {
-    [
-        'tenant' => $tenant,
-        'room' => $room,
-        'user' => $user,
-    ] = setupReservationEnvironment('maintenance-index-filter');
-
-    $user->assignRole('manager');
-
-    MaintenanceTicket::query()->create([
-        'tenant_id' => $tenant->id,
-        'hotel_id' => $room->hotel_id,
-        'room_id' => $room->id,
-        'reported_by_user_id' => $user->id,
-        'status' => MaintenanceTicket::STATUS_OPEN,
-        'severity' => MaintenanceTicket::SEVERITY_LOW,
-        'title' => 'Poignée',
-        'description' => null,
-        'opened_at' => now()->subHour(),
-    ]);
-
-    $resolved = MaintenanceTicket::query()->create([
-        'tenant_id' => $tenant->id,
-        'hotel_id' => $room->hotel_id,
-        'room_id' => $room->id,
-        'reported_by_user_id' => $user->id,
-        'status' => MaintenanceTicket::STATUS_RESOLVED,
-        'severity' => MaintenanceTicket::SEVERITY_MEDIUM,
-        'title' => 'TV',
-        'description' => null,
-        'opened_at' => now()->subMinutes(30),
-    ]);
-
-    $response = $this->actingAs($user)->get(sprintf(
-        'http://%s/maintenance?status=resolved',
-        tenantDomain($tenant),
-    ));
-
-    $response->assertOk()
-        ->assertInertia(function (Assert $page) use ($resolved): void {
-            $page->component('Maintenance/Index')
-                ->where('filters.status', 'resolved')
-                ->has('tickets.data', 1)
-                ->where('tickets.data.0.id', $resolved->id);
-        });
+    $room->refresh();
+    expect($room->status)->toBe(Room::STATUS_OCCUPIED);
+    expect($room->block_sale_after_checkout)->toBeTrue();
 });

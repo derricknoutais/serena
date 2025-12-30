@@ -10,7 +10,6 @@ use App\Models\User;
 use App\Services\RoomStateMachine;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -143,7 +142,8 @@ class MaintenanceTicketController extends Controller
             ->with('roomType')
             ->findOrFail($data['room_id']);
 
-        $this->ensureNoActiveTicket($room);
+        $canOverrideBlocks = $user->hasAnyRole(['owner', 'manager']);
+        $blocksSaleInput = array_key_exists('blocks_sale', $data) ? (bool) $data['blocks_sale'] : null;
 
         $ticket = MaintenanceTicket::query()->create([
             'tenant_id' => $user->tenant_id,
@@ -153,13 +153,27 @@ class MaintenanceTicketController extends Controller
             'assigned_to_user_id' => $data['assigned_to_user_id'] ?? null,
             'status' => MaintenanceTicket::STATUS_OPEN,
             'severity' => $data['severity'],
+            'blocks_sale' => $this->resolveBlocksSale($data['severity'], $blocksSaleInput, $canOverrideBlocks),
             'title' => $data['title'],
             'description' => $data['description'] ?? null,
             'opened_at' => now(),
         ]);
 
-        if ($room->status === Room::STATUS_AVAILABLE) {
-            $this->roomStateMachine->markOutOfService($room);
+        activity('maintenance')
+            ->performedOn($ticket)
+            ->causedBy($user)
+            ->withProperties([
+                'room_id' => $room->id,
+                'severity' => $ticket->severity,
+                'blocks_sale' => (bool) $ticket->blocks_sale,
+                'status' => $ticket->status,
+            ])
+            ->event('created')
+            ->log('created');
+
+        if ($room->status === Room::STATUS_OCCUPIED && $ticket->blocks_sale) {
+            $room->block_sale_after_checkout = true;
+            $room->save();
         }
 
         return response()->json([
@@ -175,9 +189,14 @@ class MaintenanceTicketController extends Controller
         /** @var User $user */
         $user = $request->user();
         $data = $request->validated();
+        $canOverrideBlocks = $user->hasAnyRole(['owner', 'manager']);
 
         if (isset($data['status'])) {
             $this->ensureStatusPermission($user, $data['status']);
+        }
+
+        if (array_key_exists('blocks_sale', $data) && ! $canOverrideBlocks) {
+            abort(403);
         }
 
         if (array_key_exists('assigned_to_user_id', $data)) {
@@ -186,6 +205,14 @@ class MaintenanceTicketController extends Controller
 
         if (array_key_exists('description', $data)) {
             $ticket->description = $data['description'];
+        }
+
+        if (array_key_exists('severity', $data)) {
+            $ticket->severity = $data['severity'];
+        }
+
+        if (array_key_exists('blocks_sale', $data)) {
+            $ticket->blocks_sale = (bool) $data['blocks_sale'];
         }
 
         if (isset($data['status'])) {
@@ -201,42 +228,49 @@ class MaintenanceTicketController extends Controller
         $ticket->save();
 
         $room = $ticket->room()->firstOrFail();
+        $changes = array_intersect_key($ticket->getChanges(), array_flip([
+            'status',
+            'severity',
+            'blocks_sale',
+            'assigned_to_user_id',
+        ]));
 
-        if (isset($data['status'])) {
-            if (in_array($data['status'], [MaintenanceTicket::STATUS_RESOLVED, MaintenanceTicket::STATUS_CLOSED], true)) {
-                $shouldRestore = $request->boolean('restore_room_status');
+        if ($changes !== []) {
+            activity('maintenance')
+                ->performedOn($ticket)
+                ->causedBy($user)
+                ->withProperties($changes)
+                ->event('updated')
+                ->log('updated');
+        }
 
-                if ($shouldRestore && $room->status === Room::STATUS_OUT_OF_ORDER) {
-                    $this->roomStateMachine->markAvailable($room);
-                    $room->hk_status = 'dirty';
-                    $room->save();
-                }
-            } elseif (in_array($data['status'], [MaintenanceTicket::STATUS_OPEN, MaintenanceTicket::STATUS_IN_PROGRESS], true)) {
-                if ($room->status === Room::STATUS_AVAILABLE) {
-                    $this->roomStateMachine->markOutOfService($room);
-                }
+        $hasBlockingOpenTickets = $room->maintenanceTickets()
+            ->whereIn('status', [
+                MaintenanceTicket::STATUS_OPEN,
+                MaintenanceTicket::STATUS_IN_PROGRESS,
+            ])
+            ->where('blocks_sale', true)
+            ->exists();
+
+        if ($room->status === Room::STATUS_OCCUPIED && $hasBlockingOpenTickets) {
+            $room->block_sale_after_checkout = true;
+            $room->save();
+        }
+
+        if (! $hasBlockingOpenTickets) {
+            $room->block_sale_after_checkout = false;
+
+            if ($room->status === Room::STATUS_OUT_OF_ORDER && $request->boolean('restore_room_status')) {
+                $this->roomStateMachine->markAvailable($room);
+                $room->hk_status = 'dirty';
             }
+
+            $room->save();
         }
 
         return response()->json([
             'ticket' => $this->ticketPayload($ticket->fresh(['assignedTo:id,name', 'reportedBy:id,name'])),
         ]);
-    }
-
-    private function ensureNoActiveTicket(Room $room): void
-    {
-        $hasActiveTicket = $room->maintenanceTickets()
-            ->whereIn('status', [
-                MaintenanceTicket::STATUS_OPEN,
-                MaintenanceTicket::STATUS_IN_PROGRESS,
-            ])
-            ->exists();
-
-        if ($hasActiveTicket) {
-            throw ValidationException::withMessages([
-                'room_id' => 'Un ticket de maintenance est déjà en cours pour cette chambre.',
-            ]);
-        }
     }
 
     private function ensureStatusPermission(User $user, string $status): void
@@ -245,6 +279,17 @@ class MaintenanceTicketController extends Controller
         $requiredPermission = $isClosing ? 'maintenance_tickets.close' : 'maintenance_tickets.update';
 
         abort_if(! $user->can($requiredPermission), 403);
+    }
+
+    private function resolveBlocksSale(string $severity, ?bool $blocksSaleInput, bool $canOverrideBlocks): bool
+    {
+        if ($blocksSaleInput !== null) {
+            abort_if(! $canOverrideBlocks, 403);
+
+            return $blocksSaleInput;
+        }
+
+        return MaintenanceTicket::defaultBlocksSaleFromSeverity($severity);
     }
 
     /**
@@ -257,6 +302,7 @@ class MaintenanceTicketController extends Controller
             'room_id' => $ticket->room_id,
             'status' => $ticket->status,
             'severity' => $ticket->severity,
+            'blocks_sale' => (bool) $ticket->blocks_sale,
             'title' => $ticket->title,
             'description' => $ticket->description,
             'opened_at' => optional($ticket->opened_at)?->toDateTimeString(),

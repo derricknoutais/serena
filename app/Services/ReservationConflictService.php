@@ -64,7 +64,7 @@ class ReservationConflictService
         $supply = Room::query()
             ->where('hotel_id', $hotelId)
             ->where('room_type_id', $roomTypeId)
-            ->where('status', '!=', 'out_of_order')
+            ->sellable()
             ->count();
 
         if ($supply <= 0) {

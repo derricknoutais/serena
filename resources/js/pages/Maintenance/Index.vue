@@ -378,8 +378,10 @@ export default {
         },
         severityLabel(severity) {
             switch (severity) {
-                case 'high':
+                case 'critical':
                     return 'Critique';
+                case 'high':
+                    return 'Élevée';
                 case 'medium':
                     return 'Moyen';
                 case 'low':
@@ -409,6 +411,8 @@ export default {
         },
         severityClasses(severity) {
             switch (severity) {
+                case 'critical':
+                    return 'bg-rose-100 text-rose-700 border border-rose-200';
                 case 'high':
                     return 'bg-red-100 text-red-700 border border-red-200';
                 case 'medium':

@@ -38,9 +38,11 @@ class StoreMaintenanceTicketRequest extends FormRequest
                     MaintenanceTicket::SEVERITY_LOW,
                     MaintenanceTicket::SEVERITY_MEDIUM,
                     MaintenanceTicket::SEVERITY_HIGH,
+                    MaintenanceTicket::SEVERITY_CRITICAL,
                 ]),
             ],
             'description' => ['nullable', 'string'],
+            'blocks_sale' => ['nullable', 'boolean'],
             'assigned_to_user_id' => [
                 'nullable',
                 'integer',
