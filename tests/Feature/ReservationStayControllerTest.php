@@ -116,6 +116,142 @@ it('rounds stay quantities up when checkout time adds a partial day', function (
     expect($reservation->fresh()->base_amount)->toBe(20000);
 });
 
+it('charges weekend offers per configured night bundle when extending a stay', function (): void {
+    [
+        'tenant' => $tenant,
+        'reservation' => $reservation,
+        'user' => $user,
+        'hotel' => $hotel,
+        'roomType' => $roomType,
+    ] = setupReservationEnvironment('stay-weekend-pack');
+
+    $user->assignRole('owner');
+
+    $offer = Offer::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Week-end',
+        'kind' => 'weekend',
+        'billing_mode' => 'per_stay',
+        'time_rule' => 'weekend_window',
+        'time_config' => [
+            'checkout' => [
+                'max_days_after_checkin' => 3,
+            ],
+        ],
+        'is_active' => true,
+    ]);
+
+    OfferRoomTypePrice::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'offer_id' => $offer->id,
+        'room_type_id' => $roomType->id,
+        'currency' => 'XAF',
+        'price' => 15000,
+    ]);
+
+    $reservation->update([
+        'offer_id' => $offer->id,
+        'offer_name' => $offer->name,
+        'offer_kind' => $offer->kind,
+        'check_in_date' => '2025-05-01 12:00:00',
+        'check_out_date' => '2025-05-04 12:00:00',
+        'unit_price' => 15000,
+        'base_amount' => 15000,
+        'total_amount' => 15000,
+    ]);
+
+    $this->mock(ReservationAvailabilityService::class)
+        ->shouldReceive('ensureAvailable')
+        ->once()
+        ->andReturnTrue();
+
+    $this->mock(FolioBillingService::class)
+        ->shouldReceive('addStayAdjustment')
+        ->once();
+
+    $response = $this->actingAs($user)->patch(sprintf(
+        'http://%s/reservations/%s/stay/dates',
+        tenantDomain($tenant),
+        $reservation->id,
+    ), [
+        'check_out_date' => '2025-05-07T12:00:00',
+    ]);
+
+    $response->assertOk();
+
+    expect($reservation->fresh()->base_amount)->toBe(30000);
+});
+
+it('charges package offers per configured night bundle when extending a stay', function (): void {
+    [
+        'tenant' => $tenant,
+        'reservation' => $reservation,
+        'user' => $user,
+        'hotel' => $hotel,
+        'roomType' => $roomType,
+    ] = setupReservationEnvironment('stay-package-bundle');
+
+    $user->assignRole('owner');
+
+    $offer = Offer::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Package 3 nuits',
+        'kind' => 'package',
+        'billing_mode' => 'per_stay',
+        'time_rule' => 'weekend_window',
+        'time_config' => [
+            'checkout' => [
+                'max_days_after_checkin' => 3,
+            ],
+        ],
+        'is_active' => true,
+    ]);
+
+    OfferRoomTypePrice::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'offer_id' => $offer->id,
+        'room_type_id' => $roomType->id,
+        'currency' => 'XAF',
+        'price' => 50000,
+    ]);
+
+    $reservation->update([
+        'offer_id' => $offer->id,
+        'offer_name' => $offer->name,
+        'offer_kind' => $offer->kind,
+        'check_in_date' => '2025-05-01 12:00:00',
+        'check_out_date' => '2025-05-04 12:00:00',
+        'unit_price' => 50000,
+        'base_amount' => 50000,
+        'total_amount' => 50000,
+    ]);
+
+    $this->mock(ReservationAvailabilityService::class)
+        ->shouldReceive('ensureAvailable')
+        ->once()
+        ->andReturnTrue();
+
+    $this->mock(FolioBillingService::class)
+        ->shouldReceive('addStayAdjustment')
+        ->once();
+
+    $response = $this->actingAs($user)->patch(sprintf(
+        'http://%s/reservations/%s/stay/dates',
+        tenantDomain($tenant),
+        $reservation->id,
+    ), [
+        'check_out_date' => '2025-05-07T12:00:00',
+    ]);
+
+    $response->assertOk();
+
+    expect($reservation->fresh()->base_amount)->toBe(100000);
+});
+
 it('allows changing the offer when extending a stay', function (): void {
     [
         'tenant' => $tenant,
@@ -170,8 +306,8 @@ it('allows changing the offer when extending a stay', function (): void {
         'check_in_date' => '2025-05-01 12:00:00',
         'check_out_date' => '2025-05-03 12:00:00',
         'unit_price' => 15000,
-        'base_amount' => 30000,
-        'total_amount' => 30000,
+        'base_amount' => 15000,
+        'total_amount' => 15000,
     ]);
 
     $this->mock(ReservationAvailabilityService::class)

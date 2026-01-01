@@ -39,6 +39,8 @@ class ReservationStatusController extends Controller
             'actual_check_out_at' => ['nullable', 'date'],
             'early_fee_override' => ['nullable', 'numeric', 'min:0'],
             'late_fee_override' => ['nullable', 'numeric', 'min:0'],
+            'early_payment_method_id' => ['nullable', 'integer'],
+            'late_payment_method_id' => ['nullable', 'integer'],
         ]);
 
         $action = $validated['action'];
@@ -59,6 +61,68 @@ class ReservationStatusController extends Controller
         $actualCheckOutAt = ! empty($validated['actual_check_out_at'])
             ? Carbon::parse($validated['actual_check_out_at'])
             : null;
+        $stayAdjustmentService = $this->reservationStateMachine->getStayAdjustmentService();
+        $decision = null;
+        $earlyAmount = 0.0;
+        $lateAmount = 0.0;
+        $earlyPaymentMethod = null;
+        $latePaymentMethod = null;
+        $cashSession = null;
+
+        if (in_array($action, ['check_in', 'check_out'], true)) {
+            $decision = $stayAdjustmentService->evaluateEarlyLate(
+                $reservation,
+                $action === 'check_in'
+                    ? ($actualCheckInAt ?? now())
+                    : ($reservation->actual_check_in_at
+                        ?? ($reservation->check_in_date ? Carbon::parse($reservation->check_in_date) : now())),
+                $action === 'check_out' ? ($actualCheckOutAt ?? now()) : null,
+            );
+
+            $earlyOverride = isset($validated['early_fee_override']) ? (float) $validated['early_fee_override'] : null;
+            $lateOverride = isset($validated['late_fee_override']) ? (float) $validated['late_fee_override'] : null;
+
+            $shouldChargeEarly = $action === 'check_in'
+                && $decision['is_early_checkin']
+                && ($decision['early_fee_amount'] > 0 || ($canOverrideFees && $earlyOverride !== null));
+            $shouldChargeLate = $action === 'check_out'
+                && $decision['is_late_checkout']
+                && ($decision['late_fee_amount'] > 0 || ($canOverrideFees && $lateOverride !== null));
+
+            if ($shouldChargeEarly) {
+                $earlyAmount = $stayAdjustmentService->resolveFeeAmount(
+                    $decision['early_fee_amount'],
+                    $earlyOverride,
+                    $canOverrideFees,
+                );
+                if ($earlyAmount > 0) {
+                    $earlyPaymentMethod = $this->resolvePaymentMethod(
+                        $reservation,
+                        $validated['early_payment_method_id'] ?? null,
+                        'early_payment_method_id',
+                    );
+                }
+            }
+
+            if ($shouldChargeLate) {
+                $lateAmount = $stayAdjustmentService->resolveFeeAmount(
+                    $decision['late_fee_amount'],
+                    $lateOverride,
+                    $canOverrideFees,
+                );
+                if ($lateAmount > 0) {
+                    $latePaymentMethod = $this->resolvePaymentMethod(
+                        $reservation,
+                        $validated['late_payment_method_id'] ?? null,
+                        'late_payment_method_id',
+                    );
+                }
+            }
+
+            if ($earlyAmount > 0 || $lateAmount > 0) {
+                $cashSession = $this->resolveFrontdeskCashSession($reservation);
+            }
+        }
 
         DB::transaction(function () use (
             $action,
@@ -67,7 +131,12 @@ class ReservationStatusController extends Controller
             $validated,
             $canOverrideFees,
             $actualCheckInAt,
-            $actualCheckOutAt
+            $actualCheckOutAt,
+            $earlyAmount,
+            $lateAmount,
+            $earlyPaymentMethod,
+            $latePaymentMethod,
+            $cashSession,
         ): void {
             $updatedReservation = match ($action) {
                 'confirm' => $this->reservationStateMachine->confirm($reservation),
@@ -96,6 +165,26 @@ class ReservationStatusController extends Controller
                 (float) ($validated['penalty_amount'] ?? 0),
                 $validated['penalty_note'] ?? null
             );
+
+            if ($earlyAmount > 0 && $earlyPaymentMethod && $cashSession) {
+                $this->addStayFeePayment(
+                    $updatedReservation,
+                    $earlyAmount,
+                    $earlyPaymentMethod,
+                    $cashSession,
+                    'Arrivée anticipée',
+                );
+            }
+
+            if ($lateAmount > 0 && $latePaymentMethod && $cashSession) {
+                $this->addStayFeePayment(
+                    $updatedReservation,
+                    $lateAmount,
+                    $latePaymentMethod,
+                    $cashSession,
+                    'Départ tardif',
+                );
+            }
         });
 
         return back()->with('success', 'Statut mis à jour.');
@@ -222,5 +311,72 @@ class ReservationStatusController extends Controller
                 'penalty_amount' => 'Aucune caisse réception ouverte. Veuillez ouvrir une session de caisse.',
             ]);
         }
+    }
+
+    private function resolvePaymentMethod(Reservation $reservation, ?int $paymentMethodId, string $errorKey): PaymentMethod
+    {
+        if (! $paymentMethodId) {
+            throw ValidationException::withMessages([
+                $errorKey => 'Veuillez choisir un mode de paiement.',
+            ]);
+        }
+
+        $method = PaymentMethod::query()
+            ->where('tenant_id', $reservation->tenant_id)
+            ->where('is_active', true)
+            ->where(function ($query) use ($reservation): void {
+                $query->whereNull('hotel_id')->orWhere('hotel_id', $reservation->hotel_id);
+            })
+            ->find($paymentMethodId);
+
+        if (! $method) {
+            throw ValidationException::withMessages([
+                $errorKey => 'Mode de paiement invalide.',
+            ]);
+        }
+
+        return $method;
+    }
+
+    private function resolveFrontdeskCashSession(Reservation $reservation): CashSession
+    {
+        $session = CashSession::query()
+            ->where('tenant_id', $reservation->tenant_id)
+            ->where('hotel_id', $reservation->hotel_id)
+            ->where('type', 'frontdesk')
+            ->where('status', 'open')
+            ->first();
+
+        if (! $session) {
+            throw ValidationException::withMessages([
+                'cash_session' => 'Aucune caisse réception ouverte. Veuillez ouvrir une session de caisse.',
+            ]);
+        }
+
+        return $session;
+    }
+
+    private function addStayFeePayment(
+        Reservation $reservation,
+        float $amount,
+        PaymentMethod $paymentMethod,
+        CashSession $cashSession,
+        string $note,
+    ): void {
+        if ($amount <= 0) {
+            return;
+        }
+
+        $folio = $this->billingService->ensureMainFolioForReservation($reservation);
+
+        $folio->addPayment([
+            'amount' => $amount,
+            'currency' => $folio->currency,
+            'payment_method_id' => $paymentMethod->id,
+            'paid_at' => now(),
+            'notes' => $note,
+            'created_by_user_id' => request()->user()?->id,
+            'cash_session_id' => $cashSession->id,
+        ]);
     }
 }

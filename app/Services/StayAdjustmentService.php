@@ -221,6 +221,11 @@ class StayAdjustmentService
         return max(0.0, $computed);
     }
 
+    public function resolveFeeAmount(float $computed, ?float $override, bool $canOverride): float
+    {
+        return $this->resolveAmount($computed, $override, $canOverride);
+    }
+
     private function addFeeIfMissing(Folio $folio, string $description, float $amount, string $kind, ?string $reason): void
     {
         if ($amount <= 0) {

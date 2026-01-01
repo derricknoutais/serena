@@ -51,9 +51,17 @@ class RoomBoardWalkInController extends Controller
             'offer_price_id' => ['required', 'integer', 'exists:offer_room_type_prices,id'],
             'check_in_at' => ['nullable', 'date'],
             'check_out_at' => ['nullable', 'date', 'after:check_in_at'],
-            'adults' => ['required', 'integer', 'min:1'],
-            'children' => ['nullable', 'integer', 'min:0'],
             'amount_received' => ['required', 'numeric', 'min:0'],
+            'payment_method_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('payment_methods', 'id')
+                    ->where('tenant_id', $tenantId)
+                    ->where('is_active', true)
+                    ->where(function ($query) use ($hotelId): void {
+                        $query->whereNull('hotel_id')->orWhere('hotel_id', $hotelId);
+                    }),
+            ],
         ]);
 
         $room = Room::query()
@@ -64,7 +72,7 @@ class RoomBoardWalkInController extends Controller
         /** @var RoomType $roomType */
         $roomType = RoomType::query()->findOrFail((int) $validated['room_type_id']);
 
-        $totalGuests = (int) $validated['adults'] + (int) ($validated['children'] ?? 0);
+        $totalGuests = 1;
         $maxGuests = (int) ($roomType->capacity_adults ?? 0) + (int) ($roomType->capacity_children ?? 0);
 
         if ($maxGuests > 0 && $totalGuests > $maxGuests) {
@@ -143,8 +151,8 @@ class RoomBoardWalkInController extends Controller
                 'source' => 'walk_in',
                 'offer_name' => $offer->name,
                 'offer_kind' => $offer->kind,
-                'adults' => (int) $validated['adults'],
-                'children' => (int) ($validated['children'] ?? 0),
+                'adults' => 1,
+                'children' => 0,
                 'check_in_date' => $checkInDate,
                 'check_out_date' => $checkOutDate,
                 'currency' => $roomType->currency ?? 'XAF',
@@ -162,21 +170,28 @@ class RoomBoardWalkInController extends Controller
             );
 
             $amountReceived = (float) $validated['amount_received'];
+            $paymentMethodId = $validated['payment_method_id'] ?? null;
 
             if ($amountReceived > 0.0) {
+                if (! $paymentMethodId) {
+                    throw ValidationException::withMessages([
+                        'payment_method_id' => 'Veuillez choisir un mode de paiement.',
+                    ]);
+                }
+
                 $folio = $this->billingService->ensureMainFolioForReservation($reservation);
 
                 $paymentMethod = PaymentMethod::query()
                     ->where('tenant_id', $tenantId)
+                    ->where('is_active', true)
                     ->where(function ($query) use ($hotelId): void {
                         $query->whereNull('hotel_id')->orWhere('hotel_id', $hotelId);
                     })
-                    ->where('type', 'cash')
-                    ->first();
+                    ->find($paymentMethodId);
 
                 if (! $paymentMethod) {
                     throw ValidationException::withMessages([
-                        'amount_received' => 'Aucun mode de paiement cash disponible.',
+                        'payment_method_id' => 'Mode de paiement invalide.',
                     ]);
                 }
 

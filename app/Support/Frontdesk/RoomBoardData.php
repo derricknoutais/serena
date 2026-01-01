@@ -8,6 +8,7 @@ use App\Models\Guest;
 use App\Models\MaintenanceTicket;
 use App\Models\Offer;
 use App\Models\OfferRoomTypePrice;
+use App\Models\PaymentMethod;
 use App\Models\Reservation;
 use App\Models\Room;
 use App\Models\RoomType;
@@ -274,12 +275,22 @@ class RoomBoardData
             ->where('tenant_id', $tenantId)
             ->where('hotel_id', $hotelId)
             ->orderBy('name')
-            ->get(['id', 'name', 'kind']);
+            ->get(['id', 'name', 'kind', 'time_rule', 'time_config']);
 
         $offerRoomTypePrices = OfferRoomTypePrice::query()
             ->where('tenant_id', $tenantId)
             ->where('hotel_id', $hotelId)
             ->get(['room_type_id', 'offer_id', 'price', 'currency']);
+
+        $paymentMethods = PaymentMethod::query()
+            ->where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->where(function ($query) use ($hotelId): void {
+                $query->whereNull('hotel_id')->orWhere('hotel_id', $hotelId);
+            })
+            ->orderByDesc('is_default')
+            ->orderBy('name')
+            ->get(['id', 'name', 'type', 'is_default']);
 
         return [
             'date' => $dateString,
@@ -302,6 +313,7 @@ class RoomBoardData
                 'name' => $user->name,
             ],
             'guests' => $guests,
+            'paymentMethods' => $paymentMethods,
         ];
     }
 }

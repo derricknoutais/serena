@@ -6,6 +6,8 @@ use App\Models\Folio;
 use App\Models\FolioItem;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
+use App\Models\Offer;
+use App\Models\OfferRoomTypePrice;
 use App\Models\Reservation;
 use App\Models\Room;
 use Illuminate\Support\Carbon;
@@ -129,10 +131,25 @@ class FolioBillingService
         $offer = $reservation->offer;
         $offerKind = $offer?->kind ?? $reservation->offer_kind ?? 'night';
         $offerName = $offer?->name ?? $reservation->offer_name ?? 'Séjour';
-        $quantity = $this->calculateStayQuantity($offerKind, $checkIn, $checkOut);
+        $bundleNights = $this->resolveBundleNights($offer, $offerKind);
+        $quantity = $this->calculateStayQuantity($offerKind, $checkIn, $checkOut, $bundleNights);
 
         $description = $this->buildStayDescription($offerKind, $offerName, $checkIn, $checkOut);
         $unitPrice = (float) $reservation->unit_price;
+        $offerPrice = null;
+
+        if ($reservation->offer_id && $reservation->room_type_id) {
+            $offerPrice = OfferRoomTypePrice::query()
+                ->where('tenant_id', $reservation->tenant_id)
+                ->where('hotel_id', $reservation->hotel_id)
+                ->where('room_type_id', $reservation->room_type_id)
+                ->where('offer_id', $reservation->offer_id)
+                ->value('price');
+        }
+
+        if ($offerPrice !== null) {
+            $unitPrice = (float) $offerPrice;
+        }
         $stayMeta = [
             'reservation_id' => $reservation->id,
             'offer_id' => $reservation->offer_id,
@@ -171,18 +188,26 @@ class FolioBillingService
         $stayItem->recalculateAmounts();
         $stayItem->save();
 
+        if ($offerPrice !== null && (float) $reservation->unit_price !== (float) $offerPrice) {
+            $reservation->forceFill([
+                'unit_price' => (float) $offerPrice,
+                'base_amount' => $quantity * (float) $offerPrice,
+                'total_amount' => ($quantity * (float) $offerPrice) + (float) $reservation->tax_amount,
+            ])->save();
+        }
+
         $folio->recalculateTotals();
 
         return $folio;
     }
 
-    public function calculateStayQuantity(string $kind, Carbon $checkIn, Carbon $checkOut): int
+    public function calculateStayQuantity(string $kind, Carbon $checkIn, Carbon $checkOut, int $bundleNights = 1): int
     {
         $nights = max(1, $checkIn->diffInDays($checkOut));
 
         return match ($kind) {
             'short_stay' => 1,
-            'weekend' => max(2, $nights),
+            'weekend', 'package' => max(1, (int) ceil($nights / max(1, $bundleNights))),
             'full_day' => max(1, $nights),
             default => max(1, $nights),
         };
@@ -267,7 +292,9 @@ class FolioBillingService
         $pivot = $pivotDate->copy()->startOfDay();
         $pivot = $pivot->max($checkIn)->min($checkOut);
 
-        $kind = $reservation->offer?->kind ?? $reservation->offer_kind ?? 'night';
+        $offer = $reservation->offer;
+        $kind = $offer?->kind ?? $reservation->offer_kind ?? 'night';
+        $bundleNights = $this->resolveBundleNights($offer, $kind);
 
         $segments = [];
 
@@ -290,7 +317,7 @@ class FolioBillingService
         }
 
         foreach ($segments as $segment) {
-            $quantity = $this->calculateStayQuantity($kind, $segment['start'], $segment['end']);
+            $quantity = $this->calculateStayQuantity($kind, $segment['start'], $segment['end'], $bundleNights);
 
             if ($quantity <= 0) {
                 continue;
@@ -350,5 +377,51 @@ class FolioBillingService
         }
 
         return 'chambre';
+    }
+
+    private function resolveBundleNights(?Offer $offer, string $kind): int
+    {
+        if (! in_array($kind, ['weekend', 'package'], true)) {
+            return 1;
+        }
+
+        if (! $offer) {
+            return $kind === 'weekend' ? 2 : 1;
+        }
+
+        $bundle = 0;
+
+        if ($offer->time_rule === 'weekend_window') {
+            $bundle = (int) ($offer->time_config['checkout']['max_days_after_checkin'] ?? 0);
+        } elseif ($offer->time_rule === 'fixed_checkout') {
+            $bundle = (int) ($offer->time_config['day_offset'] ?? 0);
+        } elseif ($offer->time_rule === 'rolling') {
+            $minutes = (int) ($offer->time_config['duration_minutes'] ?? 0);
+            $bundle = $minutes > 0 ? (int) ceil($minutes / 1440) : 0;
+        } elseif ($offer->time_rule === 'fixed_window') {
+            $startTime = $offer->time_config['start_time'] ?? null;
+            $endTime = $offer->time_config['end_time'] ?? null;
+            if (is_string($startTime) && is_string($endTime)) {
+                [$startHour, $startMinute] = array_map('intval', explode(':', $startTime.':0'));
+                [$endHour, $endMinute] = array_map('intval', explode(':', $endTime.':0'));
+                $startMinutes = ($startHour * 60) + $startMinute;
+                $endMinutes = ($endHour * 60) + $endMinute;
+                if ($endMinutes <= $startMinutes) {
+                    $endMinutes += 1440;
+                }
+                $duration = $endMinutes - $startMinutes;
+                $bundle = $duration > 0 ? (int) ceil($duration / 1440) : 0;
+            }
+        }
+
+        if ($bundle <= 0 && $offer->fixed_duration_hours !== null) {
+            $bundle = (int) ceil(((int) $offer->fixed_duration_hours) / 24);
+        }
+
+        if ($bundle <= 0) {
+            return $kind === 'weekend' ? 2 : 1;
+        }
+
+        return $bundle;
     }
 }

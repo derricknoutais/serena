@@ -8,6 +8,7 @@ use App\Models\Guest;
 use App\Models\Hotel;
 use App\Models\Offer;
 use App\Models\OfferRoomTypePrice;
+use App\Models\PaymentMethod;
 use App\Models\Reservation;
 use App\Models\Room;
 use App\Models\RoomType;
@@ -112,6 +113,18 @@ class ReservationsIndexData
             ->when($hotelId, fn ($q) => $q->where('hotel_id', $hotelId))
             ->get(['room_type_id', 'offer_id', 'price', 'currency']);
 
+        $paymentMethods = PaymentMethod::query()
+            ->where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->when($hotelId, function ($query) use ($hotelId): void {
+                $query->where(function ($nested) use ($hotelId): void {
+                    $nested->whereNull('hotel_id')->orWhere('hotel_id', $hotelId);
+                });
+            })
+            ->orderByDesc('is_default')
+            ->orderBy('name')
+            ->get(['id', 'name', 'type', 'is_default']);
+
         return [
             'events' => $reservations,
             'guests' => $guests,
@@ -126,6 +139,7 @@ class ReservationsIndexData
             ]),
             'offers' => $offers,
             'offerRoomTypePrices' => $offerRoomTypePrices,
+            'paymentMethods' => $paymentMethods,
             'defaults' => [
                 'currency' => 'XAF',
                 'hotel_id' => $hotelId,

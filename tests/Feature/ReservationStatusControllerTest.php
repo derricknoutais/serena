@@ -117,6 +117,15 @@ it('creates the stay folio item on check-in', function (): void {
         'is_active' => true,
     ]);
 
+    \App\Models\OfferRoomTypePrice::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'room_type_id' => $reservation->room_type_id,
+        'offer_id' => $offer->id,
+        'currency' => 'XAF',
+        'price' => 18000,
+    ]);
+
     $reservation->update([
         'status' => Reservation::STATUS_CONFIRMED,
         'check_in_date' => now()->toDateString(),
@@ -124,6 +133,7 @@ it('creates the stay folio item on check-in', function (): void {
         'offer_id' => $offer->id,
         'offer_name' => $offer->name,
         'offer_kind' => $offer->kind,
+        'unit_price' => 10000,
     ]);
 
     $response = $this->actingAs($user)->patch(sprintf(
@@ -145,7 +155,8 @@ it('creates the stay folio item on check-in', function (): void {
         ->and($stayItem)->not->toBeNull()
         ->and($stayItem?->type)->toBe('stay')
         ->and($stayItem?->meta['offer_id'] ?? null)->toBe($offer->id)
-        ->and($stayItem?->meta['offer_name'] ?? null)->toBe('Offre Test');
+        ->and($stayItem?->meta['offer_name'] ?? null)->toBe('Offre Test')
+        ->and($stayItem?->unit_price)->toBe(18000.0);
 });
 
 it('requires an open frontdesk cash session when applying a cancellation penalty', function (): void {
@@ -200,6 +211,151 @@ it('requires an open frontdesk cash session when applying a cancellation penalty
     ]);
 
     $response->assertRedirect();
+});
+
+it('requires a payment method for early check-in fees', function (): void {
+    [
+        'tenant' => $tenant,
+        'hotel' => $hotel,
+        'user' => $user,
+        'reservation' => $reservation,
+    ] = setupReservationEnvironment('status-early-payment-method');
+
+    $hotel->update([
+        'stay_settings' => [
+            'standard_checkin_time' => '14:00',
+            'early_checkin' => [
+                'policy' => 'paid',
+                'fee_type' => 'flat',
+                'fee_value' => 5000,
+            ],
+        ],
+    ]);
+
+    $reservation->update([
+        'status' => Reservation::STATUS_CONFIRMED,
+        'check_in_date' => '2025-06-10 14:00:00',
+        'check_out_date' => '2025-06-11 12:00:00',
+        'base_amount' => 10000,
+    ]);
+
+    $response = $this->actingAs($user)->from(sprintf(
+        'http://%s/reservations',
+        tenantDomain($tenant),
+    ))->patch(sprintf(
+        'http://%s/reservations/%s/status',
+        tenantDomain($tenant),
+        $reservation->id,
+    ), [
+        'action' => 'check_in',
+        'actual_check_in_at' => '2025-06-10 09:00:00',
+    ]);
+
+    $response->assertSessionHasErrors('early_payment_method_id');
+    expect($reservation->fresh()->status)->toBe(Reservation::STATUS_CONFIRMED);
+});
+
+it('requires an open frontdesk cash session for late checkout fees', function (): void {
+    [
+        'tenant' => $tenant,
+        'hotel' => $hotel,
+        'user' => $user,
+        'reservation' => $reservation,
+        'methods' => $methods,
+    ] = setupReservationEnvironment('status-late-cash-session');
+
+    $hotel->update([
+        'stay_settings' => [
+            'standard_checkout_time' => '12:00',
+            'late_checkout' => [
+                'policy' => 'paid',
+                'fee_type' => 'flat',
+                'fee_value' => 3000,
+            ],
+        ],
+    ]);
+
+    $reservation->update([
+        'status' => Reservation::STATUS_IN_HOUSE,
+        'check_in_date' => '2025-06-10 14:00:00',
+        'check_out_date' => '2025-06-11 12:00:00',
+        'base_amount' => 10000,
+    ]);
+
+    $response = $this->actingAs($user)->from(sprintf(
+        'http://%s/reservations',
+        tenantDomain($tenant),
+    ))->patch(sprintf(
+        'http://%s/reservations/%s/status',
+        tenantDomain($tenant),
+        $reservation->id,
+    ), [
+        'action' => 'check_out',
+        'actual_check_out_at' => '2025-06-11 14:30:00',
+        'late_payment_method_id' => $methods[0]->id,
+    ]);
+
+    $response->assertSessionHasErrors('cash_session');
+    expect($reservation->fresh()->status)->toBe(Reservation::STATUS_IN_HOUSE);
+});
+
+it('records early check-in payments in the frontdesk cash session', function (): void {
+    [
+        'tenant' => $tenant,
+        'hotel' => $hotel,
+        'user' => $user,
+        'reservation' => $reservation,
+        'methods' => $methods,
+    ] = setupReservationEnvironment('status-early-payment');
+
+    $hotel->update([
+        'stay_settings' => [
+            'standard_checkin_time' => '14:00',
+            'early_checkin' => [
+                'policy' => 'paid',
+                'fee_type' => 'flat',
+                'fee_value' => 4500,
+            ],
+        ],
+    ]);
+
+    $reservation->update([
+        'status' => Reservation::STATUS_CONFIRMED,
+        'check_in_date' => '2025-06-10 14:00:00',
+        'check_out_date' => '2025-06-11 12:00:00',
+        'base_amount' => 10000,
+    ]);
+
+    $session = CashSession::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'opened_by_user_id' => $user->id,
+        'type' => 'frontdesk',
+        'started_at' => now(),
+        'starting_amount' => 0,
+        'status' => 'open',
+    ]);
+
+    $response = $this->actingAs($user)->patch(sprintf(
+        'http://%s/reservations/%s/status',
+        tenantDomain($tenant),
+        $reservation->id,
+    ), [
+        'action' => 'check_in',
+        'actual_check_in_at' => '2025-06-10 09:00:00',
+        'early_payment_method_id' => $methods[0]->id,
+    ]);
+
+    $response->assertRedirect();
+
+    $reservation->refresh();
+    $folio = $reservation->mainFolio()->first();
+    $payment = $folio?->payments()->latest('id')->first();
+
+    expect($reservation->status)->toBe(Reservation::STATUS_IN_HOUSE)
+        ->and($payment)->not->toBeNull()
+        ->and($payment?->amount)->toBe(4500.0)
+        ->and($payment?->cash_session_id)->toBe($session->id);
 });
 
 it('blocks check-out when the folio has an outstanding balance', function (): void {

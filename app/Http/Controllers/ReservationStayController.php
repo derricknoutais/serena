@@ -110,6 +110,8 @@ class ReservationStayController extends Controller
         $oldBaseAmount = (float) $reservation->base_amount;
         $oldTotalAmount = (float) $reservation->total_amount;
 
+        $previousOffer = $reservation->offer;
+        $previousOfferKind = $previousOffer?->kind ?? $reservation->offer_kind ?? 'night';
         $selectedOfferId = $data['offer_id'] ?? null;
         if ($selectedOfferId) {
             /** @var Offer $offer */
@@ -136,11 +138,23 @@ class ReservationStayController extends Controller
             $reservation->offer_kind = $offer->kind;
             $reservation->unit_price = (float) $offerPrice->price;
             $reservation->currency = $offerPrice->currency ?? $reservation->currency;
+            $reservation->setRelation('offer', $offer);
         }
 
-        $previousQuantity = $this->calculateStayQuantity($reservation, $checkIn, $currentCheckOut);
+        $previousQuantity = $this->calculateStayQuantity(
+            $checkIn,
+            $currentCheckOut,
+            $previousOfferKind,
+            $this->resolveBundleNights($previousOffer, $previousOfferKind),
+        );
         $reservation->check_out_date = $newCheckOut->toDateTimeString();
-        $quantity = $this->calculateStayQuantity($reservation, $checkIn, $newCheckOut);
+        $currentOfferKind = $reservation->offer?->kind ?? $reservation->offer_kind ?? 'night';
+        $quantity = $this->calculateStayQuantity(
+            $checkIn,
+            $newCheckOut,
+            $currentOfferKind,
+            $this->resolveBundleNights($reservation->offer, $currentOfferKind),
+        );
         $unitPrice = (float) $reservation->unit_price;
         $reservation->base_amount = $quantity * $unitPrice;
         $reservation->total_amount = $reservation->base_amount + (float) $reservation->tax_amount;
@@ -235,7 +249,13 @@ class ReservationStayController extends Controller
         $oldUnitPrice = (float) $reservation->unit_price;
 
         $newUnitPrice = $this->determineUnitPrice($reservation, $newRoom->room_type_id) ?? $oldUnitPrice;
-        $quantity = $this->calculateStayQuantity($reservation, $checkIn, $checkOut);
+        $currentOfferKind = $reservation->offer?->kind ?? $reservation->offer_kind ?? 'night';
+        $quantity = $this->calculateStayQuantity(
+            $checkIn,
+            $checkOut,
+            $currentOfferKind,
+            $this->resolveBundleNights($reservation->offer, $currentOfferKind),
+        );
         $newBaseAmount = $quantity * $newUnitPrice;
 
         $pivotDate = Carbon::now();
@@ -285,17 +305,68 @@ class ReservationStayController extends Controller
         abort_unless($reservation->tenant_id === $request->user()->tenant_id, 403);
     }
 
-    private function calculateStayQuantity(Reservation $reservation, Carbon $checkIn, Carbon $checkOut): float
-    {
-        $kind = $reservation->offer?->kind ?? $reservation->offer_kind ?? 'night';
+    private function calculateStayQuantity(
+        Carbon $checkIn,
+        Carbon $checkOut,
+        ?string $kind = null,
+        int $bundleNights = 1,
+    ): float {
+        $kind = $kind ?? 'night';
         $minutes = max(1, $checkIn->diffInMinutes($checkOut));
         $nights = max(1, (int) ceil($minutes / 1440));
 
         return match ($kind) {
             'short_stay' => 1,
-            'weekend' => max(2, $nights),
+            'weekend', 'package' => max(1, (int) ceil($nights / max(1, $bundleNights))),
             default => $nights,
         };
+    }
+
+    private function resolveBundleNights(?Offer $offer, ?string $kind = null): int
+    {
+        $resolvedKind = $kind ?? $offer?->kind ?? 'night';
+        if (! in_array($resolvedKind, ['weekend', 'package'], true)) {
+            return 1;
+        }
+
+        if (! $offer) {
+            return $resolvedKind === 'weekend' ? 2 : 1;
+        }
+
+        $bundle = 0;
+
+        if ($offer->time_rule === 'weekend_window') {
+            $bundle = (int) ($offer->time_config['checkout']['max_days_after_checkin'] ?? 0);
+        } elseif ($offer->time_rule === 'fixed_checkout') {
+            $bundle = (int) ($offer->time_config['day_offset'] ?? 0);
+        } elseif ($offer->time_rule === 'rolling') {
+            $minutes = (int) ($offer->time_config['duration_minutes'] ?? 0);
+            $bundle = $minutes > 0 ? (int) ceil($minutes / 1440) : 0;
+        } elseif ($offer->time_rule === 'fixed_window') {
+            $startTime = $offer->time_config['start_time'] ?? null;
+            $endTime = $offer->time_config['end_time'] ?? null;
+            if (is_string($startTime) && is_string($endTime)) {
+                [$startHour, $startMinute] = array_map('intval', explode(':', $startTime.':0'));
+                [$endHour, $endMinute] = array_map('intval', explode(':', $endTime.':0'));
+                $startMinutes = ($startHour * 60) + $startMinute;
+                $endMinutes = ($endHour * 60) + $endMinute;
+                if ($endMinutes <= $startMinutes) {
+                    $endMinutes += 1440;
+                }
+                $duration = $endMinutes - $startMinutes;
+                $bundle = $duration > 0 ? (int) ceil($duration / 1440) : 0;
+            }
+        }
+
+        if ($bundle <= 0 && $offer->fixed_duration_hours !== null) {
+            $bundle = (int) ceil(((int) $offer->fixed_duration_hours) / 24);
+        }
+
+        if ($bundle <= 0) {
+            return $resolvedKind === 'weekend' ? 2 : 1;
+        }
+
+        return $bundle;
     }
 
     private function determineUnitPrice(Reservation $reservation, int $roomTypeId): ?float

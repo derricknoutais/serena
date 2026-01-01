@@ -716,20 +716,15 @@
                                 >
                                     Offre
                                 </label>
-                                <select
+                                <Multiselect
                                     id="offer_id"
-                                    v-model.number="form.offer_id"
-                                    @change="onOfferChange"
-                                    class="w-full rounded-lg border border-serena-border bg-white px-3 py-2 text-sm text-serena-text-main shadow-sm focus:border-serena-primary focus:outline-none focus:ring-2 focus:ring-serena-primary-soft"
-                                >
-                                    <option
-                                        v-for="offer in walkInOffers"
-                                        :key="offer.id"
-                                        :value="offer.id"
-                                    >
-                                        {{ offer.name }} — {{ offer.price }}
-                                    </option>
-                                </select>
+                                    v-model="selectedWalkInOffer"
+                                    :options="walkInOffers"
+                                    track-by="id"
+                                    :custom-label="walkInOfferLabel"
+                                    placeholder="Choisir une offre"
+                                    class="mt-1"
+                                />
                                 <p
                                     v-if="form.errors.offer_id"
                                     class="mt-1 text-xs text-serena-danger"
@@ -766,38 +761,6 @@
                                     class="w-full rounded-lg border border-serena-border bg-white px-3 py-2 text-sm text-serena-text-main shadow-sm focus:border-serena-primary focus:outline-none focus:ring-2 focus:ring-serena-primary-soft"
                                 />
                             </div>
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <TextInput
-                                        id="adults"
-                                        v-model="form.adults"
-                                        type="number"
-                                        min="1"
-                                        label="Adultes"
-                                    />
-                                    <p
-                                        v-if="form.errors.adults"
-                                        class="mt-1 text-xs text-serena-danger"
-                                    >
-                                        {{ form.errors.adults }}
-                                    </p>
-                                </div>
-                                <div>
-                                    <TextInput
-                                        id="children"
-                                        v-model="form.children"
-                                        type="number"
-                                        min="0"
-                                        label="Enfants"
-                                    />
-                                    <p
-                                        v-if="form.errors.children"
-                                        class="mt-1 text-xs text-serena-danger"
-                                    >
-                                        {{ form.errors.children }}
-                                    </p>
-                                </div>
-                            </div>
                             <div>
                                 <TextInput
                                     id="amount_received"
@@ -812,6 +775,29 @@
                                     class="mt-1 text-xs text-serena-danger"
                                 >
                                     {{ form.errors.amount_received }}
+                                </p>
+                            </div>
+                            <div>
+                                <label
+                                    for="payment_method_id"
+                                    class="mb-1 block text-xs font-medium text-serena-text-muted"
+                                >
+                                    Mode de paiement
+                                </label>
+                                <Multiselect
+                                    id="payment_method_id"
+                                    v-model="selectedWalkInPaymentMethod"
+                                    :options="paymentMethodOptions()"
+                                    track-by="id"
+                                    label="name"
+                                    placeholder="Choisir un mode de paiement"
+                                    class="mt-1"
+                                />
+                                <p
+                                    v-if="form.errors.payment_method_id"
+                                    class="mt-1 text-xs text-serena-danger"
+                                >
+                                    {{ form.errors.payment_method_id }}
                                 </p>
                             </div>
                         </div>
@@ -1298,6 +1284,10 @@ export default {
             type: Array,
             default: () => [],
         },
+        paymentMethods: {
+            type: Array,
+            default: () => [],
+        },
         guests: {
             type: Array,
             default: () => [],
@@ -1327,6 +1317,8 @@ export default {
             currentDate: this.date,
             isWalkInOpen: !!this.walkInRoom,
             selectedWalkInGuest: null,
+            selectedWalkInOffer: null,
+            selectedWalkInPaymentMethod: null,
             localGuests: [],
             guestSearchTimeout: null,
             form: null,
@@ -1457,12 +1449,16 @@ export default {
             }
 
             const reservation = this.selectedRoom.current_reservation;
-            const offerKind = (this.stayModalOffer?.kind ?? reservation.offer_kind) || 'night';
+            const offer = this.stayModalOffer
+                ?? this.offers.find((item) => item.id === reservation.offer_id)
+                ?? null;
+            const offerKind = (offer?.kind ?? reservation.offer_kind) || 'night';
             const unitPrice = this.stayModalOfferPrice?.price ?? Number(reservation.unit_price ?? 0);
             const nights = this.calculateStayUnits(
                 offerKind,
                 reservation.check_in_at || reservation.check_in_date,
                 this.stayModalDate,
+                offer,
             );
 
             return {
@@ -1488,6 +1484,9 @@ export default {
                         id: offer.id,
                         name: offer.name,
                         kind: offer.kind,
+                        time_rule: offer.time_rule,
+                        time_config: offer.time_config,
+                        fixed_duration_hours: offer.fixed_duration_hours,
                         price: price.price,
                         currency: price.currency,
                         label: `${offer.name} · ${this.formatAmount(price.price)}`,
@@ -1606,6 +1605,10 @@ export default {
                     const initialOffer = this.walkInOffers.length
                         ? this.walkInOffers[0]
                         : null;
+                    const defaultPaymentId = this.defaultPaymentMethodId();
+                    const defaultPaymentMethod = defaultPaymentId
+                        ? this.paymentMethodOptions().find((method) => method.id === defaultPaymentId) ?? null
+                        : null;
 
                     const start = new Date();
                     let end = await this.computeWalkInEndDate(start, initialOffer);
@@ -1622,17 +1625,20 @@ export default {
                         offer_price_id: initialOffer
                             ? initialOffer.offer_price_id
                             : null,
+                        payment_method_id: defaultPaymentId ?? null,
                         check_in_at: this.toDateTimeLocal(start),
                         check_out_at: this.toDateTimeLocal(end),
-                        adults: 1,
-                        children: 0,
                         amount_received: '',
                     });
 
+                    this.selectedWalkInOffer = initialOffer;
+                    this.selectedWalkInPaymentMethod = defaultPaymentMethod;
                     this.isWalkInOpen = true;
                 } else {
                     this.isWalkInOpen = false;
                     this.form = null;
+                    this.selectedWalkInOffer = null;
+                    this.selectedWalkInPaymentMethod = null;
                 }
             },
         },
@@ -1654,6 +1660,32 @@ export default {
             }
 
             this.form.guest_id = newGuest.id ?? null;
+        },
+        selectedWalkInOffer(newOffer) {
+            if (!this.form) {
+                return;
+            }
+
+            this.form.offer_id = newOffer?.id ?? null;
+            this.form.offer_price_id = newOffer?.offer_price_id ?? null;
+
+            if (newOffer) {
+                this.onOfferChange();
+            }
+        },
+        selectedWalkInPaymentMethod(newMethod) {
+            if (!this.form) {
+                return;
+            }
+
+            this.form.payment_method_id = newMethod?.id ?? null;
+        },
+        stayModalOffer(newOffer) {
+            if (!newOffer || !this.showStayModal || this.stayModalMode !== 'extend') {
+                return;
+            }
+
+            this.updateStayModalDateFromOffer(newOffer);
         },
     },
     methods: {
@@ -1720,6 +1752,17 @@ export default {
 
             return `${year}-${month}-${day}T${hours}:${minutes}`;
         },
+        paymentMethodOptions() {
+            return Array.isArray(this.paymentMethods) ? this.paymentMethods : [];
+        },
+        defaultPaymentMethodId() {
+            const methods = this.paymentMethodOptions();
+            if (!methods.length) {
+                return null;
+            }
+
+            return methods.find((method) => method.is_default)?.id ?? methods[0].id ?? null;
+        },
         extractTime(value) {
             if (!value) {
                 return '';
@@ -1756,6 +1799,33 @@ export default {
                 title: 'Action non autorisée',
                 text: 'Vous ne disposez pas des droits suffisants.',
             });
+        },
+        openCashSessionModal() {
+            window.dispatchEvent(new CustomEvent('cash-session-open-request', {
+                detail: { type: 'frontdesk' },
+            }));
+        },
+        async ensureFrontdeskCashSession() {
+            try {
+                const response = await axios.get('/cash/status', { params: { type: 'frontdesk' } });
+
+                if (response.data?.session) {
+                    return true;
+                }
+            } catch {
+                // ignore
+            }
+
+            await Swal.fire({
+                icon: 'warning',
+                title: 'Caisse fermée',
+                text: 'Veuillez ouvrir la caisse réception avant de continuer.',
+                confirmButtonText: 'Ouvrir la caisse',
+            });
+
+            this.openCashSessionModal();
+
+            return false;
         },
         async computeWalkInEndDate(startDate, offer) {
             const start = startDate instanceof Date ? new Date(startDate) : new Date();
@@ -2048,6 +2118,11 @@ export default {
             }
 
             this.showStayModal = true;
+            if (mode === 'extend' && this.stayModalOffer?.id) {
+                this.$nextTick(() => {
+                    this.updateStayModalDateFromOffer(this.stayModalOffer);
+                });
+            }
         },
         closeStayModal() {
             this.showStayModal = false;
@@ -2096,6 +2171,37 @@ export default {
                 });
             } finally {
                 this.stayModalSubmitting = false;
+            }
+        },
+        async updateStayModalDateFromOffer(offer) {
+            if (!offer?.id || !this.selectedRoom?.current_reservation || this.stayModalMode !== 'extend') {
+                return;
+            }
+
+            const arrivalValue = this.selectedRoom.current_reservation.check_out_at
+                || this.selectedRoom.current_reservation.check_out_date;
+            const arrivalDate = arrivalValue ? new Date(arrivalValue) : null;
+
+            if (!arrivalDate || Number.isNaN(arrivalDate.getTime())) {
+                return;
+            }
+
+            try {
+                const response = await axios.post(`/api/offers/${offer.id}/time-preview`, {
+                    arrival_at: arrivalDate.toISOString(),
+                });
+                const departure = new Date(response.data?.departure_at);
+
+                if (!Number.isNaN(departure.getTime())) {
+                    this.stayModalDate = this.toDateTimeLocal(departure);
+                    this.stayModalTime = this.extractTime(departure);
+                }
+            } catch (error) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Offre invalide',
+                    text: error.response?.data?.message ?? 'Impossible de calculer la date de départ.',
+                });
             }
         },
         openChangeRoomModal() {
@@ -2400,7 +2506,7 @@ export default {
 
             return this.selectedRoom.status === 'out_of_order' && !this.selectedRoom.is_occupied;
         },
-        calculateStayUnits(kind, start, end) {
+        calculateStayUnits(kind, start, end, offer = null) {
             const startDate = new Date(start);
             const endDate = new Date(end);
 
@@ -2415,10 +2521,58 @@ export default {
                 case 'short_stay':
                     return 1;
                 case 'weekend':
-                    return Math.max(2, nights);
+                case 'package':
+                    return Math.max(1, Math.ceil(nights / this.resolveBundleNights(offer, kind)));
                 default:
                     return nights;
             }
+        },
+        resolveBundleNights(offer, kind = null) {
+            const resolvedKind = kind ?? offer?.kind ?? 'night';
+            if (!['weekend', 'package'].includes(resolvedKind)) {
+                return 1;
+            }
+
+            if (!offer) {
+                return resolvedKind === 'weekend' ? 2 : 1;
+            }
+
+            let bundle = 0;
+
+            if (offer.time_rule === 'weekend_window') {
+                bundle = Number(offer.time_config?.checkout?.max_days_after_checkin ?? 0);
+            } else if (offer.time_rule === 'fixed_checkout') {
+                bundle = Number(offer.time_config?.day_offset ?? 0);
+            } else if (offer.time_rule === 'rolling') {
+                const minutes = Number(offer.time_config?.duration_minutes ?? 0);
+                bundle = minutes > 0 ? Math.ceil(minutes / 1440) : 0;
+            } else if (offer.time_rule === 'fixed_window') {
+                const startTime = offer.time_config?.start_time ?? null;
+                const endTime = offer.time_config?.end_time ?? null;
+                if (typeof startTime === 'string' && typeof endTime === 'string') {
+                    const [startHour, startMinute] = startTime.split(':').map(Number);
+                    const [endHour, endMinute] = endTime.split(':').map(Number);
+                    const startMinutes = (Number.isFinite(startHour) ? startHour : 0) * 60
+                        + (Number.isFinite(startMinute) ? startMinute : 0);
+                    let endMinutes = (Number.isFinite(endHour) ? endHour : 0) * 60
+                        + (Number.isFinite(endMinute) ? endMinute : 0);
+                    if (endMinutes <= startMinutes) {
+                        endMinutes += 1440;
+                    }
+                    const duration = endMinutes - startMinutes;
+                    bundle = duration > 0 ? Math.ceil(duration / 1440) : 0;
+                }
+            }
+
+            if (bundle <= 0 && Number.isFinite(Number(offer.fixed_duration_hours))) {
+                bundle = Math.ceil(Number(offer.fixed_duration_hours) / 24);
+            }
+
+            if (!Number.isFinite(bundle) || bundle <= 0) {
+                return resolvedKind === 'weekend' ? 2 : 1;
+            }
+
+            return bundle;
         },
         formatAmount(value) {
             const amount = Number(value || 0);
@@ -2551,9 +2705,8 @@ export default {
                 return;
             }
 
-            const selected = this.walkInOffers.find(
-                (offer) => offer.id === this.form.offer_id,
-            );
+            const selected = this.selectedWalkInOffer
+                ?? this.walkInOffers.find((offer) => offer.id === this.form.offer_id);
 
             if (selected) {
                 this.form.offer_price_id = selected.offer_price_id;
@@ -2660,14 +2813,21 @@ export default {
                 this.form.guest_id = this.selectedWalkInGuest.id;
             }
 
-            if (this.form.offer_id) {
-                const selected = this.walkInOffers.find(
-                    (offer) => offer.id === this.form.offer_id,
-                );
-                if (selected) {
-                    this.form.offer_price_id = selected.offer_price_id;
-                }
+            if (this.selectedWalkInOffer?.id) {
+                this.form.offer_id = this.selectedWalkInOffer.id;
+                this.form.offer_price_id = this.selectedWalkInOffer.offer_price_id ?? null;
             }
+
+            if (this.selectedWalkInPaymentMethod?.id) {
+                this.form.payment_method_id = this.selectedWalkInPaymentMethod.id;
+            }
+        },
+        walkInOfferLabel(offer) {
+            if (!offer) {
+                return '';
+            }
+
+            return `${offer.name} — ${this.formatAmount(offer.price)}`;
         },
         closeWalkIn() {
             this.isWalkInOpen = false;
@@ -3291,26 +3451,90 @@ export default {
                 }
 
                 if (action === 'check_in' && early.is_early_checkin && (early.fee ?? 0) > 0) {
+                    const methods = this.paymentMethodOptions();
+                    if (!methods.length) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Mode de paiement manquant',
+                            text: 'Aucun mode de paiement actif n’est disponible.',
+                        });
+
+                        return { continue: false, overrides: {} };
+                    }
+
+                    const hasSession = await this.ensureFrontdeskCashSession();
+                    if (!hasSession) {
+                        return { continue: false, overrides: {} };
+                    }
+
+                    const optionsHtml = methods
+                        .map((method) => `<option value="${method.id}">${method.name}</option>`)
+                        .join('');
+                    const defaultMethodId = this.defaultPaymentMethodId();
                     const message = early.reason
                         || `Un supplément sera appliqué (${this.formatFeeAmount(early.fee, currency)}).`;
                     const feePrompt = await Swal.fire({
                         title: 'Arrivée anticipée détectée',
-                        text: message,
+                        html:
+                            '<div class="text-left">'
+                            + `<p class="text-sm text-gray-700">${message}</p>`
+                            + (this.canOverrideFees
+                                ? `<label class="mt-3 block text-xs font-semibold text-gray-600">Supplément (${currency})</label>`
+                                    + `<input id="swal-early-fee" type="number" min="0" step="0.01" class="swal2-input" value="${early.fee ?? 0}">`
+                                : '')
+                            + '<label class="mt-3 block text-xs font-semibold text-gray-600">Mode de paiement</label>'
+                            + `<select id="swal-early-payment" class="swal2-select">${optionsHtml}</select>`
+                            + '</div>',
                         icon: 'info',
-                        input: this.canOverrideFees ? 'number' : null,
-                        inputValue: early.fee ?? 0,
-                        inputLabel: `Supplément (${currency})`,
                         showCancelButton: true,
                         confirmButtonText: 'Valider',
                         cancelButtonText: 'Annuler',
+                        focusConfirm: false,
+                        didOpen: () => {
+                            if (defaultMethodId) {
+                                const select = document.getElementById('swal-early-payment');
+                                if (select) {
+                                    select.value = defaultMethodId.toString();
+                                }
+                            }
+                        },
+                        preConfirm: () => {
+                            const paymentSelect = document.getElementById('swal-early-payment');
+                            const paymentMethodId = paymentSelect?.value ? Number(paymentSelect.value) : null;
+                            const amountInput = document.getElementById('swal-early-fee');
+                            const rawAmount = amountInput?.value ?? '';
+                            const overrideAmount = this.canOverrideFees ? Number(rawAmount) : null;
+
+                            if (!paymentMethodId) {
+                                Swal.showValidationMessage('Veuillez choisir un mode de paiement.');
+
+                                return false;
+                            }
+
+                            if (this.canOverrideFees && (!Number.isFinite(overrideAmount) || overrideAmount < 0)) {
+                                Swal.showValidationMessage('Le supplément doit être un montant valide.');
+
+                                return false;
+                            }
+
+                            return {
+                                payment_method_id: paymentMethodId,
+                                fee_override: this.canOverrideFees ? overrideAmount : null,
+                            };
+                        },
                     });
 
                     if (!feePrompt.isConfirmed) {
                         return { continue: false, overrides: {} };
                     }
 
+                    const paymentMethodId = feePrompt.value?.payment_method_id ?? null;
+                    if (paymentMethodId) {
+                        overrides.early_payment_method_id = paymentMethodId;
+                    }
+
                     if (this.canOverrideFees) {
-                        const overrideValue = Number(feePrompt.value ?? early.fee ?? 0);
+                        const overrideValue = Number(feePrompt.value?.fee_override ?? early.fee ?? 0);
                         overrides.early_fee_override = Number.isFinite(overrideValue) ? overrideValue : early.fee;
                     }
                 } else if (action === 'check_in' && early.is_early_checkin && early.reason) {
@@ -3349,24 +3573,90 @@ export default {
                     }
 
                     if (late.is_late_checkout && (late.fee ?? 0) > 0) {
+                        const methods = this.paymentMethodOptions();
+                        if (!methods.length) {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Mode de paiement manquant',
+                                text: 'Aucun mode de paiement actif n’est disponible.',
+                            });
+
+                            return { continue: false, overrides: {} };
+                        }
+
+                        const hasSession = await this.ensureFrontdeskCashSession();
+                        if (!hasSession) {
+                            return { continue: false, overrides: {} };
+                        }
+
+                        const optionsHtml = methods
+                            .map((method) => `<option value="${method.id}">${method.name}</option>`)
+                            .join('');
+                        const defaultMethodId = this.defaultPaymentMethodId();
                         const latePrompt = await Swal.fire({
                             title: 'Départ tardif détecté',
-                            html: this.buildLateCheckoutHtml(late, currency),
+                            html:
+                                `<div class="text-left">${this.buildLateCheckoutHtml(late, currency)}</div>`
+                                + '<div class="mt-3 text-left">'
+                                + '<label class="block text-xs font-semibold text-gray-600">Mode de paiement</label>'
+                                + `<select id="swal-late-payment" class="swal2-select">${optionsHtml}</select>`
+                                + '</div>'
+                                + (this.canOverrideFees
+                                    ? '<div class="mt-3 text-left">'
+                                        + `<label class="block text-xs font-semibold text-gray-600">Supplément (${currency})</label>`
+                                        + `<input id="swal-late-fee" type="number" min="0" step="0.01" class="swal2-input" value="${late.fee ?? 0}">`
+                                        + '</div>'
+                                    : ''),
                             icon: 'info',
-                            input: this.canOverrideFees ? 'number' : null,
-                            inputValue: late.fee ?? 0,
-                            inputLabel: `Supplément (${currency})`,
                             showCancelButton: true,
                             confirmButtonText: 'Valider',
                             cancelButtonText: 'Annuler',
+                            focusConfirm: false,
+                            didOpen: () => {
+                                if (defaultMethodId) {
+                                    const select = document.getElementById('swal-late-payment');
+                                    if (select) {
+                                        select.value = defaultMethodId.toString();
+                                    }
+                                }
+                            },
+                            preConfirm: () => {
+                                const paymentSelect = document.getElementById('swal-late-payment');
+                                const paymentMethodId = paymentSelect?.value ? Number(paymentSelect.value) : null;
+                                const amountInput = document.getElementById('swal-late-fee');
+                                const rawAmount = amountInput?.value ?? '';
+                                const overrideAmount = this.canOverrideFees ? Number(rawAmount) : null;
+
+                                if (!paymentMethodId) {
+                                    Swal.showValidationMessage('Veuillez choisir un mode de paiement.');
+
+                                    return false;
+                                }
+
+                                if (this.canOverrideFees && (!Number.isFinite(overrideAmount) || overrideAmount < 0)) {
+                                    Swal.showValidationMessage('Le supplément doit être un montant valide.');
+
+                                    return false;
+                                }
+
+                                return {
+                                    payment_method_id: paymentMethodId,
+                                    fee_override: this.canOverrideFees ? overrideAmount : null,
+                                };
+                            },
                         });
 
                         if (!latePrompt.isConfirmed) {
                             return { continue: false, overrides: {} };
                         }
 
+                        const paymentMethodId = latePrompt.value?.payment_method_id ?? null;
+                        if (paymentMethodId) {
+                            overrides.late_payment_method_id = paymentMethodId;
+                        }
+
                         if (this.canOverrideFees) {
-                            const overrideLate = Number(latePrompt.value ?? late.fee ?? 0);
+                            const overrideLate = Number(latePrompt.value?.fee_override ?? late.fee ?? 0);
                             overrides.late_fee_override = Number.isFinite(overrideLate) ? overrideLate : late.fee;
                         }
                     }
@@ -3502,6 +3792,11 @@ export default {
                     preserveScroll: true,
                     onSuccess: () => {
                         this.reloadRoomBoard();
+                        if (overrides?.early_payment_method_id || overrides?.late_payment_method_id) {
+                            window.dispatchEvent(new CustomEvent('cash-session-updated', {
+                                detail: { type: 'frontdesk' },
+                            }));
+                        }
                         Swal.fire({
                             icon: 'success',
                             title: 'Succès',
@@ -3516,6 +3811,10 @@ export default {
                                 ? errors
                                 : Object.values(errors || {})[0])
                             ?? 'Erreur lors de la mise à jour.';
+
+                        if (errors?.cash_session) {
+                            this.openCashSessionModal();
+                        }
 
                         Swal.fire({
                             icon: 'error',
