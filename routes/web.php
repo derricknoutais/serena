@@ -172,6 +172,7 @@ Route::middleware([
         Route::group(['prefix' => 'cash', 'as' => 'cash.'], function () {
             Route::get('/', [\App\Http\Controllers\CashSessionController::class, 'index'])->name('index');
             Route::get('/status', [\App\Http\Controllers\CashSessionController::class, 'status'])->name('status');
+            Route::get('{cashSession}', [\App\Http\Controllers\CashSessionController::class, 'show'])->name('show');
             Route::post('/', [\App\Http\Controllers\CashSessionController::class, 'store'])->name('store');
             Route::post('{cashSession}/close', [\App\Http\Controllers\CashSessionController::class, 'close'])->name('close');
             Route::post('{cashSession}/transaction', [\App\Http\Controllers\CashSessionController::class, 'transaction'])->name('transaction');

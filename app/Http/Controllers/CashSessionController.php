@@ -66,6 +66,102 @@ class CashSessionController extends Controller
         ]);
     }
 
+    public function show(Request $request, CashSession $cashSession): Response
+    {
+        $user = $request->user();
+
+        abort_unless($cashSession->tenant_id === $user->tenant_id, 404);
+        abort_unless($cashSession->hotel_id === $user->active_hotel_id, 404);
+
+        $cashSession->load([
+            'openedBy:id,name',
+            'closedBy:id,name',
+            'validatedBy:id,name',
+            'hotel:id,name',
+            'transactions' => fn ($query) => $query->orderBy('created_at'),
+            'payments' => fn ($query) => $query
+                ->with([
+                    'paymentMethod:id,name',
+                    'createdBy:id,name',
+                    'folio:id,code,reservation_id,guest_id',
+                    'folio.reservation:id,code,guest_id',
+                    'folio.guest:id,first_name,last_name',
+                ])
+                ->orderBy('paid_at'),
+        ]);
+
+        $session = [
+            'id' => $cashSession->id,
+            'type' => $cashSession->type,
+            'status' => $cashSession->status,
+            'currency' => $cashSession->currency,
+            'starting_amount' => (float) $cashSession->starting_amount,
+            'closing_amount' => $cashSession->closing_amount !== null ? (float) $cashSession->closing_amount : null,
+            'expected_closing_amount' => $cashSession->expected_closing_amount !== null
+                ? (float) $cashSession->expected_closing_amount
+                : null,
+            'difference_amount' => $cashSession->difference_amount !== null ? (float) $cashSession->difference_amount : null,
+            'total_received' => $cashSession->calculateTotalReceived(),
+            'theoretical_balance' => $cashSession->calculateTheoreticalBalance(),
+            'started_at' => optional($cashSession->started_at)?->toDateTimeString(),
+            'ended_at' => optional($cashSession->ended_at)?->toDateTimeString(),
+            'validated_at' => optional($cashSession->validated_at)?->toDateTimeString(),
+            'notes' => $cashSession->notes,
+            'opened_by' => $cashSession->openedBy?->only(['id', 'name']),
+            'closed_by' => $cashSession->closedBy?->only(['id', 'name']),
+            'validated_by' => $cashSession->validatedBy?->only(['id', 'name']),
+            'hotel' => $cashSession->hotel?->only(['id', 'name']),
+        ];
+
+        $transactions = $cashSession->transactions->map(static function ($transaction): array {
+            return [
+                'id' => $transaction->id,
+                'type' => $transaction->type,
+                'amount' => (float) $transaction->amount,
+                'description' => $transaction->description,
+                'created_at' => optional($transaction->created_at)?->toDateTimeString(),
+            ];
+        });
+
+        $payments = $cashSession->payments->map(static function ($payment): array {
+            $reservation = $payment->folio?->reservation;
+            $guest = $payment->folio?->guest;
+            $guestName = $guest
+                ? trim(($guest->last_name ?? '').' '.($guest->first_name ?? ''))
+                : null;
+
+            return [
+                'id' => $payment->id,
+                'amount' => (float) $payment->amount,
+                'currency' => $payment->currency,
+                'paid_at' => optional($payment->paid_at)?->toDateTimeString(),
+                'method' => $payment->paymentMethod?->name,
+                'created_by' => $payment->createdBy?->only(['id', 'name']),
+                'folio_code' => $payment->folio?->code,
+                'reservation_code' => $reservation?->code,
+                'guest_name' => $guestName,
+                'notes' => $payment->notes,
+            ];
+        });
+
+        $paymentBreakdown = $cashSession->payments
+            ->groupBy(fn ($payment) => $payment->paymentMethod?->name ?? 'Autre')
+            ->map(fn ($group) => (float) $group->sum('amount'))
+            ->sortKeys()
+            ->map(fn ($amount, $method) => [
+                'method' => $method,
+                'amount' => $amount,
+            ])
+            ->values();
+
+        return Inertia::render('CashSessions/CashSessionShow', [
+            'session' => $session,
+            'transactions' => $transactions,
+            'payments' => $payments,
+            'paymentBreakdown' => $paymentBreakdown,
+        ]);
+    }
+
     public function store(Request $request): RedirectResponse
     {
         Gate::authorize('cash_sessions.open');

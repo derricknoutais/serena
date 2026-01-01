@@ -221,9 +221,11 @@ export default {
     mounted() {
         this.fetchSession();
         window.addEventListener('cash-session-updated', this.handleExternalUpdate);
+        window.addEventListener('cash-session-open-request', this.handleOpenRequest);
     },
     beforeUnmount() {
         window.removeEventListener('cash-session-updated', this.handleExternalUpdate);
+        window.removeEventListener('cash-session-open-request', this.handleOpenRequest);
     },
     methods: {
         showUnauthorizedAlert() {
@@ -241,6 +243,21 @@ export default {
             }
 
             this.fetchSession();
+        },
+        handleOpenRequest(event) {
+            const eventType = event?.detail?.type || 'frontdesk';
+
+            if (eventType !== this.type) {
+                return;
+            }
+
+            if (!this.canOpenCash) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
+
+            this.openingModal = true;
         },
         async fetchSession() {
             try {

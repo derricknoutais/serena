@@ -26,7 +26,12 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 bg-white">
-                        <tr v-for="session in sessions.data" :key="session.id" class="hover:bg-gray-50">
+                        <tr
+                            v-for="session in sessions.data"
+                            :key="session.id"
+                            class="cursor-pointer hover:bg-gray-50"
+                            @click="openSession(session)"
+                        >
                             <td class="px-4 py-3 text-sm font-medium text-gray-800">
                                 <span class="capitalize">{{ session.type }}</span>
                             </td>
@@ -66,7 +71,7 @@
                             <td class="px-4 py-3 text-right text-sm text-gray-600">
                                 <button
                                     v-if="session.status === 'closed_pending_validation'"
-                                    @click="confirmValidation(session)"
+                                    @click.stop="confirmValidation(session)"
                                     class="text-indigo-600 hover:text-indigo-900 font-medium text-xs border border-indigo-200 bg-indigo-50 px-2 py-1 rounded"
                                 >
                                     Valider
@@ -128,6 +133,13 @@ export default {
             return new Date(dateString).toLocaleString('fr-FR', {
                 day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit'
             });
+        },
+        openSession(session) {
+            if (!session?.id) {
+                return;
+            }
+
+            router.visit(`/cash/${session.id}`);
         },
         formatCurrency(amount, currency = 'XAF') {
             return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: currency }).format(amount);
