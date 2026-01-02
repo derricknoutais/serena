@@ -4,14 +4,14 @@ use App\Models\Offer;
 use App\Models\Reservation;
 use Illuminate\Validation\ValidationException;
 
-it('requires hourly offers to end the same day', function (): void {
+it('allows hourly offers to pass midnight', function (): void {
     $reservation = new Reservation([
         'check_in_date' => '2025-06-01 10:00:00',
         'check_out_date' => '2025-06-02 12:00:00',
         'offer_kind' => 'hourly',
     ]);
 
-    expect(fn () => $reservation->validateOfferDates())->toThrow(ValidationException::class);
+    expect(fn () => $reservation->validateOfferDates())->not->toThrow(ValidationException::class);
 });
 
 it('requires at least one night for night offers', function (): void {

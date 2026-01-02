@@ -102,7 +102,7 @@ const rawSteps: Step[] = [
             number: 2,
             title: 'Inviter votre équipe',
             description: 'Invitez vos collaborateurs et assignez-leur des rôles pour cet hôtel.',
-            actionHref: '/guests',
+            actionHref: '/resources/guests',
             actionLabel: 'Inviter / assigner',
         },
     },

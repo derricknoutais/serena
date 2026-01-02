@@ -133,7 +133,7 @@ const ressourcesNavItems = computed(() => baseRessourcesNavItems.filter((item) =
 }));
 
 const ressourcesOpen = ref(currentUrl.value.startsWith('/ressources/') || currentUrl.value.startsWith('/activity'));
-const receptionOpen = ref(currentUrl.value.startsWith('/guests') || currentUrl.value.startsWith('/frontdesk'));
+const receptionOpen = ref(currentUrl.value.startsWith('/resources/guests') || currentUrl.value.startsWith('/frontdesk'));
 
 const footerNavItems: NavItem[] = [
     {
@@ -210,7 +210,7 @@ const footerNavItems: NavItem[] = [
                     </SidebarMenuItem>
                     <SidebarMenuItem>
                         <SidebarMenuButton as-child class="pl-6" @click.stop.prevent>
-                            <Link href="/guests" @click.stop.prevent>
+                            <Link href="/resources/guests" @click.stop.prevent>
                                 <UsersRound class="h-4 w-4" />
                                 <span>Clients</span>
                             </Link>

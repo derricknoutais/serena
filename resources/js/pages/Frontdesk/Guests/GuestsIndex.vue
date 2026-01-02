@@ -313,7 +313,7 @@ export default {
     },
     methods: {
         applyFilters(value = this.localFilters.search) {
-            router.visit('/guests', {
+            router.visit('/resources/guests', {
                 method: 'get',
                 data: { search: value },
                 preserveState: true,
@@ -378,7 +378,7 @@ export default {
                 notes: this.form.notes,
             };
 
-            const url = this.isEditing ? `/guests/${this.editId}` : '/guests';
+            const url = this.isEditing ? `/resources/guests/${this.editId}` : '/resources/guests';
             const method = this.isEditing ? 'put' : 'post';
 
             router[method](url, payload, {
@@ -405,7 +405,7 @@ export default {
                 confirmButtonColor: '#dc2626',
             }).then((result) => {
                 if (result.isConfirmed) {
-                    router.delete(`/guests/${id}`, { preserveScroll: true });
+                    router.delete(`/resources/guests/${id}`, { preserveScroll: true });
                 }
             });
         },

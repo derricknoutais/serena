@@ -133,6 +133,24 @@ export default defineComponent({
                 this.syncOutbox();
             }
         },
+        handleClickOutside(event: MouseEvent) {
+            const target = event.target as HTMLElement | null;
+            if (!target) {
+                return;
+            }
+
+            if (!target.closest('[data-dropdown="resources"]')) {
+                this.resourcesOpen = false;
+            }
+
+            if (!target.closest('[data-dropdown="operations"]')) {
+                this.operationsOpen = false;
+            }
+
+            if (!target.closest('[data-dropdown="finance"]')) {
+                this.financeOpen = false;
+            }
+        },
     },
     created() {
         this.unreadCount = (this as any)?.$page?.props?.notifications?.unread_count ?? 0;
@@ -143,11 +161,13 @@ export default defineComponent({
         this.notificationTimer = window.setInterval(() => this.loadNotifications(true), 60000);
         window.addEventListener('online', this.handleNetworkChange);
         window.addEventListener('offline', this.handleNetworkChange);
+        window.addEventListener('click', this.handleClickOutside);
         this.unreadCount = (this as any)?.$page?.props?.notifications?.unread_count ?? 0;
     },
     beforeUnmount() {
         window.removeEventListener('online', this.handleNetworkChange);
         window.removeEventListener('offline', this.handleNetworkChange);
+        window.removeEventListener('click', this.handleClickOutside);
         if (this.notificationTimer) {
             window.clearInterval(this.notificationTimer);
         }
@@ -262,7 +282,7 @@ export default defineComponent({
 
                 <nav class="hidden items-center space-x-4 text-sm lg:flex">
                     <!-- Ressources -->
-                    <div class="relative" aria-label="Ressources">
+                    <div class="relative" aria-label="Ressources" data-dropdown="resources">
                         <PrimaryButton
                             type="button"
                             variant="primary"
@@ -295,6 +315,12 @@ export default defineComponent({
                                 class="block rounded-lg px-3 py-1.5 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
                             >
                                 Chambres
+                            </Link>
+                            <Link
+                                href="/resources/guests"
+                                class="block rounded-lg px-3 py-1.5 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
+                            >
+                                Guests
                             </Link>
                             <Link
                                 href="/ressources/offers"
@@ -341,7 +367,7 @@ export default defineComponent({
                         </div>
                     </div>
                     <Link
-                        href="/guests"
+                        href="/resources/guests"
                         class="rounded-full px-3 py-1 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
                     >
                         Guests
@@ -352,7 +378,7 @@ export default defineComponent({
                     >
                         FrontDesk
                     </Link>
-                    <div class="relative">
+                    <div class="relative" data-dropdown="operations">
                         <button
                             type="button"
                             class="rounded-full px-3 py-1 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
@@ -387,7 +413,7 @@ export default defineComponent({
                         </div>
                     </div>
 
-                    <div class="relative">
+                    <div class="relative" data-dropdown="finance">
                         <button
                             type="button"
                             class="rounded-full px-3 py-1 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
@@ -513,7 +539,7 @@ export default defineComponent({
                 <div class="space-y-2">
                     <p class="text-xs font-semibold uppercase tracking-wide text-serena-text-muted">Navigation</p>
                     <div class="flex flex-col gap-2">
-                        <Link href="/guests" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
+                        <Link href="/resources/guests" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
                             Guests
                         </Link>
                         <Link :href="frontdeskDashboard()" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">

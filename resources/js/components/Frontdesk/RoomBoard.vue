@@ -1768,7 +1768,13 @@ export default {
                 return '';
             }
 
-            const date = new Date(value);
+            if (typeof value === 'string') {
+                const match = value.match(/(\d{2}):(\d{2})/);
+
+                return match ? `${match[1]}:${match[2]}` : '';
+            }
+
+            const date = value instanceof Date ? value : new Date(value);
             if (Number.isNaN(date.getTime())) {
                 return '';
             }
@@ -1777,6 +1783,58 @@ export default {
             const minutes = String(date.getMinutes()).padStart(2, '0');
 
             return `${hours}:${minutes}`;
+        },
+        normalizeStayDateTime(value, fallbackTime = null) {
+            if (!value) {
+                return '';
+            }
+
+            const fallback = fallbackTime || '00:00';
+
+            if (value instanceof Date) {
+                return this.toDateTimeLocal(value);
+            }
+
+            if (typeof value !== 'string') {
+                return '';
+            }
+
+            const trimmed = value.trim();
+
+            if (!trimmed) {
+                return '';
+            }
+
+            if (trimmed.includes('T')) {
+                const [datePart, timePart = ''] = trimmed.split('T');
+                const time = this.normalizeStayTime(timePart, fallback);
+
+                return `${datePart}T${time}`;
+            }
+
+            if (trimmed.includes(' ')) {
+                const [datePart, timePart = ''] = trimmed.split(' ');
+                const time = this.normalizeStayTime(timePart, fallback);
+
+                return `${datePart}T${time}`;
+            }
+
+            if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+                return `${trimmed}T${fallback}`;
+            }
+
+            return '';
+        },
+        normalizeStayTime(value, fallback) {
+            const cleaned = (value || '').replace('Z', '').split('.')[0];
+
+            if (!cleaned) {
+                return fallback;
+            }
+
+            const match = cleaned.match(/(\d{2}):(\d{2})/);
+
+            return match ? `${match[1]}:${match[2]}` : fallback;
         },
         onStayModalDateChange() {
             if (!this.stayModalDate) {
@@ -1874,7 +1932,7 @@ export default {
 
             this.guestSearchTimeout = setTimeout(async () => {
                 try {
-                    const response = await axios.get('/guests/search', {
+                    const response = await axios.get('/resources/guests/search', {
                         params: { search: term },
                         headers: { Accept: 'application/json' },
                     });
@@ -2014,7 +2072,7 @@ export default {
 
             try {
                 const response = await axios.post(
-                    '/guests',
+                    '/resources/guests',
                     {
                         first_name: formValues.first_name,
                         last_name: formValues.last_name,
@@ -2109,7 +2167,11 @@ export default {
                 ?? null;
 
             this.stayModalTime = this.extractTime(currentDeparture);
-            const currentDepartureValue = this.toDateTimeLocal(currentDeparture);
+            const currentDepartureValue = this.normalizeStayDateTime(currentDeparture, this.stayModalTime);
+
+            if (!currentDepartureValue) {
+                return;
+            }
 
             if (mode === 'extend') {
                 this.stayModalDate = this.addDays(currentDepartureValue, 1);
@@ -2180,15 +2242,15 @@ export default {
 
             const arrivalValue = this.selectedRoom.current_reservation.check_out_at
                 || this.selectedRoom.current_reservation.check_out_date;
-            const arrivalDate = arrivalValue ? new Date(arrivalValue) : null;
+            const arrivalAt = this.normalizeStayDateTime(arrivalValue, this.stayModalTime);
 
-            if (!arrivalDate || Number.isNaN(arrivalDate.getTime())) {
+            if (!arrivalAt) {
                 return;
             }
 
             try {
                 const response = await axios.post(`/api/offers/${offer.id}/time-preview`, {
-                    arrival_at: arrivalDate.toISOString(),
+                    arrival_at: arrivalAt,
                 });
                 const departure = new Date(response.data?.departure_at);
 

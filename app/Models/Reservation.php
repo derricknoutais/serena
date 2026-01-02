@@ -143,12 +143,24 @@ class Reservation extends Model
             ]);
         }
 
-        $nights = $checkIn->diffInDays($checkOut);
+        $offerKind = $this->offer_kind;
 
-        switch ($this->offer_kind) {
-            case 'hourly':
-                break;
+        if ($offerKind === 'hourly') {
+            return;
+        }
 
+        $checkInDate = $checkIn->copy()->startOfDay();
+        $checkOutDate = $checkOut->copy()->startOfDay();
+
+        if ($checkOutDate->lessThanOrEqualTo($checkInDate)) {
+            throw ValidationException::withMessages([
+                'check_out_date' => 'La date de départ doit être postérieure à la date d’arrivée.',
+            ]);
+        }
+
+        $nights = $checkInDate->diffInDays($checkOutDate);
+
+        switch ($offerKind) {
             case 'night':
                 if ($nights < 1) {
                     throw ValidationException::withMessages([

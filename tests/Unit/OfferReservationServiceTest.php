@@ -80,10 +80,10 @@ it('computes end time for fixed duration offers and validates checkout limit', f
 
     expect($service->isOfferValidForDateTime($offer, $dt))->toBeTrue();
 
-    $reservation = $service->buildReservationFromOffer($offer, $dt, 1);
+    $reservation = $service->buildReservationFromOffer($offer, $dt, 'room-1');
 
-    expect($reservation->check_in_date)->toEqual(Carbon::parse('2025-01-15')->startOfDay());
-    expect($reservation->check_out_date)->toEqual(Carbon::parse('2025-01-15')->startOfDay());
+    expect($reservation->check_in_date)->toEqual(Carbon::parse('2025-01-15 08:00:00'));
+    expect($reservation->check_out_date)->toEqual(Carbon::parse('2025-01-15 11:00:00'));
 });
 
 it('throws when fixed duration exceeds checkout limit', function (): void {
@@ -98,5 +98,5 @@ it('throws when fixed duration exceeds checkout limit', function (): void {
     $dt = Carbon::parse('2025-01-15 09:00:00');
 
     expect($service->isOfferValidForDateTime($offer, $dt))->toBeFalse();
-    $service->buildReservationFromOffer($offer, $dt, 1);
+    $service->buildReservationFromOffer($offer, $dt, 'room-1');
 })->throws(OfferNotValidForDateTimeException::class);

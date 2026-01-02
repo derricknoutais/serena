@@ -34,8 +34,8 @@ class OfferReservationService
 
         [$startAt, $endAt] = $this->resolveStartAndEnd($offer, $dt, $customEnd);
 
-        $checkInDate = $startAt->copy()->startOfDay();
-        $checkOutDate = $endAt->copy()->startOfDay();
+        $checkInDate = $startAt->copy();
+        $checkOutDate = $endAt->copy();
 
         return new Reservation(array_merge($baseAttributes, [
             'room_id' => $resourceId,
