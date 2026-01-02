@@ -1454,16 +1454,55 @@ export default {
                 ?? null;
             const offerKind = (offer?.kind ?? reservation.offer_kind) || 'night';
             const unitPrice = this.stayModalOfferPrice?.price ?? Number(reservation.unit_price ?? 0);
-            const nights = this.calculateStayUnits(
-                offerKind,
+            const checkIn = this.normalizeStayDateTime(
                 reservation.check_in_at || reservation.check_in_date,
-                this.stayModalDate,
-                offer,
+                this.stayModalTime,
             );
+            const currentCheckOut = this.normalizeStayDateTime(
+                reservation.check_out_at || reservation.check_out_date,
+                this.stayModalTime,
+            );
+            const isExtend = this.stayModalMode === 'extend';
+            const start = isExtend ? currentCheckOut : checkIn;
+
+            if (!start) {
+                return {
+                    nights: 0,
+                    total: 0,
+                };
+            }
+
+            const nights = this.calculateStayNights(start, this.stayModalDate);
+            let units = 0;
+            const isSameOffer = offer?.id && reservation.offer_id && Number(offer.id) === Number(reservation.offer_id);
+
+            if (isExtend && isSameOffer && checkIn && currentCheckOut) {
+                const previousUnits = this.calculateStayUnits(
+                    offerKind,
+                    checkIn,
+                    currentCheckOut,
+                    offer,
+                );
+                const nextUnits = this.calculateStayUnits(
+                    offerKind,
+                    checkIn,
+                    this.stayModalDate,
+                    offer,
+                );
+
+                units = Math.max(0, nextUnits - previousUnits);
+            } else {
+                units = this.calculateStayUnits(
+                    offerKind,
+                    start,
+                    this.stayModalDate,
+                    offer,
+                );
+            }
 
             return {
                 nights,
-                total: nights * unitPrice,
+                total: units * unitPrice,
             };
         },
         stayOfferOptions() {
@@ -2568,7 +2607,7 @@ export default {
 
             return this.selectedRoom.status === 'out_of_order' && !this.selectedRoom.is_occupied;
         },
-        calculateStayUnits(kind, start, end, offer = null) {
+        calculateStayNights(start, end) {
             const startDate = new Date(start);
             const endDate = new Date(end);
 
@@ -2577,7 +2616,15 @@ export default {
             }
 
             const msPerDay = 1000 * 60 * 60 * 24;
-            const nights = Math.max(1, Math.ceil((endDate - startDate) / msPerDay));
+
+            return Math.max(1, Math.ceil((endDate - startDate) / msPerDay));
+        },
+        calculateStayUnits(kind, start, end, offer = null) {
+            const nights = this.calculateStayNights(start, end);
+
+            if (!nights) {
+                return 0;
+            }
 
             switch (kind) {
                 case 'short_stay':

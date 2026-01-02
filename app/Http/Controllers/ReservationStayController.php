@@ -110,9 +110,79 @@ class ReservationStayController extends Controller
         $oldBaseAmount = (float) $reservation->base_amount;
         $oldTotalAmount = (float) $reservation->total_amount;
 
+        $selectedOfferId = $data['offer_id'] ?? null;
+        $useExtensionOffer = $action === 'extend'
+            && $selectedOfferId !== null
+            && (int) $selectedOfferId !== (int) ($reservation->offer_id ?? 0);
+
+        if ($useExtensionOffer) {
+            /** @var Offer $extensionOffer */
+            $extensionOffer = Offer::query()
+                ->where('tenant_id', $reservation->tenant_id)
+                ->where('hotel_id', $reservation->hotel_id)
+                ->findOrFail((int) $selectedOfferId);
+
+            $extensionPrice = OfferRoomTypePrice::query()
+                ->where('tenant_id', $reservation->tenant_id)
+                ->where('hotel_id', $reservation->hotel_id)
+                ->where('room_type_id', $reservation->room_type_id)
+                ->where('offer_id', $extensionOffer->id)
+                ->first();
+
+            if (! $extensionPrice) {
+                throw ValidationException::withMessages([
+                    'offer_id' => 'Aucun tarif disponible pour cette offre et ce type de chambre.',
+                ]);
+            }
+
+            $extensionQuantity = $this->calculateStayQuantity(
+                $currentCheckOut,
+                $newCheckOut,
+                $extensionOffer->kind,
+                $this->resolveBundleNights($extensionOffer, $extensionOffer->kind),
+            );
+            $extensionUnitPrice = (float) $extensionPrice->price;
+            $extensionAmount = $extensionQuantity * $extensionUnitPrice;
+
+            $reservation->check_out_date = $newCheckOut->toDateTimeString();
+            $reservation->base_amount = $oldBaseAmount + $extensionAmount;
+            $reservation->total_amount = $reservation->base_amount + (float) $reservation->tax_amount;
+            $reservation->save();
+
+            if (abs($extensionAmount) >= 0.01) {
+                $description = 'Prolongation de séjour';
+                $offerLabel = $extensionOffer->name ?? 'Séjour';
+                $lineDescription = sprintf(
+                    '%s - %s · Séjour du %s - %s',
+                    $description,
+                    $offerLabel,
+                    $currentCheckOut->format('d/m/Y'),
+                    $newCheckOut->format('d/m/Y'),
+                );
+
+                $this->billingService->addStayAdjustment($reservation, $extensionAmount, $description, [
+                    'line_description' => $lineDescription,
+                    'quantity' => $extensionQuantity,
+                    'unit_price' => $extensionUnitPrice,
+                    'meta' => [
+                        'previous_check_out' => $currentCheckOut->toDateString(),
+                        'new_check_out' => $newCheckOut->toDateString(),
+                        'offer_id' => $extensionOffer->id,
+                        'offer_name' => $extensionOffer->name,
+                    ],
+                ]);
+            }
+
+            return response()->json([
+                'reservation' => $reservation->fresh(['room']),
+                'base_amount' => $oldBaseAmount,
+                'new_base_amount' => $reservation->base_amount,
+                'delta' => $extensionAmount,
+            ]);
+        }
+
         $previousOffer = $reservation->offer;
         $previousOfferKind = $previousOffer?->kind ?? $reservation->offer_kind ?? 'night';
-        $selectedOfferId = $data['offer_id'] ?? null;
         if ($selectedOfferId) {
             /** @var Offer $offer */
             $offer = Offer::query()

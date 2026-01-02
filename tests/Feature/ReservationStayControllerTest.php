@@ -252,7 +252,7 @@ it('charges package offers per configured night bundle when extending a stay', f
     expect($reservation->fresh()->base_amount)->toBe(100000);
 });
 
-it('allows changing the offer when extending a stay', function (): void {
+it('prices an extension with a selected offer without replacing the original', function (): void {
     [
         'tenant' => $tenant,
         'reservation' => $reservation,
@@ -333,7 +333,7 @@ it('allows changing the offer when extending a stay', function (): void {
     $response->assertOk();
 
     $freshReservation = $reservation->fresh();
-    expect($freshReservation->offer_id)->toBe($offerB->id);
-    expect($freshReservation->offer_kind)->toBe('night');
-    expect($freshReservation->unit_price)->toBe(10000);
+    expect($freshReservation->offer_id)->toBe($offerA->id);
+    expect($freshReservation->offer_kind)->toBe('weekend');
+    expect($freshReservation->base_amount)->toBe(35000);
 });
