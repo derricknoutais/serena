@@ -31,9 +31,14 @@ it('accepts offer time preview with local datetime input', function (): void {
 
     $domain = tenantDomain($tenant);
 
-    actingAs($user)
+    $response = actingAs($user)
         ->postJson(sprintf('http://%s/api/offers/%s/time-preview', $domain, $offer->id), [
             'arrival_at' => '2025-01-03T10:00',
         ])
         ->assertSuccessful();
+
+    $payload = $response->json();
+
+    expect($payload['arrival_at'])->toBe('2025-01-03T10:00:00');
+    expect($payload['departure_at'])->toBe('2025-01-05T12:00:00');
 });

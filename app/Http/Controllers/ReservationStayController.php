@@ -135,14 +135,18 @@ class ReservationStayController extends Controller
                 ]);
             }
 
-            $extensionQuantity = $this->calculateStayQuantity(
-                $currentCheckOut,
-                $newCheckOut,
-                $extensionOffer->kind,
-                $this->resolveBundleNights($extensionOffer, $extensionOffer->kind),
-            );
             $extensionUnitPrice = (float) $extensionPrice->price;
-            $extensionAmount = $extensionQuantity * $extensionUnitPrice;
+            $extensionQuantity = $extensionOffer->billing_mode === 'fixed'
+                ? 1.0
+                : $this->calculateStayQuantity(
+                    $currentCheckOut,
+                    $newCheckOut,
+                    $extensionOffer->kind,
+                    $this->resolveBundleNights($extensionOffer, $extensionOffer->kind),
+                );
+            $extensionAmount = $extensionOffer->billing_mode === 'fixed'
+                ? $extensionUnitPrice
+                : $extensionQuantity * $extensionUnitPrice;
 
             $reservation->check_out_date = $newCheckOut->toDateTimeString();
             $reservation->base_amount = $oldBaseAmount + $extensionAmount;

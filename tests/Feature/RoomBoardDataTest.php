@@ -2,6 +2,7 @@
 
 use App\Models\Guest;
 use App\Models\Hotel;
+use App\Models\Offer;
 use App\Models\Reservation;
 use App\Models\Room;
 use App\Models\RoomType;
@@ -193,8 +194,8 @@ it('includes current reservation details for occupied rooms', function (): void 
 
     expect($payload['current_reservation'])->not->toBeNull();
     expect($payload['current_reservation']['code'])->toBe('RSV-2512001');
-    expect($payload['current_reservation']['check_in_at'])->toBe(now()->startOfDay()->toDateTimeString());
-    expect($payload['current_reservation']['check_out_at'])->toBe(now()->addDay()->startOfDay()->toDateTimeString());
+    expect($payload['current_reservation']['check_in_at'])->toBe(now()->startOfDay()->format('Y-m-d\TH:i:s'));
+    expect($payload['current_reservation']['check_out_at'])->toBe(now()->addDay()->startOfDay()->format('Y-m-d\TH:i:s'));
 });
 
 it('shows in-house reservations even after the checkout date', function (): void {
@@ -256,4 +257,38 @@ it('shows in-house reservations even after the checkout date', function (): void
 
     expect($payload['current_reservation'])->not->toBeNull();
     expect($payload['current_reservation']['is_overstay'])->toBeTrue();
+});
+
+it('exposes offer time config for room board summary calculations', function (): void {
+    [
+        'hotel' => $hotel,
+        'user' => $user,
+    ] = setupRoomBoardTenant();
+
+    $offer = Offer::query()->create([
+        'tenant_id' => $user->tenant_id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Week-end H48',
+        'kind' => 'weekend',
+        'billing_mode' => 'fixed',
+        'time_rule' => 'weekend_window',
+        'time_config' => [
+            'checkout' => [
+                'max_days_after_checkin' => 2,
+            ],
+        ],
+        'is_active' => true,
+    ]);
+
+    $request = Request::create('/frontdesk/dashboard', 'GET', [
+        'date' => now()->toDateString(),
+    ]);
+    $request->setUserResolver(fn () => $user);
+
+    $data = RoomBoardData::build($request);
+    $offerPayload = collect($data['offers'])->firstWhere('id', $offer->id);
+
+    expect($offerPayload)->not->toBeNull();
+    expect($offerPayload['kind'])->toBe('weekend');
+    expect($offerPayload['time_config']['checkout']['max_days_after_checkin'])->toBe(2);
 });

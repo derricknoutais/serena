@@ -132,7 +132,9 @@ class FolioBillingService
         $offerKind = $offer?->kind ?? $reservation->offer_kind ?? 'night';
         $offerName = $offer?->name ?? $reservation->offer_name ?? 'Séjour';
         $bundleNights = $this->resolveBundleNights($offer, $offerKind);
-        $quantity = $this->calculateStayQuantity($offerKind, $checkIn, $checkOut, $bundleNights);
+        $quantity = $offer?->billing_mode === 'fixed'
+            ? 1
+            : $this->calculateStayQuantity($offerKind, $checkIn, $checkOut, $bundleNights);
 
         $description = $this->buildStayDescription($offerKind, $offerName, $checkIn, $checkOut);
         $unitPrice = (float) $reservation->unit_price;

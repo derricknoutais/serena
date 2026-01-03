@@ -130,8 +130,8 @@ class RoomBoardData
                     'guest_name' => $currentReservation->guest?->name,
                     'check_in_date' => optional($currentReservation->check_in_date)->toDateString(),
                     'check_out_date' => optional($currentReservation->check_out_date)->toDateString(),
-                    'check_in_at' => optional($currentReservation->check_in_date)->toDateTimeString(),
-                    'check_out_at' => optional($currentReservation->check_out_date)->toDateTimeString(),
+                    'check_in_at' => self::formatDateTimeLocal($currentReservation->check_in_date),
+                    'check_out_at' => self::formatDateTimeLocal($currentReservation->check_out_date),
                     'unit_price' => (float) $currentReservation->unit_price,
                     'offer_kind' => $currentReservation->offer?->kind ?? $currentReservation->offer_kind ?? 'night',
                     'room_type_id' => $currentReservation->room_type_id,
@@ -315,5 +315,14 @@ class RoomBoardData
             'guests' => $guests,
             'paymentMethods' => $paymentMethods,
         ];
+    }
+
+    private static function formatDateTimeLocal(?Carbon $value): ?string
+    {
+        if (! $value) {
+            return null;
+        }
+
+        return $value->format('Y-m-d\TH:i:s');
     }
 }

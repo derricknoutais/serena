@@ -7,6 +7,7 @@ use App\Models\Offer;
 use App\Services\OfferTimeEngine;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 class OfferTimeController extends Controller
 {
@@ -20,15 +21,18 @@ class OfferTimeController extends Controller
             'arrival_at' => ['nullable', 'date'],
         ]);
 
+        $offer->loadMissing('hotel');
+        $timezone = $offer->hotel?->timezone ?? config('app.timezone');
+
         $arrivalAt = $data['arrival_at']
-            ? now()->parse($data['arrival_at'])
-            : now();
+            ? Carbon::parse($data['arrival_at'], $timezone)->setTimezone($timezone)
+            : now($timezone);
 
         $period = $this->engine->computeStayPeriod($offer, $arrivalAt);
 
         return response()->json([
-            'arrival_at' => $period['arrival_at']->toIso8601String(),
-            'departure_at' => $period['departure_at']->toIso8601String(),
+            'arrival_at' => $period['arrival_at']->setTimezone($timezone)->format('Y-m-d\TH:i:s'),
+            'departure_at' => $period['departure_at']->setTimezone($timezone)->format('Y-m-d\TH:i:s'),
         ]);
     }
 }

@@ -1464,6 +1464,7 @@ export default {
             );
             const isExtend = this.stayModalMode === 'extend';
             const start = isExtend ? currentCheckOut : checkIn;
+            const useBundleSummary = isExtend && ['weekend', 'package'].includes(offerKind);
 
             if (!start) {
                 return {
@@ -1472,32 +1473,28 @@ export default {
                 };
             }
 
-            const nights = this.calculateStayNights(start, this.stayModalDate);
+            const nights = this.calculateStaySummaryNights(
+                offerKind,
+                start,
+                this.stayModalDate,
+                offer,
+                useBundleSummary,
+            );
             let units = 0;
             const isSameOffer = offer?.id && reservation.offer_id && Number(offer.id) === Number(reservation.offer_id);
+            const resolveUnits = (from, to) => (
+                useBundleSummary
+                    ? this.calculateStayUnitsByDate(offerKind, from, to, offer)
+                    : this.calculateStayUnits(offerKind, from, to, offer)
+            );
 
             if (isExtend && isSameOffer && checkIn && currentCheckOut) {
-                const previousUnits = this.calculateStayUnits(
-                    offerKind,
-                    checkIn,
-                    currentCheckOut,
-                    offer,
-                );
-                const nextUnits = this.calculateStayUnits(
-                    offerKind,
-                    checkIn,
-                    this.stayModalDate,
-                    offer,
-                );
+                const previousUnits = resolveUnits(checkIn, currentCheckOut);
+                const nextUnits = resolveUnits(checkIn, this.stayModalDate);
 
                 units = Math.max(0, nextUnits - previousUnits);
             } else {
-                units = this.calculateStayUnits(
-                    offerKind,
-                    start,
-                    this.stayModalDate,
-                    offer,
-                );
+                units = resolveUnits(start, this.stayModalDate);
             }
 
             return {
@@ -1942,7 +1939,7 @@ export default {
             try {
                 const http = window.axios ?? axios;
                 const response = await http.post(`/api/offers/${effectiveOffer.id}/time-preview`, {
-                    arrival_at: start.toISOString(),
+                    arrival_at: this.toDateTimeLocal(start),
                 });
 
                 const departure = new Date(response.data?.departure_at);
@@ -2618,6 +2615,52 @@ export default {
             const msPerDay = 1000 * 60 * 60 * 24;
 
             return Math.max(1, Math.ceil((endDate - startDate) / msPerDay));
+        },
+        calculateStayDateNights(start, end) {
+            const startDate = new Date(start);
+            const endDate = new Date(end);
+
+            if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+                return 0;
+            }
+
+            const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+            const endDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+            const msPerDay = 1000 * 60 * 60 * 24;
+
+            return Math.max(1, Math.ceil((endDay - startDay) / msPerDay));
+        },
+        calculateStayUnitsByDate(kind, start, end, offer = null) {
+            const nights = this.calculateStayDateNights(start, end);
+
+            if (!nights) {
+                return 0;
+            }
+
+            switch (kind) {
+                case 'short_stay':
+                    return 1;
+                case 'weekend':
+                case 'package':
+                    return Math.max(1, Math.ceil(nights / this.resolveBundleNights(offer, kind)));
+                default:
+                    return nights;
+            }
+        },
+        calculateStaySummaryNights(kind, start, end, offer = null, useBundleSummary = false) {
+            if (!useBundleSummary) {
+                return this.calculateStayNights(start, end);
+            }
+
+            const units = this.calculateStayUnitsByDate(kind, start, end, offer);
+
+            if (!units) {
+                return 0;
+            }
+
+            const bundleNights = this.resolveBundleNights(offer, kind);
+
+            return units * bundleNights;
         },
         calculateStayUnits(kind, start, end, offer = null) {
             const nights = this.calculateStayNights(start, end);

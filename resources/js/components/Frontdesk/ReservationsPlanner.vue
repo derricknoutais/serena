@@ -2546,7 +2546,7 @@
                 try {
                     const http = window.axios ?? axios;
                     const response = await http.post(`/api/offers/${offer.id}/time-preview`, {
-                        arrival_at: start.toISOString(),
+                        arrival_at: this.toDateTimeLocal(start),
                     });
 
                     const arrival = new Date(response.data.arrival_at);

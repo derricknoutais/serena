@@ -5,6 +5,8 @@ use App\Models\FolioItem;
 use App\Models\Guest;
 use App\Models\Hotel;
 use App\Models\Invoice;
+use App\Models\Offer;
+use App\Models\OfferRoomTypePrice;
 use App\Models\Reservation;
 use App\Models\Room;
 use App\Models\RoomType;
@@ -199,6 +201,48 @@ it('adds descriptive stay adjustment charges with quantity and unit price', func
         ->and($item->type)->toBe('stay_adjustment')
         ->and($item->meta['previous_check_out'])->toBe('2025-05-10')
         ->and($folio->balance)->toBe(20000.0);
+});
+
+it('syncs fixed billing stay items as a single unit', function (): void {
+    $offer = Offer::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'hotel_id' => $this->hotel->id,
+        'name' => 'Week-end',
+        'kind' => 'weekend',
+        'billing_mode' => 'fixed',
+        'is_active' => true,
+    ]);
+
+    OfferRoomTypePrice::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'hotel_id' => $this->hotel->id,
+        'offer_id' => $offer->id,
+        'room_type_id' => $this->roomType->id,
+        'currency' => 'XAF',
+        'price' => 55000,
+    ]);
+
+    $this->reservation->update([
+        'offer_id' => $offer->id,
+        'offer_name' => $offer->name,
+        'offer_kind' => $offer->kind,
+        'check_in_date' => '2025-05-01 12:00:00',
+        'check_out_date' => '2025-05-03 12:00:00',
+        'unit_price' => 55000,
+        'base_amount' => 55000,
+        'total_amount' => 55000,
+    ]);
+
+    $service = app(FolioBillingService::class);
+    $service->syncStayChargeFromReservation($this->reservation->fresh());
+
+    $folio = $service->ensureMainFolioForReservation($this->reservation);
+    $stayItem = $folio->items()->where('is_stay_item', true)->first();
+
+    expect($stayItem)->not->toBeNull()
+        ->and($stayItem->quantity)->toBe(1.0)
+        ->and($stayItem->unit_price)->toBe(55000.0)
+        ->and($stayItem->base_amount)->toBe(55000.0);
 });
 
 it('falls back to default stay adjustment description when no context is provided', function (): void {

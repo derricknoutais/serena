@@ -252,6 +252,206 @@ it('charges package offers per configured night bundle when extending a stay', f
     expect($reservation->fresh()->base_amount)->toBe(100000);
 });
 
+it('calculates package extension quantities from the current checkout date', function (): void {
+    [
+        'tenant' => $tenant,
+        'reservation' => $reservation,
+        'user' => $user,
+        'hotel' => $hotel,
+        'roomType' => $roomType,
+    ] = setupReservationEnvironment('stay-package-extension');
+
+    $user->assignRole('owner');
+
+    $nightOffer = Offer::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Nuitée',
+        'kind' => 'night',
+        'billing_mode' => 'per_stay',
+        'is_active' => true,
+    ]);
+
+    $packageOffer = Offer::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Package 2 nuits',
+        'kind' => 'package',
+        'billing_mode' => 'per_stay',
+        'time_rule' => 'weekend_window',
+        'time_config' => [
+            'checkout' => [
+                'max_days_after_checkin' => 2,
+            ],
+        ],
+        'is_active' => true,
+    ]);
+
+    OfferRoomTypePrice::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'offer_id' => $nightOffer->id,
+        'room_type_id' => $roomType->id,
+        'currency' => 'XAF',
+        'price' => 10000,
+    ]);
+
+    OfferRoomTypePrice::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'offer_id' => $packageOffer->id,
+        'room_type_id' => $roomType->id,
+        'currency' => 'XAF',
+        'price' => 35000,
+    ]);
+
+    $reservation->update([
+        'offer_id' => $nightOffer->id,
+        'offer_name' => $nightOffer->name,
+        'offer_kind' => $nightOffer->kind,
+        'check_in_date' => '2025-05-01 12:00:00',
+        'check_out_date' => '2025-05-02 12:00:00',
+        'unit_price' => 10000,
+        'base_amount' => 10000,
+        'total_amount' => 10000,
+    ]);
+
+    $this->mock(ReservationAvailabilityService::class)
+        ->shouldReceive('ensureAvailable')
+        ->once()
+        ->andReturnTrue();
+
+    $this->mock(FolioBillingService::class)
+        ->shouldReceive('addStayAdjustment')
+        ->once()
+        ->withArgs(function ($reservationArg, $amount, $description, $context) use ($reservation, $packageOffer): bool {
+            expect($reservationArg->id)->toBe($reservation->id);
+            expect($amount)->toBe(35000.0);
+            expect($description)->toBe('Prolongation de séjour');
+            expect($context['quantity'])->toBe(1.0);
+            expect($context['unit_price'])->toBe(35000.0);
+            expect($context['meta']['previous_check_out'])->toBe('2025-05-02');
+            expect($context['meta']['new_check_out'])->toBe('2025-05-04');
+            expect($context['meta']['offer_id'])->toBe($packageOffer->id);
+
+            return true;
+        });
+
+    $response = $this->actingAs($user)->patch(sprintf(
+        'http://%s/reservations/%s/stay/dates',
+        tenantDomain($tenant),
+        $reservation->id,
+    ), [
+        'check_out_date' => '2025-05-04T12:00:00',
+        'offer_id' => $packageOffer->id,
+    ]);
+
+    $response->assertOk();
+
+    $freshReservation = $reservation->fresh();
+    expect($freshReservation->offer_id)->toBe($nightOffer->id);
+    expect($freshReservation->base_amount)->toBe(45000);
+});
+
+it('charges fixed billing offers as a single unit when extending', function (): void {
+    [
+        'tenant' => $tenant,
+        'reservation' => $reservation,
+        'user' => $user,
+        'hotel' => $hotel,
+        'roomType' => $roomType,
+    ] = setupReservationEnvironment('stay-fixed-extension');
+
+    $user->assignRole('owner');
+
+    $baseOffer = Offer::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Nuitée',
+        'kind' => 'night',
+        'billing_mode' => 'per_night',
+        'is_active' => true,
+    ]);
+
+    $fixedOffer = Offer::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Week-end H48',
+        'kind' => 'weekend',
+        'billing_mode' => 'fixed',
+        'time_rule' => 'weekend_window',
+        'time_config' => [
+            'checkout' => [
+                'max_days_after_checkin' => 2,
+            ],
+        ],
+        'is_active' => true,
+    ]);
+
+    OfferRoomTypePrice::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'offer_id' => $baseOffer->id,
+        'room_type_id' => $roomType->id,
+        'currency' => 'XAF',
+        'price' => 10000,
+    ]);
+
+    OfferRoomTypePrice::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'offer_id' => $fixedOffer->id,
+        'room_type_id' => $roomType->id,
+        'currency' => 'XAF',
+        'price' => 55000,
+    ]);
+
+    $reservation->update([
+        'offer_id' => $baseOffer->id,
+        'offer_name' => $baseOffer->name,
+        'offer_kind' => $baseOffer->kind,
+        'check_in_date' => '2025-05-01 12:00:00',
+        'check_out_date' => '2025-05-02 12:00:00',
+        'unit_price' => 10000,
+        'base_amount' => 10000,
+        'total_amount' => 10000,
+    ]);
+
+    $this->mock(ReservationAvailabilityService::class)
+        ->shouldReceive('ensureAvailable')
+        ->once()
+        ->andReturnTrue();
+
+    $this->mock(FolioBillingService::class)
+        ->shouldReceive('addStayAdjustment')
+        ->once()
+        ->withArgs(function ($reservationArg, $amount, $description, $context) use ($reservation, $fixedOffer): bool {
+            expect($reservationArg->id)->toBe($reservation->id);
+            expect($amount)->toBe(55000.0);
+            expect($description)->toBe('Prolongation de séjour');
+            expect($context['quantity'])->toBe(1.0);
+            expect($context['unit_price'])->toBe(55000.0);
+            expect($context['meta']['offer_id'])->toBe($fixedOffer->id);
+
+            return true;
+        });
+
+    $response = $this->actingAs($user)->patch(sprintf(
+        'http://%s/reservations/%s/stay/dates',
+        tenantDomain($tenant),
+        $reservation->id,
+    ), [
+        'check_out_date' => '2025-05-04T12:00:00',
+        'offer_id' => $fixedOffer->id,
+    ]);
+
+    $response->assertOk();
+
+    $freshReservation = $reservation->fresh();
+    expect($freshReservation->offer_id)->toBe($baseOffer->id);
+    expect($freshReservation->base_amount)->toBe(65000.0);
+});
+
 it('prices an extension with a selected offer without replacing the original', function (): void {
     [
         'tenant' => $tenant,
