@@ -366,3 +366,51 @@ it('exposes offer time config for room board summary calculations', function ():
     expect($offerPayload['kind'])->toBe('weekend');
     expect($offerPayload['time_config']['checkout']['max_days_after_checkin'])->toBe(2);
 });
+
+it('keeps the room board order as stored', function (): void {
+    [
+        'hotel' => $hotel,
+        'roomType' => $roomType,
+        'user' => $user,
+    ] = setupRoomBoardTenant();
+
+    $roomA = Room::query()->create([
+        'tenant_id' => $user->tenant_id,
+        'hotel_id' => $hotel->id,
+        'room_type_id' => $roomType->id,
+        'number' => 'A-102',
+        'floor' => '1',
+        'status' => Room::STATUS_AVAILABLE,
+        'hk_status' => Room::HK_STATUS_INSPECTED,
+    ]);
+
+    $roomB = Room::query()->create([
+        'tenant_id' => $user->tenant_id,
+        'hotel_id' => $hotel->id,
+        'room_type_id' => $roomType->id,
+        'number' => '101',
+        'floor' => '1',
+        'status' => Room::STATUS_AVAILABLE,
+        'hk_status' => Room::HK_STATUS_INSPECTED,
+    ]);
+
+    $roomC = Room::query()->create([
+        'tenant_id' => $user->tenant_id,
+        'hotel_id' => $hotel->id,
+        'room_type_id' => $roomType->id,
+        'number' => 'B-201',
+        'floor' => '1',
+        'status' => Room::STATUS_AVAILABLE,
+        'hk_status' => Room::HK_STATUS_INSPECTED,
+    ]);
+
+    $request = Request::create('/frontdesk/dashboard', 'GET', [
+        'date' => now()->toDateString(),
+    ]);
+    $request->setUserResolver(fn () => $user);
+
+    $data = RoomBoardData::build($request);
+    $ids = collect($data['roomsByFloor'])->first()->pluck('id')->all();
+
+    expect($ids)->toBe([$roomA->id, $roomB->id, $roomC->id]);
+});

@@ -45,8 +45,7 @@ class RoomBoardData
             ->where('tenant_id', $tenantId)
             ->where('hotel_id', $hotelId)
             ->with(['roomType', 'hotel:id,timezone'])
-            ->orderBy('floor')
-            ->orderBy('number')
+            ->orderBy('id')
             ->get();
 
         $inspectionTasks = HousekeepingTask::query()
@@ -284,15 +283,7 @@ class RoomBoardData
 
         $roomsByFloor = $roomsData
             ->groupBy('floor')
-            ->sortKeys()
-            ->map(function (Collection $rooms): Collection {
-                return $rooms
-                    ->sortBy([
-                        fn (array $room): int => (int) ($room['hk_sort'] ?? 99),
-                        fn (array $room): string => (string) ($room['number'] ?? ''),
-                    ])
-                    ->values();
-            })
+            ->map(fn (Collection $rooms): Collection => $rooms->values())
             ->values();
 
         $walkInRoomId = (string) $request->query('room_id', '');

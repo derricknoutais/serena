@@ -239,7 +239,7 @@ export default defineComponent({
             return resourceKeys.some((key) => permissions[key]);
         },
         operationsLinkVisible(): boolean {
-            return this.canViewHousekeeping || this.maintenanceLinkVisible || this.posLinkVisible;
+            return this.maintenanceLinkVisible || this.posLinkVisible;
         },
         financeLinkVisible(): boolean {
             return this.cashLinkVisible || this.analyticsLinkVisible;
@@ -413,6 +413,13 @@ export default defineComponent({
                     >
                         FrontDesk
                     </Link>
+                    <Link
+                        v-if="canViewHousekeeping"
+                        href="/housekeeping"
+                        class="rounded-full px-3 py-1 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
+                    >
+                        Housekeeping
+                    </Link>
                     <div v-if="operationsLinkVisible" class="relative" data-dropdown="operations">
                         <button
                             type="button"
@@ -425,20 +432,6 @@ export default defineComponent({
                             v-if="operationsOpen"
                             class="absolute right-0 z-30 mt-2 w-44 rounded-xl border border-serena-border bg-white shadow-lg"
                         >
-                            <Link
-                                v-if="canViewHousekeeping"
-                                href="/housekeeping"
-                                class="block px-3 py-2 text-sm text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
-                            >
-                                Housekeeping
-                            </Link>
-                            <Link
-                                v-if="canViewHousekeeping"
-                                href="/housekeeping/reports"
-                                class="block px-3 py-2 text-sm text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
-                            >
-                                Rapports HK
-                            </Link>
                             <Link
                                 v-if="maintenanceLinkVisible"
                                 href="/maintenance"
