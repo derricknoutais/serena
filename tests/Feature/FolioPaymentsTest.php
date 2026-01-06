@@ -7,6 +7,8 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PaymentMethod;
 use App\Services\FolioBillingService;
+use Database\Seeders\PermissionSeeder;
+use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Facades\Config;
 
 beforeEach(function (): void {
@@ -14,6 +16,11 @@ beforeEach(function (): void {
     Config::set('app.url_host', 'serena.test');
     Config::set('app.url_scheme', 'http');
     Config::set('tenancy.central_domains', ['serena.test']);
+
+    $this->seed([
+        RoleSeeder::class,
+        PermissionSeeder::class,
+    ]);
 });
 
 it('stores a payment via json and returns updated totals', function (): void {
@@ -23,6 +30,8 @@ it('stores a payment via json and returns updated totals', function (): void {
         'reservation' => $reservation,
         'user' => $user,
     ] = setupReservationEnvironment('cashflow');
+
+    $user->assignRole('owner');
 
     $billingService = app(FolioBillingService::class);
     $folio = $billingService->ensureMainFolioForReservation($reservation);
@@ -75,6 +84,8 @@ it('soft deletes a payment and refreshes totals', function (): void {
         'user' => $user,
     ] = setupReservationEnvironment('deletepay');
 
+    $user->assignRole('owner');
+
     $billingService = app(FolioBillingService::class);
     $folio = $billingService->ensureMainFolioForReservation($reservation);
 
@@ -113,6 +124,8 @@ it('generates an invoice from a folio and exposes the pdf view', function (): vo
         'reservation' => $reservation,
         'user' => $user,
     ] = setupReservationEnvironment('invoicepdf');
+
+    $user->assignRole('owner');
 
     $billingService = app(FolioBillingService::class);
     $folio = $billingService->ensureMainFolioForReservation($reservation);

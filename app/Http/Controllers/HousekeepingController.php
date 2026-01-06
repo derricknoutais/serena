@@ -104,6 +104,12 @@ class HousekeepingController extends Controller
             'note' => ['nullable', 'string', 'max:255'],
         ]);
 
+        match ($data['hk_status']) {
+            'inspected' => Gate::authorize('housekeeping.mark_inspected'),
+            'dirty', 'redo' => Gate::authorize('housekeeping.mark_dirty'),
+            default => Gate::authorize('housekeeping.mark_clean'),
+        };
+
         /** @var \App\Models\User $user */
         $user = $request->user();
 
@@ -352,7 +358,7 @@ class HousekeepingController extends Controller
     {
         $user = $request->user();
 
-        return $user->hasRole(['owner', 'manager', 'housekeeping', 'superadmin']);
+        return $user?->can('housekeeping.view') ?? false;
     }
 
     private function resolveHotelId(\App\Models\User $user): int

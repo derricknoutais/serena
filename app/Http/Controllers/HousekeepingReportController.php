@@ -20,6 +20,7 @@ class HousekeepingReportController extends Controller
     {
         /** @var User $user */
         $user = $request->user();
+        abort_unless($user && $user->can('housekeeping.view'), 403);
         $tenantId = (string) $user->tenant_id;
         $hotelId = $this->resolveHotelId($user);
 

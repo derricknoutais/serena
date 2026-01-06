@@ -145,6 +145,9 @@ class ReservationsIndexData
                 'hotel_id' => $hotelId,
             ],
             'canManageTimes' => $user->can('reservations.override_datetime'),
+            'canExtendStay' => $user->can('reservations.extend_stay') || $user->can('reservations.override_datetime'),
+            'canShortenStay' => $user->can('reservations.shorten_stay') || $user->can('reservations.override_datetime'),
+            'canChangeRoom' => $user->can('reservations.change_room') || $user->can('reservations.override_datetime'),
         ];
     }
 

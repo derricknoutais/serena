@@ -3,6 +3,7 @@
 require_once __DIR__.'/FolioTestHelpers.php';
 
 use Database\Seeders\PermissionSeeder;
+use Database\Seeders\RoleSeeder;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function (): void {
@@ -13,7 +14,10 @@ beforeEach(function (): void {
         'tenancy.central_domains' => ['serena.test'],
     ]);
 
-    $this->seed(PermissionSeeder::class);
+    $this->seed([
+        RoleSeeder::class,
+        PermissionSeeder::class,
+    ]);
 });
 
 it('renders the frontdesk dashboard page', function (): void {
@@ -21,6 +25,8 @@ it('renders the frontdesk dashboard page', function (): void {
         'tenant' => $tenant,
         'user' => $user,
     ] = setupReservationEnvironment('frontdesk-page');
+
+    $user->assignRole('owner');
 
     $response = $this->actingAs($user)->get(sprintf(
         'http://%s/frontdesk/dashboard',

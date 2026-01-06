@@ -19,11 +19,19 @@ beforeEach(function (): void {
 
     $guard = config('auth.defaults.guard', 'web');
     $permissions = [
+        'frontdesk.view',
+        'housekeeping.view',
+        'analytics.view',
         'reservations.override_datetime',
+        'reservations.extend_stay',
+        'reservations.shorten_stay',
+        'reservations.change_room',
+        'payments.create',
         'folio_items.void',
         'housekeeping.mark_inspected',
         'housekeeping.mark_clean',
         'housekeeping.mark_dirty',
+        'cash_sessions.view',
         'cash_sessions.open',
         'cash_sessions.close',
         'rooms.view', 'rooms.create', 'rooms.update', 'rooms.delete',
@@ -47,12 +55,21 @@ beforeEach(function (): void {
     }
 });
 
+if (! function_exists('grantFrontdeskAccess')) {
+    function grantFrontdeskAccess($user): void
+    {
+        $user->givePermissionTo('frontdesk.view');
+    }
+}
+
 it('confirms a reservation when transition is allowed', function (): void {
     [
         'tenant' => $tenant,
         'user' => $user,
         'reservation' => $reservation,
     ] = setupReservationEnvironment('status-confirm');
+
+    grantFrontdeskAccess($user);
 
     $reservation->update([
         'status' => Reservation::STATUS_PENDING,
@@ -80,6 +97,8 @@ it('rejects an invalid status transition', function (): void {
         'reservation' => $reservation,
     ] = setupReservationEnvironment('status-invalid');
 
+    grantFrontdeskAccess($user);
+
     $reservation->update([
         'status' => Reservation::STATUS_PENDING,
         'check_in_date' => '2025-05-01',
@@ -105,6 +124,8 @@ it('creates the stay folio item on check-in', function (): void {
         'reservation' => $reservation,
         'hotel' => $hotel,
     ] = setupReservationEnvironment('status-checkin');
+
+    grantFrontdeskAccess($user);
 
     $offer = Offer::query()->create([
         'tenant_id' => $tenant->id,
@@ -167,6 +188,8 @@ it('requires an open frontdesk cash session when applying a cancellation penalty
         'reservation' => $reservation,
     ] = setupReservationEnvironment('status-penalty');
 
+    grantFrontdeskAccess($user);
+
     $reservation->update([
         'status' => Reservation::STATUS_CONFIRMED,
         'check_in_date' => '2025-06-01',
@@ -221,6 +244,8 @@ it('requires a payment method for early check-in fees', function (): void {
         'reservation' => $reservation,
     ] = setupReservationEnvironment('status-early-payment-method');
 
+    grantFrontdeskAccess($user);
+
     $hotel->update([
         'stay_settings' => [
             'standard_checkin_time' => '14:00',
@@ -263,6 +288,8 @@ it('requires an open frontdesk cash session for late checkout fees', function ()
         'reservation' => $reservation,
         'methods' => $methods,
     ] = setupReservationEnvironment('status-late-cash-session');
+
+    grantFrontdeskAccess($user);
 
     $hotel->update([
         'stay_settings' => [
@@ -307,6 +334,8 @@ it('records early check-in payments in the frontdesk cash session', function ():
         'reservation' => $reservation,
         'methods' => $methods,
     ] = setupReservationEnvironment('status-early-payment');
+
+    grantFrontdeskAccess($user);
 
     $hotel->update([
         'stay_settings' => [
@@ -365,6 +394,8 @@ it('blocks check-out when the folio has an outstanding balance', function (): vo
         'reservation' => $reservation,
     ] = setupReservationEnvironment('status-checkout-balance');
 
+    grantFrontdeskAccess($user);
+
     $reservation->update([
         'status' => Reservation::STATUS_IN_HOUSE,
         'check_in_date' => now()->toDateString(),
@@ -401,6 +432,8 @@ it('allows managers to check out even when the folio has a balance', function ()
         'user' => $user,
         'reservation' => $reservation,
     ] = setupReservationEnvironment('status-checkout-manager');
+
+    grantFrontdeskAccess($user);
 
     $guard = config('auth.defaults.guard', 'web');
     Role::query()->firstOrCreate([
@@ -445,6 +478,8 @@ it('does not block check-out previews with early check-in rules', function (): v
         'hotel' => $hotel,
     ] = setupReservationEnvironment('status-checkout-preview');
 
+    grantFrontdeskAccess($user);
+
     $hotel->update([
         'stay_settings' => [
             'standard_checkin_time' => '14:00',
@@ -483,6 +518,8 @@ it('uses offer late checkout policy when configured', function (): void {
         'reservation' => $reservation,
         'hotel' => $hotel,
     ] = setupReservationEnvironment('status-checkout-offer-late');
+
+    grantFrontdeskAccess($user);
 
     $hotel->update([
         'stay_settings' => [
@@ -551,6 +588,8 @@ it('calculates late checkout fee per hour for offer policy', function (): void {
         'reservation' => $reservation,
         'hotel' => $hotel,
     ] = setupReservationEnvironment('status-checkout-offer-late-hour');
+
+    grantFrontdeskAccess($user);
 
     $hotel->update([
         'stay_settings' => [

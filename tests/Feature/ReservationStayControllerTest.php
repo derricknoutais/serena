@@ -8,6 +8,7 @@ use App\Services\FolioBillingService;
 use App\Services\ReservationAvailabilityService;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
+use Spatie\Permission\Models\Permission;
 
 beforeEach(function (): void {
     config([
@@ -75,6 +76,29 @@ it('honors the provided checkout time when updating stay dates', function (): vo
 
     expect($reservation->fresh()->check_out_date?->format('Y-m-d H:i'))
         ->toBe('2025-05-03 11:30');
+});
+
+it('forbids extending a stay without the extend permission', function (): void {
+    [
+        'tenant' => $tenant,
+        'reservation' => $reservation,
+        'user' => $user,
+    ] = setupReservationEnvironment('stay-permission');
+
+    $user->givePermissionTo(Permission::findByName('frontdesk.view'));
+
+    $newCheckout = $reservation->check_out_date?->copy()->addDay()->toDateTimeString()
+        ?? now()->addDays(2)->toDateTimeString();
+
+    $response = $this->actingAs($user)->patch(sprintf(
+        'http://%s/reservations/%s/stay/dates',
+        tenantDomain($tenant),
+        $reservation->id,
+    ), [
+        'check_out_date' => $newCheckout,
+    ]);
+
+    $response->assertForbidden();
 });
 
 it('rounds stay quantities up when checkout time adds a partial day', function (): void {
@@ -449,7 +473,7 @@ it('charges fixed billing offers as a single unit when extending', function (): 
 
     $freshReservation = $reservation->fresh();
     expect($freshReservation->offer_id)->toBe($baseOffer->id);
-    expect($freshReservation->base_amount)->toBe(65000.0);
+    expect((float) $freshReservation->base_amount)->toBe(65000.0);
 });
 
 it('prices an extension with a selected offer without replacing the original', function (): void {

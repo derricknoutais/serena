@@ -1,8 +1,12 @@
 <?php
 
 use App\Models\User;
+use Database\Seeders\PermissionSeeder;
+use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\URL;
 use Laravel\Fortify\Features;
+use Spatie\Permission\Models\Role;
 
 beforeEach(function () {
     config([
@@ -11,6 +15,14 @@ beforeEach(function () {
         'app.url_scheme' => 'http',
         'tenancy.central_domains' => ['saas-template.test'],
         'session.domain' => '.saas-template.test',
+    ]);
+
+    URL::forceRootUrl(config('app.url'));
+    URL::forceScheme('http');
+
+    $this->seed([
+        RoleSeeder::class,
+        PermissionSeeder::class,
     ]);
 });
 
@@ -30,6 +42,21 @@ test('users can authenticate using the login screen', function () {
 
     $this->assertAuthenticated();
     $response->assertRedirect('http://'.$user->tenant_id.'.saas-template.test/dashboard');
+});
+
+test('housekeeping users are redirected to housekeeping after login', function () {
+    $user = User::factory()->withoutTwoFactor()->create();
+
+    Role::findOrCreate('housekeeping');
+    $user->assignRole('housekeeping');
+
+    $response = $this->post(route('login.store'), [
+        'email' => $user->email,
+        'password' => 'password',
+    ]);
+
+    $this->assertAuthenticated();
+    $response->assertRedirect('http://'.$user->tenant_id.'.saas-template.test/housekeeping');
 });
 
 test('users with two factor enabled are redirected to two factor challenge', function () {

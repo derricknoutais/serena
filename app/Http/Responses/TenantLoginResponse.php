@@ -13,12 +13,13 @@ class TenantLoginResponse implements LoginResponseContract
     {
         $tenantId = $this->resolveTenantId($request);
         $targetDomain = $this->resolveTenantDomain($tenantId, $request->getHost());
+        $targetPath = $this->resolveTargetPath($request);
 
         $targetUrl = sprintf(
             '%s://%s%s',
             config('app.url_scheme', 'http'),
             $targetDomain,
-            config('fortify.home', '/dashboard'),
+            $targetPath,
         );
 
         return redirect()->away($targetUrl);
@@ -54,5 +55,16 @@ class TenantLoginResponse implements LoginResponseContract
         }
 
         return sprintf('%s.%s', $tenantId, config('app.url_host') ?? $fallbackHost);
+    }
+
+    private function resolveTargetPath(Request $request): string
+    {
+        $user = $request->user();
+
+        if ($user !== null && $user->hasRole('housekeeping')) {
+            return '/housekeeping';
+        }
+
+        return config('fortify.home', '/dashboard');
     }
 }

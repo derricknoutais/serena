@@ -1,11 +1,13 @@
 <?php
 
 use App\Models\CashSession;
+use App\Models\Folio;
 use App\Models\Hotel;
 use App\Models\Payment;
 use App\Models\PaymentMethod;
 use App\Models\Tenant;
 use App\Models\User;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -16,6 +18,8 @@ beforeEach(function (): void {
         'app.url_scheme' => 'http',
         'tenancy.central_domains' => ['serena.test'],
     ]);
+
+    $this->seed(PermissionSeeder::class);
 });
 
 test('cash session detail page renders', function (): void {
@@ -44,6 +48,7 @@ test('cash session detail page renders', function (): void {
         'email' => 'manager@cash.test',
         'active_hotel_id' => $hotel->id,
     ]);
+    $user->givePermissionTo('cash_sessions.view');
 
     $session = CashSession::query()->create([
         'tenant_id' => $tenant->id,
@@ -64,9 +69,20 @@ test('cash session detail page renders', function (): void {
         'is_active' => true,
     ]);
 
+    $folio = Folio::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'code' => 'FOL-CASH-001',
+        'status' => 'open',
+        'is_main' => true,
+        'type' => 'stay',
+        'currency' => 'XAF',
+    ]);
+
     Payment::query()->create([
         'tenant_id' => $tenant->id,
         'hotel_id' => $hotel->id,
+        'folio_id' => $folio->id,
         'payment_method_id' => $method->id,
         'amount' => 5000,
         'currency' => 'XAF',

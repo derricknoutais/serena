@@ -27,7 +27,9 @@ class RoomBoardData
 
         $tenantId = (string) $user->tenant_id;
         $hotelId = (int) ($user->active_hotel_id ?? $user->hotel_id ?? 0);
-        $canManageHousekeeping = $user->hasRole(['owner', 'manager', 'housekeeping', 'superadmin']);
+        $canManageHousekeeping = $user->can('housekeeping.mark_clean')
+            || $user->can('housekeeping.mark_dirty')
+            || $user->can('housekeeping.mark_inspected');
 
         if ($hotelId === 0) {
             abort(404, 'Aucun hôtel actif sélectionné.');

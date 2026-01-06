@@ -98,3 +98,19 @@ it('lists pending and in-progress housekeeping tasks on the housekeeping index',
                 ];
             }));
 });
+
+it('shares housekeeping access flags', function (): void {
+    ['tenant' => $tenant, 'user' => $user] = setupReservationEnvironment('hk-nav');
+
+    $user->assignRole('housekeeping');
+
+    $response = $this->actingAs($user)->get(sprintf(
+        'http://%s/housekeeping',
+        tenantDomain($tenant),
+    ));
+
+    $response->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('auth.can.housekeeping_view', true)
+            ->where('auth.can.frontdesk_view', false));
+});

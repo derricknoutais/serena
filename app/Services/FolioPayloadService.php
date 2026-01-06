@@ -103,6 +103,7 @@ class FolioPayloadService
             'paymentMethods' => $paymentMethods,
             'permissions' => [
                 'can_manage_payments' => $user?->can('folio_items.void') ?? false,
+                'can_collect_payments' => $user?->can('payments.create') ?? false,
                 'can_manage_invoices' => $user?->can('invoices.create') ?? false,
             ],
         ];

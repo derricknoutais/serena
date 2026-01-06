@@ -115,12 +115,13 @@
                 </div>
 
                 <div
-                    v-if="selectedEvent?.status === 'in_house' && canOverrideTimes"
+                    v-if="selectedEvent?.status === 'in_house' && canManageStayActions"
                     class="mt-3 space-y-2 rounded-lg border border-dashed border-gray-200 p-3"
                 >
                     <label class="text-xs font-semibold text-gray-700">Gestion du séjour</label>
                     <div class="flex flex-wrap gap-2">
                         <button
+                            v-if="canExtendStayAction"
                             type="button"
                             class="rounded-lg border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
                             @click="openStayModal('extend')"
@@ -128,6 +129,7 @@
                             Prolonger
                         </button>
                         <button
+                            v-if="canShortenStayAction"
                             type="button"
                             class="rounded-lg border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
                             @click="openStayModal('shorten')"
@@ -135,7 +137,7 @@
                             Raccourcir
                         </button>
                         <button
-                            v-if="canChangeRoom"
+                            v-if="canChangeRoomAction"
                             type="button"
                             class="rounded-lg border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
                             @click="openChangeRoomModal"
@@ -717,6 +719,18 @@
                 type: Boolean,
                 required: true,
             },
+            canExtendStay: {
+                type: Boolean,
+                required: true,
+            },
+            canShortenStay: {
+                type: Boolean,
+                required: true,
+            },
+            canChangeRoom: {
+                type: Boolean,
+                required: true,
+            },
         },
         data() {
             return {
@@ -969,10 +983,36 @@
                     ? 'Prolonger le séjour'
                     : 'Raccourcir le séjour';
             },
+            permissionFlags() {
+                return this.$page?.props?.auth?.can ?? {};
+            },
             canOverrideTimes() {
-                const permissions = this.$page?.props?.auth?.can ?? {};
+                return this.permissionFlags.reservations_override_datetime ?? this.canManageTimes;
+            },
+            canExtendStayAction() {
+                return Boolean(
+                    (this.permissionFlags.reservations_extend_stay ?? this.canExtendStay)
+                    || this.canOverrideTimes,
+                );
+            },
+            canShortenStayAction() {
+                return Boolean(
+                    (this.permissionFlags.reservations_shorten_stay ?? this.canShortenStay)
+                    || this.canOverrideTimes,
+                );
+            },
+            canChangeRoomAction() {
+                if (!this.selectedEvent) {
+                    return false;
+                }
 
-                return permissions.reservations_override_datetime ?? this.canManageTimes;
+                const hasPermission = this.permissionFlags.reservations_change_room ?? this.canChangeRoom;
+
+                return (hasPermission || this.canOverrideTimes)
+                    && ['confirmed', 'in_house'].includes(this.selectedEvent.status);
+            },
+            canManageStayActions() {
+                return this.canExtendStayAction || this.canShortenStayAction || this.canChangeRoomAction;
             },
             canOverrideFees() {
                 const roles = this.$page?.props?.auth?.user?.roles || [];
@@ -1045,13 +1085,6 @@
                     nights,
                     total: nights * unitPrice,
                 };
-            },
-            canChangeRoom() {
-                if (!this.selectedEvent) {
-                    return false;
-                }
-
-                return ['confirmed', 'in_house'].includes(this.selectedEvent.status);
             },
             currentEventOffer() {
                 if (!this.selectedEvent?.offer_id) {
@@ -1344,7 +1377,9 @@
             router.reload({ only: ['reservationsData'] });
         },
         openStayModal(mode) {
-            if (!this.canOverrideTimes) {
+            const canManageStay = mode === 'extend' ? this.canExtendStayAction : this.canShortenStayAction;
+
+            if (!canManageStay) {
                 this.showUnauthorizedAlert();
 
                 return;
@@ -1375,7 +1410,11 @@
             this.stayModalSubmitting = false;
         },
         async submitStayModal() {
-            if (!this.canOverrideTimes) {
+            const canManageStay = this.stayModalMode === 'extend'
+                ? this.canExtendStayAction
+                : this.canShortenStayAction;
+
+            if (!canManageStay) {
                 this.showUnauthorizedAlert();
 
                 return;
@@ -1431,7 +1470,11 @@
                 }
             },
             openChangeRoomModal() {
-                if (!this.canChangeRoom || !this.selectedEvent?.id) {
+                if (!this.canChangeRoomAction || !this.selectedEvent?.id) {
+                    if (this.selectedEvent?.id && !this.canChangeRoomAction) {
+                        this.showUnauthorizedAlert();
+                    }
+
                     return;
                 }
 
@@ -1443,6 +1486,12 @@
                 this.changeRoomSubmitting = false;
             },
             async submitChangeRoom() {
+                if (!this.canChangeRoomAction) {
+                    this.showUnauthorizedAlert();
+
+                    return;
+                }
+
                 if (!this.selectedEvent?.id || !this.changeRoomSelection) {
                     return;
                 }

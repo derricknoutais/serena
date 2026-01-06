@@ -11,6 +11,7 @@ use App\Models\ProductCategory;
 use App\Models\Reservation;
 use App\Models\Tax;
 use App\Services\FolioBillingService;
+use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -22,7 +23,10 @@ beforeEach(function (): void {
         'tenancy.central_domains' => ['serena.test'],
     ]);
 
-    $this->seed(RoleSeeder::class);
+    $this->seed([
+        RoleSeeder::class,
+        PermissionSeeder::class,
+    ]);
 });
 
 it('renders the POS page with products and reservations', function (): void {

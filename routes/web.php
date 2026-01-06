@@ -160,22 +160,26 @@ Route::middleware([
             ->middleware(['auth', 'verified', 'role:owner|manager|superadmin'])
             ->name('users.hotels.update');
 
-        Route::middleware('role:owner|manager|receptionist|accountant|superadmin')->group(function () {
+        Route::middleware('can:pos.view')->group(function () {
             Route::get('/pos', [PosController::class, 'index'])
                 ->name('pos.index');
             Route::post('/pos/sales/counter', [PosController::class, 'storeCounterSale'])
+                ->middleware('can:pos.create')
                 ->name('pos.sales.counter');
             Route::post('/pos/sales/room', [PosController::class, 'storeRoomSale'])
+                ->middleware('can:pos.create')
                 ->name('pos.sales.room');
         });
 
-        Route::middleware('role:owner|manager|superadmin')->group(function () {
-            Route::get('/night-audit', [NightAuditController::class, 'index'])->name('night-audit.index');
-            Route::get('/night-audit/pdf', [NightAuditController::class, 'pdf'])->name('night-audit.pdf');
-        });
+        Route::get('/night-audit', [NightAuditController::class, 'index'])
+            ->middleware('can:night_audit.view')
+            ->name('night-audit.index');
+        Route::get('/night-audit/pdf', [NightAuditController::class, 'pdf'])
+            ->middleware('can:night_audit.export')
+            ->name('night-audit.pdf');
 
         // Cash Management
-        Route::group(['prefix' => 'cash', 'as' => 'cash.'], function () {
+        Route::group(['prefix' => 'cash', 'as' => 'cash.', 'middleware' => 'can:cash_sessions.view'], function () {
             Route::get('/', [\App\Http\Controllers\CashSessionController::class, 'index'])->name('index');
             Route::get('/status', [\App\Http\Controllers\CashSessionController::class, 'status'])->name('status');
             Route::get('{cashSession}', [\App\Http\Controllers\CashSessionController::class, 'show'])->name('show');
@@ -185,47 +189,109 @@ Route::middleware([
             Route::post('{cashSession}/validate', [\App\Http\Controllers\CashSessionController::class, 'validateSession'])->name('validate');
         });
 
-        Route::get('/housekeeping', [HousekeepingController::class, 'index'])
-            ->name('housekeeping.index');
-        Route::get('/housekeeping/reports', [HousekeepingReportController::class, 'index'])
-            ->middleware('role:owner|manager|superadmin')
-            ->name('housekeeping.reports');
-        Route::get('/hk/rooms/{room}', [HousekeepingController::class, 'show'])
-            ->name('housekeeping.rooms.show');
-        Route::patch('/hk/rooms/{room}/status', [HousekeepingController::class, 'updateStatus'])
-            ->name('housekeeping.rooms.update');
-        Route::post('/hk/rooms/{room}/tasks/start', [HousekeepingController::class, 'startTask'])
-            ->name('housekeeping.rooms.tasks.start');
-        Route::post('/hk/rooms/{room}/tasks/join', [HousekeepingController::class, 'joinTask'])
-            ->name('housekeeping.rooms.tasks.join');
-        Route::post('/hk/rooms/{room}/tasks/finish', [HousekeepingController::class, 'finishTask'])
-            ->name('housekeeping.rooms.tasks.finish');
-        Route::post('/hk/rooms/{room}/inspections/start', [HousekeepingController::class, 'startInspection'])
-            ->name('housekeeping.rooms.inspections.start');
-        Route::post('/hk/rooms/{room}/inspections/finish', [HousekeepingController::class, 'finishInspection'])
-            ->name('housekeeping.rooms.inspections.finish');
+        Route::middleware('can:housekeeping.view')->group(function () {
+            Route::get('/housekeeping', [HousekeepingController::class, 'index'])
+                ->name('housekeeping.index');
+            Route::get('/housekeeping/reports', [HousekeepingReportController::class, 'index'])
+                ->name('housekeeping.reports');
+            Route::get('/hk/rooms/{room}', [HousekeepingController::class, 'show'])
+                ->name('housekeeping.rooms.show');
+            Route::patch('/hk/rooms/{room}/status', [HousekeepingController::class, 'updateStatus'])
+                ->name('housekeeping.rooms.update');
+            Route::post('/hk/rooms/{room}/tasks/start', [HousekeepingController::class, 'startTask'])
+                ->name('housekeeping.rooms.tasks.start');
+            Route::post('/hk/rooms/{room}/tasks/join', [HousekeepingController::class, 'joinTask'])
+                ->name('housekeeping.rooms.tasks.join');
+            Route::post('/hk/rooms/{room}/tasks/finish', [HousekeepingController::class, 'finishTask'])
+                ->name('housekeeping.rooms.tasks.finish');
+            Route::post('/hk/rooms/{room}/inspections/start', [HousekeepingController::class, 'startInspection'])
+                ->name('housekeeping.rooms.inspections.start');
+            Route::post('/hk/rooms/{room}/inspections/finish', [HousekeepingController::class, 'finishInspection'])
+                ->name('housekeeping.rooms.inspections.finish');
+        });
 
-        Route::get('/rooms/board', [RoomBoardController::class, 'index'])
-            ->name('rooms.board');
+        Route::middleware('can:frontdesk.view')->group(function () {
+            Route::get('/rooms/board', [RoomBoardController::class, 'index'])
+                ->name('rooms.board');
 
-        Route::patch('/frontdesk/rooms/{room}/hk-status', [RoomHousekeepingController::class, 'updateStatus'])
-            ->middleware('idempotency')
-            ->name('frontdesk.rooms.hk-status');
+            Route::patch('/frontdesk/rooms/{room}/hk-status', [RoomHousekeepingController::class, 'updateStatus'])
+                ->middleware('idempotency')
+                ->name('frontdesk.rooms.hk-status');
+
+            Route::get('/reservations/walk-in/create', [WalkInReservationController::class, 'create'])
+                ->name('reservations.walk_in.create');
+
+            Route::post('/reservations/walk-in', [WalkInReservationController::class, 'store'])
+                ->name('reservations.walk_in.store');
+
+            Route::get('/resources/guests', [GuestController::class, 'index'])->name('guests.index');
+            Route::get('/resources/guests/create', [GuestController::class, 'create'])->name('guests.create');
+            Route::post('/resources/guests', [GuestController::class, 'store'])->name('guests.store');
+            Route::get('/resources/guests/search', [GuestController::class, 'search'])->name('guests.search');
+            Route::get('/resources/guests/{guest}', [GuestController::class, 'show'])->name('guests.show');
+            Route::get('/resources/guests/{guest}/edit', [GuestController::class, 'edit'])->name('guests.edit');
+            Route::put('/resources/guests/{guest}', [GuestController::class, 'update'])->name('guests.update');
+            Route::delete('/resources/guests/{guest}', [GuestController::class, 'destroy'])->name('guests.destroy');
+
+            Route::get('/reservations', [ReservationController::class, 'index'])->name('reservations.index');
+            Route::get('/frontdesk/dashboard', [FrontdeskController::class, 'dashboard'])->name('frontdesk.dashboard');
+            Route::get('/frontdesk/forecast', [FrontdeskController::class, 'forecast'])
+                ->middleware('can:night_audit.view')
+                ->name('frontdesk.forecast');
+            Route::post('/frontdesk/room-board/walk-in', [RoomBoardWalkInController::class, 'store'])
+                ->middleware('idempotency')
+                ->name('frontdesk.room_board.walk_in');
+            Route::post('/reservations', [ReservationController::class, 'store'])->name('reservations.store');
+            Route::get('/reservations/{reservation}', [ReservationController::class, 'show'])->name('reservations.show');
+            Route::put('/reservations/{reservation}', [ReservationController::class, 'update'])->name('reservations.update');
+            Route::patch('/reservations/{reservation}/status', [ReservationStatusController::class, 'update'])
+                ->middleware('idempotency')
+                ->name('reservations.status');
+            Route::patch('/reservations/{reservation}/stay/dates', [ReservationStayController::class, 'updateDates'])
+                ->middleware('idempotency')
+                ->name('reservations.stay.dates');
+            Route::patch('/reservations/{reservation}/stay/room', [ReservationStayController::class, 'changeRoom'])
+                ->name('reservations.stay.room');
+
+            Route::prefix('frontdesk')->group(function () {
+                Route::get('/arrivals', [FrontdeskController::class, 'arrivals'])->name('frontdesk.arrivals');
+                Route::get('/departures', [FrontdeskController::class, 'departures'])->name('frontdesk.departures');
+                Route::get('/in-house', [FrontdeskController::class, 'inHouse'])->name('frontdesk.in_house');
+            });
+
+            Route::get('/reservations/{reservation}/folio', [ReservationFolioController::class, 'show'])
+                ->name('reservations.folio.show');
+
+            Route::post('/frontdesk/reservations/from-offer', [\App\Http\Controllers\Api\ReservationFromOfferController::class, 'store'])
+                ->name('frontdesk.reservations.from_offer');
+            Route::post('/api/offers/{offer}/time-preview', [OfferTimeController::class, 'preview'])
+                ->name('api.offers.time_preview');
+            Route::post('/reservations/{reservation}/stay-adjustments/preview', [ReservationStatusController::class, 'preview'])
+                ->name('reservations.stay.preview');
+            Route::get('/reservations/{reservation}/activity', [ActivityFeedController::class, 'reservation'])
+                ->name('reservations.activity');
+            Route::get('/rooms/{room}/activity', [ActivityFeedController::class, 'room'])
+                ->name('rooms.activity');
+            Route::get('/audit/activity', [ActivityFeedController::class, 'index'])
+                ->name('audit.activity');
+
+            Route::get('/folios/{folio}', [FolioController::class, 'show'])->name('folios.show');
+            Route::post('/folios/{folio}/items', [FolioController::class, 'storeItem'])->name('folios.items.store');
+            Route::post('/folios/{folio}/payments', [FolioController::class, 'storePayment'])->name('folios.payments.store');
+            Route::delete('/folios/{folio}/payments/{payment}', [FolioController::class, 'destroyPayment'])->name('folios.payments.destroy');
+            Route::post('/folios/{folio}/invoices', [InvoiceController::class, 'storeFromFolio'])->name('folios.invoices.store');
+            Route::get('/invoices/{invoice}/print', [InvoiceController::class, 'pdf'])->name('invoices.pdf');
+        });
+
         Route::get('/maintenance', [MaintenanceTicketController::class, 'index'])
-            ->middleware('role:owner|manager|maintenance|superadmin')
+            ->middleware('can:maintenance_tickets.view')
             ->name('maintenance.index');
         Route::post('/maintenance-tickets', [MaintenanceTicketController::class, 'store'])
             ->name('maintenance-tickets.store');
         Route::patch('/maintenance-tickets/{maintenanceTicket}', [MaintenanceTicketController::class, 'update'])
             ->name('maintenance-tickets.update');
 
-        Route::get('/reservations/walk-in/create', [WalkInReservationController::class, 'create'])
-            ->name('reservations.walk_in.create');
-
-        Route::post('/reservations/walk-in', [WalkInReservationController::class, 'store'])
-            ->name('reservations.walk_in.store');
-
-        Route::middleware('role:owner|manager|superadmin')->group(function () {
+        Route::middleware('can:analytics.view')->group(function () {
             Route::get('/analytics', [\App\Http\Controllers\AnalyticsController::class, 'index'])->name('analytics.index');
             Route::get('/analytics/summary', [\App\Http\Controllers\AnalyticsController::class, 'summary'])->name('analytics.summary');
             Route::get('/analytics/trends', [\App\Http\Controllers\AnalyticsController::class, 'trends'])->name('analytics.trends');
@@ -239,64 +305,6 @@ Route::middleware([
             ->name('notifications.read_all');
         Route::patch('/notifications/{notification}', [\App\Http\Controllers\NotificationController::class, 'markRead'])
             ->name('notifications.read');
-
-        Route::get('/resources/guests', [GuestController::class, 'index'])->name('guests.index');
-        Route::get('/resources/guests/create', [GuestController::class, 'create'])->name('guests.create');
-        Route::post('/resources/guests', [GuestController::class, 'store'])->name('guests.store');
-        Route::get('/resources/guests/search', [GuestController::class, 'search'])->name('guests.search');
-        Route::get('/resources/guests/{guest}', [GuestController::class, 'show'])->name('guests.show');
-        Route::get('/resources/guests/{guest}/edit', [GuestController::class, 'edit'])->name('guests.edit');
-        Route::put('/resources/guests/{guest}', [GuestController::class, 'update'])->name('guests.update');
-        Route::delete('/resources/guests/{guest}', [GuestController::class, 'destroy'])->name('guests.destroy');
-
-        Route::get('/reservations', [ReservationController::class, 'index'])->name('reservations.index');
-        Route::get('/frontdesk/dashboard', [FrontdeskController::class, 'dashboard'])->name('frontdesk.dashboard');
-        Route::get('/frontdesk/forecast', [FrontdeskController::class, 'forecast'])
-            ->middleware('role:owner|manager|superadmin')
-            ->name('frontdesk.forecast');
-        Route::post('/frontdesk/room-board/walk-in', [RoomBoardWalkInController::class, 'store'])
-            ->middleware('idempotency')
-            ->name('frontdesk.room_board.walk_in');
-        Route::post('/reservations', [ReservationController::class, 'store'])->name('reservations.store');
-        Route::get('/reservations/{reservation}', [ReservationController::class, 'show'])->name('reservations.show');
-        Route::put('/reservations/{reservation}', [ReservationController::class, 'update'])->name('reservations.update');
-        Route::patch('/reservations/{reservation}/status', [ReservationStatusController::class, 'update'])
-            ->middleware('idempotency')
-            ->name('reservations.status');
-        Route::patch('/reservations/{reservation}/stay/dates', [ReservationStayController::class, 'updateDates'])
-            ->middleware('idempotency')
-            ->name('reservations.stay.dates');
-        Route::patch('/reservations/{reservation}/stay/room', [ReservationStayController::class, 'changeRoom'])
-            ->name('reservations.stay.room');
-
-        Route::prefix('frontdesk')->group(function () {
-            Route::get('/arrivals', [FrontdeskController::class, 'arrivals'])->name('frontdesk.arrivals');
-            Route::get('/departures', [FrontdeskController::class, 'departures'])->name('frontdesk.departures');
-            Route::get('/in-house', [FrontdeskController::class, 'inHouse'])->name('frontdesk.in_house');
-        });
-
-        Route::get('/reservations/{reservation}/folio', [ReservationFolioController::class, 'show'])
-            ->name('reservations.folio.show');
-
-        Route::post('/frontdesk/reservations/from-offer', [\App\Http\Controllers\Api\ReservationFromOfferController::class, 'store'])
-            ->name('frontdesk.reservations.from_offer');
-        Route::post('/api/offers/{offer}/time-preview', [OfferTimeController::class, 'preview'])
-            ->name('api.offers.time_preview');
-        Route::post('/reservations/{reservation}/stay-adjustments/preview', [ReservationStatusController::class, 'preview'])
-            ->name('reservations.stay.preview');
-        Route::get('/reservations/{reservation}/activity', [ActivityFeedController::class, 'reservation'])
-            ->name('reservations.activity');
-        Route::get('/rooms/{room}/activity', [ActivityFeedController::class, 'room'])
-            ->name('rooms.activity');
-        Route::get('/audit/activity', [ActivityFeedController::class, 'index'])
-            ->name('audit.activity');
-
-        Route::get('/folios/{folio}', [FolioController::class, 'show'])->name('folios.show');
-        Route::post('/folios/{folio}/items', [FolioController::class, 'storeItem'])->name('folios.items.store');
-        Route::post('/folios/{folio}/payments', [FolioController::class, 'storePayment'])->name('folios.payments.store');
-        Route::delete('/folios/{folio}/payments/{payment}', [FolioController::class, 'destroyPayment'])->name('folios.payments.destroy');
-        Route::post('/folios/{folio}/invoices', [InvoiceController::class, 'storeFromFolio'])->name('folios.invoices.store');
-        Route::get('/invoices/{invoice}/print', [InvoiceController::class, 'pdf'])->name('invoices.pdf');
     });
 
     Route::get('/activity', [ActivityController::class, 'index'])

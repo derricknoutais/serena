@@ -39,6 +39,7 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
+        $user = $request->user();
 
         return [
             ...parent::share($request),
@@ -46,8 +47,8 @@ class HandleInertiaRequests extends Middleware
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'isTenantDomain' => function_exists('tenant') && tenant() !== null,
             'auth' => [
-                'user' => $request->user()
-                    ? $request->user()->loadMissing(['roles', 'activeHotel', 'hotels:id,name'])
+                'user' => $user
+                    ? $user->loadMissing(['roles', 'activeHotel', 'hotels:id,name'])
                     : null,
                 'can' => [
                     ...$this->permissionFlags($request),
@@ -71,11 +72,19 @@ class HandleInertiaRequests extends Middleware
         $user = $request->user();
 
         $permissions = [
+            'frontdesk.view',
+            'housekeeping.view',
+            'analytics.view',
             'reservations.override_datetime',
+            'reservations.extend_stay',
+            'reservations.shorten_stay',
+            'reservations.change_room',
+            'payments.create',
             'folio_items.void',
             'housekeeping.mark_inspected',
             'housekeeping.mark_clean',
             'housekeeping.mark_dirty',
+            'cash_sessions.view',
             'cash_sessions.open',
             'cash_sessions.close',
             'rooms.view', 'rooms.create', 'rooms.update', 'rooms.delete',

@@ -330,7 +330,7 @@
                         </div>
                     </div>
 
-                    <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <div v-if="canCreatePayments" class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                         <h3 class="text-sm font-semibold text-gray-800">Enregistrer un paiement</h3>
                         <form class="mt-3 grid gap-3 md:grid-cols-2" @submit.prevent="submitPayment">
                             <div>
@@ -377,6 +377,9 @@
                                 </button>
                             </div>
                         </form>
+                    </div>
+                    <div v-else class="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-4 text-xs text-gray-500">
+                        Vous n’avez pas l’autorisation d’enregistrer un paiement.
                     </div>
                 </div>
 
@@ -494,6 +497,10 @@ export default {
         canVoidPayments() {
             return this.permissionFlags.folio_items_void
                 ?? (this.permissions?.can_manage_payments ?? false);
+        },
+        canCreatePayments() {
+            return this.permissionFlags.payments_create
+                ?? (this.permissions?.can_collect_payments ?? false);
         },
         canManageInvoices() {
             return this.permissionFlags.invoices_create

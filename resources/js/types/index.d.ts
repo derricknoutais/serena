@@ -3,6 +3,10 @@ import type { LucideIcon } from 'lucide-vue-next';
 
 export interface Auth {
     user: User;
+    can?: Record<string, boolean>;
+    hotels?: { id: number; name: string }[];
+    activeHotel?: { id: number; name: string } | null;
+    hotelNotice?: string | null;
 }
 
 export interface BreadcrumbItem {

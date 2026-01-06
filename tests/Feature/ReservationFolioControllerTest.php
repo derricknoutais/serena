@@ -6,6 +6,7 @@ use App\Models\Folio;
 use App\Models\Hotel;
 use App\Models\PaymentMethod;
 use App\Services\FolioBillingService;
+use Database\Seeders\PermissionSeeder;
 
 beforeEach(function (): void {
     config([
@@ -14,6 +15,8 @@ beforeEach(function (): void {
         'app.url_scheme' => 'http',
         'tenancy.central_domains' => ['serena.test'],
     ]);
+
+    $this->seed(PermissionSeeder::class);
 });
 
 it('returns a folio payload for the reservation endpoint', function (): void {
@@ -23,6 +26,8 @@ it('returns a folio payload for the reservation endpoint', function (): void {
         'reservation' => $reservation,
         'user' => $user,
     ] = setupReservationEnvironment('orion');
+
+    $user->givePermissionTo('frontdesk.view');
 
     $otherHotel = Hotel::query()->create([
         'tenant_id' => $tenant->id,
@@ -135,6 +140,8 @@ it('returns json data when folio show is requested via JSON', function (): void 
         'reservation' => $reservation,
         'user' => $user,
     ] = setupReservationEnvironment('lyra');
+
+    $user->givePermissionTo('frontdesk.view');
 
     $billingService = app(FolioBillingService::class);
     $folio = $billingService->ensureMainFolioForReservation($reservation);

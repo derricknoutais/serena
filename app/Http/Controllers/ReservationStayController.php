@@ -32,7 +32,6 @@ class ReservationStayController extends Controller
 
     public function updateDates(Request $request, Reservation $reservation): JsonResponse
     {
-        Gate::authorize('reservations.override_datetime');
         $this->ensureAuthorized($request, $reservation);
         $reservation->loadMissing(['offer', 'room.roomType', 'mainFolio']);
 
@@ -76,6 +75,7 @@ class ReservationStayController extends Controller
         }
 
         $action = $newCheckOut->greaterThan($currentCheckOut) ? 'extend' : 'shorten';
+        $this->authorizeStayAction($action);
 
         $payload = [
             'tenant_id' => $reservation->tenant_id,
@@ -285,6 +285,10 @@ class ReservationStayController extends Controller
 
     public function changeRoom(Request $request, Reservation $reservation): JsonResponse
     {
+        if (! Gate::check('reservations.change_room') && ! Gate::check('reservations.override_datetime')) {
+            abort(403);
+        }
+
         $this->ensureAuthorized($request, $reservation);
         $reservation->loadMissing(['offer', 'room.roomType']);
 
@@ -480,5 +484,20 @@ class ReservationStayController extends Controller
             ->where('room_type_id', $roomTypeId)
             ->where('offer_id', $reservation->offer_id)
             ->value('price');
+    }
+
+    private function authorizeStayAction(string $action): void
+    {
+        $permission = match ($action) {
+            'extend' => 'reservations.extend_stay',
+            'shorten' => 'reservations.shorten_stay',
+            default => 'reservations.override_datetime',
+        };
+
+        if (Gate::check($permission) || Gate::check('reservations.override_datetime')) {
+            return;
+        }
+
+        abort(403);
     }
 }

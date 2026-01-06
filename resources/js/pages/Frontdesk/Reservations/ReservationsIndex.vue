@@ -48,6 +48,18 @@
                 type: Boolean,
                 required: true,
             },
+            canExtendStay: {
+                type: Boolean,
+                required: true,
+            },
+            canShortenStay: {
+                type: Boolean,
+                required: true,
+            },
+            canChangeRoom: {
+                type: Boolean,
+                required: true,
+            },
         },
     };
 </script>

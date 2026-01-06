@@ -5,11 +5,16 @@ declare(strict_types=1);
 use App\Models\Activity;
 use App\Models\Offer;
 use App\Models\Reservation;
+use Database\Seeders\PermissionSeeder;
 
 require_once __DIR__.'/FolioTestHelpers.php';
 use Illuminate\Testing\TestResponse;
 
 use function Pest\Laravel\actingAs;
+
+beforeEach(function (): void {
+    $this->seed(PermissionSeeder::class);
+});
 
 it('creates reservation from offer with room type id set', function (): void {
     [
@@ -20,6 +25,8 @@ it('creates reservation from offer with room type id set', function (): void {
         'user' => $user,
         'room' => $room,
     ] = setupReservationEnvironment('offer-api');
+
+    $user->givePermissionTo('frontdesk.view');
 
     $offer = Offer::query()->create([
         'tenant_id' => $tenant->id,

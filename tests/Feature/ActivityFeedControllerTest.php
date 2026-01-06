@@ -5,6 +5,7 @@ require_once __DIR__.'/FolioTestHelpers.php';
 use App\Models\Activity;
 use App\Models\Hotel;
 use App\Models\Reservation;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Support\Carbon;
 
 use function Pest\Laravel\actingAs;
@@ -17,6 +18,8 @@ beforeEach(function (): void {
         'app.url_scheme' => 'http',
         'tenancy.central_domains' => ['serena.test'],
     ]);
+
+    $this->seed(PermissionSeeder::class);
 });
 
 it('returns activities scoped to the reservation with friendly dates', function (): void {
@@ -30,6 +33,7 @@ it('returns activities scoped to the reservation with friendly dates', function 
     ] = setupReservationEnvironment('activity-scope');
 
     $hotel->update(['timezone' => 'UTC']);
+    $user->givePermissionTo('frontdesk.view');
 
     actingAs($user);
 

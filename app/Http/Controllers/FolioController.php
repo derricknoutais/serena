@@ -68,6 +68,8 @@ class FolioController extends Controller
 
     public function storePayment(Request $request, Folio $folio): RedirectResponse|JsonResponse
     {
+        Gate::authorize('payments.create');
+
         $this->authorizeFolio($request, $folio);
 
         $data = $request->validate([

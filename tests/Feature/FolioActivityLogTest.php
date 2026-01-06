@@ -5,8 +5,9 @@ require_once __DIR__.'/FolioTestHelpers.php';
 use App\Models\Activity;
 use App\Models\CashSession;
 use App\Models\Folio;
+use Database\Seeders\PermissionSeeder;
+use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Carbon;
-use Spatie\Permission\Models\Role;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\delete;
@@ -20,7 +21,10 @@ beforeEach(function (): void {
         'tenancy.central_domains' => [],
     ]);
 
-    Role::findOrCreate('owner');
+    $this->seed([
+        RoleSeeder::class,
+        PermissionSeeder::class,
+    ]);
 });
 
 it('logs activity when a folio charge is added', function (): void {

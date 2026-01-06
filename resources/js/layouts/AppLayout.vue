@@ -203,12 +203,46 @@ export default defineComponent({
         cashLinkVisible(): boolean {
             const permissions = this.$page?.props?.auth?.can ?? {};
 
-            return Boolean((permissions.cash_sessions_open ?? false) || (permissions.cash_sessions_close ?? false));
+            return Boolean(
+                (permissions.cash_sessions_view
+                ?? (permissions.cash_sessions_open ?? false))
+                || (permissions.cash_sessions_close ?? false),
+            );
         },
         analyticsLinkVisible(): boolean {
-            const roles = this.$page?.props?.auth?.user?.roles || [];
+            const permissions = this.$page?.props?.auth?.can ?? {};
 
-            return roles.some((role: any) => ['owner', 'manager', 'superadmin'].includes(role.name));
+            return Boolean(permissions.analytics_view ?? false);
+        },
+        canViewFrontdesk(): boolean {
+            const permissions = this.$page?.props?.auth?.can ?? {};
+
+            return Boolean(permissions.frontdesk_view ?? false);
+        },
+        canViewHousekeeping(): boolean {
+            const permissions = this.$page?.props?.auth?.can ?? {};
+
+            return Boolean(permissions.housekeeping_view ?? false);
+        },
+        canViewResources(): boolean {
+            const permissions = this.$page?.props?.auth?.can ?? {};
+            const resourceKeys = [
+                'rooms_view',
+                'room_types_view',
+                'offers_view',
+                'products_view',
+                'product_categories_view',
+                'taxes_view',
+                'payment_methods_view',
+            ];
+
+            return resourceKeys.some((key) => permissions[key]);
+        },
+        operationsLinkVisible(): boolean {
+            return this.canViewHousekeeping || this.maintenanceLinkVisible || this.posLinkVisible;
+        },
+        financeLinkVisible(): boolean {
+            return this.cashLinkVisible || this.analyticsLinkVisible;
         },
         currentUser() {
             return (this.$page?.props as any)?.auth?.user ?? null;
@@ -282,7 +316,7 @@ export default defineComponent({
 
                 <nav class="hidden items-center space-x-4 text-sm lg:flex">
                     <!-- Ressources -->
-                    <div class="relative" aria-label="Ressources" data-dropdown="resources">
+                    <div v-if="canViewResources" class="relative" aria-label="Ressources" data-dropdown="resources">
                         <PrimaryButton
                             type="button"
                             variant="primary"
@@ -373,12 +407,13 @@ export default defineComponent({
                         </div>
                     </div>
                     <Link
+                        v-if="canViewFrontdesk"
                         :href="frontdeskDashboard()"
                         class="rounded-full px-3 py-1 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
                     >
                         FrontDesk
                     </Link>
-                    <div class="relative" data-dropdown="operations">
+                    <div v-if="operationsLinkVisible" class="relative" data-dropdown="operations">
                         <button
                             type="button"
                             class="rounded-full px-3 py-1 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
@@ -391,12 +426,14 @@ export default defineComponent({
                             class="absolute right-0 z-30 mt-2 w-44 rounded-xl border border-serena-border bg-white shadow-lg"
                         >
                             <Link
+                                v-if="canViewHousekeeping"
                                 href="/housekeeping"
                                 class="block px-3 py-2 text-sm text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
                             >
                                 Housekeeping
                             </Link>
                             <Link
+                                v-if="canViewHousekeeping"
                                 href="/housekeeping/reports"
                                 class="block px-3 py-2 text-sm text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
                             >
@@ -419,7 +456,7 @@ export default defineComponent({
                         </div>
                     </div>
 
-                    <div class="relative" data-dropdown="finance">
+                    <div v-if="financeLinkVisible" class="relative" data-dropdown="finance">
                         <button
                             type="button"
                             class="rounded-full px-3 py-1 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
@@ -545,10 +582,10 @@ export default defineComponent({
                 <div class="space-y-2">
                     <p class="text-xs font-semibold uppercase tracking-wide text-serena-text-muted">Navigation</p>
                     <div class="flex flex-col gap-2">
-                        <Link :href="frontdeskDashboard()" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
+                        <Link v-if="canViewFrontdesk" :href="frontdeskDashboard()" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
                             FrontDesk
                         </Link>
-                        <Link href="/housekeeping" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
+                        <Link v-if="canViewHousekeeping" href="/housekeeping" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
                             Housekeeping
                         </Link>
                         <Link v-if="maintenanceLinkVisible" href="/maintenance" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
@@ -566,7 +603,7 @@ export default defineComponent({
                     </div>
                 </div>
 
-                <div class="space-y-2">
+                <div v-if="canViewResources" class="space-y-2">
                     <p class="text-xs font-semibold uppercase tracking-wide text-serena-text-muted">Ressources</p>
                     <div class="grid grid-cols-2 gap-2">
                         <Link href="/ressources/hotel" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">

@@ -610,6 +610,7 @@
                                     Check-out
                                 </button>
                                 <button
+                                    v-if="canExtendStayAction"
                                     type="button"
                                     class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
                                     @click="openStayModal('extend')"
@@ -617,6 +618,7 @@
                                     Prolonger
                                 </button>
                                 <button
+                                    v-if="canShortenStayAction"
                                     type="button"
                                     class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
                                     @click="openStayModal('shorten')"
@@ -624,6 +626,7 @@
                                     Raccourcir
                                 </button>
                                 <button
+                                    v-if="canChangeRoomAction"
                                     type="button"
                                     class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
                                     @click="openChangeRoomModal"
@@ -1011,6 +1014,7 @@
 
                 <div class="flex flex-wrap gap-2">
                     <button
+                        v-if="canExtendStayAction"
                         type="button"
                         class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
                         @click="openStayModal('extend')"
@@ -1018,6 +1022,7 @@
                         Prolonger
                     </button>
                     <button
+                        v-if="canShortenStayAction"
                         type="button"
                         class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
                         @click="openStayModal('shorten')"
@@ -1025,6 +1030,7 @@
                         Raccourcir
                     </button>
                     <button
+                        v-if="canChangeRoomAction"
                         type="button"
                         class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
                         @click="openChangeRoomModal"
@@ -1466,9 +1472,29 @@ export default {
                 : 'Raccourcir le séjour';
         },
         canOverrideTimes() {
-            const permissions = this.$page?.props?.auth?.can ?? {};
+            return this.permissionFlags.reservations_override_datetime ?? false;
+        },
+        canExtendStayAction() {
+            return Boolean(
+                (this.permissionFlags.reservations_extend_stay ?? false)
+                || this.canOverrideTimes,
+            );
+        },
+        canShortenStayAction() {
+            return Boolean(
+                (this.permissionFlags.reservations_shorten_stay ?? false)
+                || this.canOverrideTimes,
+            );
+        },
+        canChangeRoomAction() {
+            if (!this.selectedRoom?.current_reservation) {
+                return false;
+            }
 
-            return permissions.reservations_override_datetime ?? false;
+            const canChange = this.permissionFlags.reservations_change_room ?? false;
+            const status = this.selectedRoom.current_reservation.status;
+
+            return (canChange || this.canOverrideTimes) && ['confirmed', 'in_house'].includes(status);
         },
         canOverrideFees() {
             const roles = this.$page?.props?.auth?.user?.roles || [];
@@ -2256,6 +2282,13 @@ export default {
             }
         },
         openStayModal(mode) {
+            const canManageStay = mode === 'extend' ? this.canExtendStayAction : this.canShortenStayAction;
+            if (!canManageStay) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
+
             if (!this.selectedRoom?.current_reservation) {
                 return;
             }
@@ -2300,6 +2333,16 @@ export default {
             this.showReservationModal = false;
         },
         async submitStayModal() {
+            const canManageStay = this.stayModalMode === 'extend'
+                ? this.canExtendStayAction
+                : this.canShortenStayAction;
+
+            if (!canManageStay) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
+
             if (!this.selectedRoom?.current_reservation || !this.stayModalDate) {
                 return;
             }
@@ -2370,6 +2413,12 @@ export default {
             }
         },
         openChangeRoomModal() {
+            if (!this.canChangeRoomAction) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
+
             if (!this.selectedRoom?.current_reservation) {
                 return;
             }
@@ -2384,6 +2433,12 @@ export default {
             this.loadingRoomId = null;
         },
         async submitChangeRoom() {
+            if (!this.canChangeRoomAction) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
+
             if (!this.selectedRoom?.current_reservation || !this.changeRoomSelection) {
                 return;
             }

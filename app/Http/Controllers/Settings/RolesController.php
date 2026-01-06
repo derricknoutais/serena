@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateRolePermissionsRequest;
 use App\Models\Hotel;
 use App\Models\User;
+use App\Support\PermissionsCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -17,6 +18,8 @@ class RolesController extends Controller
 {
     public function index(): Response
     {
+        PermissionsCatalog::ensureExists();
+
         $roles = Role::query()
             ->orderBy('name')
             ->with('permissions:id,name')
@@ -82,6 +85,8 @@ class RolesController extends Controller
 
     public function update(Role $role, UpdateRolePermissionsRequest $request): RedirectResponse
     {
+        PermissionsCatalog::ensureExists();
+
         $role->syncPermissions($request->validated('permissions', []));
 
         return back()->with('success', 'Permissions mises à jour.');

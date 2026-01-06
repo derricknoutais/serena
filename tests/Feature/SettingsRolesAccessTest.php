@@ -43,6 +43,40 @@ it('allows owner and manager to access roles settings', function (string $role) 
     'superadmin',
 ]);
 
+it('creates missing permissions when loading roles settings', function (): void {
+    $this->seed(RoleSeeder::class);
+
+    $tenant = Tenant::query()->create([
+        'id' => (string) Str::uuid(),
+        'name' => 'Test Hotel',
+        'slug' => 'test-hotel',
+        'plan' => 'standard',
+        'contact_email' => 'contact@test-hotel.test',
+        'data' => [
+            'name' => 'Test Hotel',
+            'slug' => 'test-hotel',
+        ],
+    ]);
+    $tenant->domains()->create(['domain' => 'test-hotel.serena.test']);
+
+    $user = User::factory()->create([
+        'tenant_id' => $tenant->getKey(),
+    ]);
+
+    $user->assignRole('owner');
+
+    $domain = 'test-hotel.serena.test';
+
+    $this->actingAs($user)
+        ->get("http://{$domain}/settings/roles")
+        ->assertOk();
+
+    $this->assertDatabaseHas('permissions', [
+        'name' => 'frontdesk.view',
+        'guard_name' => 'web',
+    ]);
+});
+
 it('isolates roles settings per tenant domain', function () {
     $this->seed([
         RoleSeeder::class,

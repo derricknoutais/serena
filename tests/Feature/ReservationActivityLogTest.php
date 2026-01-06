@@ -5,8 +5,9 @@ require_once __DIR__.'/FolioTestHelpers.php';
 use App\Models\Activity;
 use App\Models\Reservation;
 use App\Models\Room;
+use Database\Seeders\PermissionSeeder;
+use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Carbon;
-use Spatie\Permission\Models\Role;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\post;
@@ -20,7 +21,10 @@ beforeEach(function (): void {
         'tenancy.central_domains' => [],
     ]);
 
-    Role::findOrCreate('owner');
+    $this->seed([
+        RoleSeeder::class,
+        PermissionSeeder::class,
+    ]);
 });
 
 it('logs activity when a reservation is created', function (): void {
@@ -105,7 +109,6 @@ it('logs activity when a reservation is updated', function (): void {
         'room_type_id' => $reservation->room_type_id,
         'room_id' => $reservation->room_id,
         'offer_id' => $reservation->offer_id,
-        'status' => Reservation::STATUS_CONFIRMED,
         'check_in_date' => $reservation->check_in_date->toDateString(),
         'check_out_date' => $reservation->check_out_date->toDateString(),
         'currency' => $reservation->currency,

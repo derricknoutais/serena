@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/sidebar';
 import { dashboard as appDashboard } from '@/routes';
 import { dashboard as frontdeskDashboard } from '@/routes/frontdesk';
+import { index as housekeepingIndex } from '@/routes/housekeeping';
 import { edit as settingsProfile } from '@/routes/profile';
 import { index as activityIndex } from '@/routes/activity/index';
 // import { index as activityIndex } from '@/routes/activity';
@@ -38,7 +39,7 @@ import {
 import AppLogo from './AppLogo.vue';
 import { computed, ref } from 'vue';
 
-const mainNavItems: NavItem[] = [
+const baseMainNavItems: (NavItem & { requiredPermission?: string })[] = [
     {
         title: 'Dashboard',
         href: appDashboard(),
@@ -127,7 +128,36 @@ const pageProps = computed(() => (page?.props ? page.props : page.value.props));
 const permissions = computed<Record<string, boolean>>(
     () => pageProps.value?.auth?.can ?? {},
 );
+const canViewFrontdesk = computed(() => Boolean(permissions.value?.frontdesk_view ?? false));
+const canViewHousekeeping = computed(() => Boolean(permissions.value?.housekeeping_view ?? false));
+const canViewResources = computed(() => {
+    const resourceKeys = [
+        'rooms_view',
+        'room_types_view',
+        'offers_view',
+        'products_view',
+        'product_categories_view',
+        'taxes_view',
+        'payment_methods_view',
+    ];
+
+    return resourceKeys.some((key) => permissions.value?.[key]);
+});
 const currentUrl = computed(() => (page?.url ? page.url : page.value.url) || '');
+
+const mainNavItems = computed(() => {
+    return baseMainNavItems.filter((item) => {
+        if (item.requiredPermission && !(permissions.value[item.requiredPermission] ?? false)) {
+            return false;
+        }
+
+        if (item.title === 'Frontdesk') {
+            return canViewFrontdesk.value;
+        }
+
+        return true;
+    });
+});
 
 const ressourcesNavItems = computed(() => baseRessourcesNavItems.filter((item) => {
     if (!item.requiredPermission) {
@@ -155,7 +185,7 @@ const footerNavItems: NavItem[] = [
             <SidebarMenu>
                 <SidebarMenuItem>
                     <SidebarMenuButton size="lg" as-child>
-                        <Link :href="appDashboard()">
+                        <Link :href="canViewHousekeeping && !canViewFrontdesk ? housekeepingIndex() : appDashboard()">
                         <AppLogo />
                         </Link>
                     </SidebarMenuButton>
@@ -165,7 +195,7 @@ const footerNavItems: NavItem[] = [
 
         <SidebarContent>
             <NavMain :items="mainNavItems" />
-            <SidebarMenu class="px-2">
+            <SidebarMenu v-if="canViewResources" class="px-2">
                 <SidebarMenuItem>
                     <SidebarMenuButton
                         class="justify-between"
@@ -190,7 +220,7 @@ const footerNavItems: NavItem[] = [
                     </SidebarMenuItem>
                 </SidebarMenu>
             </SidebarMenu>
-            <SidebarMenu class="px-2">
+            <SidebarMenu v-if="canViewFrontdesk" class="px-2">
                 <SidebarMenuItem>
                     <SidebarMenuButton
                         class="justify-between"

@@ -6,6 +6,7 @@ use App\Models\HousekeepingChecklist;
 use App\Models\Tenant;
 use App\Notifications\Channels\TenantDatabaseChannel;
 use App\Policies\HousekeepingChecklistPolicy;
+use App\Support\PermissionsCatalog;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Database\DatabaseManager;
@@ -37,6 +38,7 @@ class AppServiceProvider extends ServiceProvider
 
         Gate::policy(HousekeepingChecklist::class, HousekeepingChecklistPolicy::class);
 
+        PermissionsCatalog::ensureExists();
         $this->registerPermissionGates();
 
         VerifyEmail::toMailUsing(function (object $notifiable, string $url): MailMessage {
@@ -124,29 +126,8 @@ class AppServiceProvider extends ServiceProvider
 
     private function registerPermissionGates(): void
     {
-        $permissions = [
-            'reservations.override_datetime',
-            'folio_items.void',
-            'housekeeping.mark_inspected',
-            'housekeeping.mark_clean',
-            'housekeeping.mark_dirty',
-            'cash_sessions.open',
-            'cash_sessions.close',
-            'rooms.view', 'rooms.create', 'rooms.update', 'rooms.delete',
-            'room_types.view', 'room_types.create', 'room_types.update', 'room_types.delete',
-            'offers.view', 'offers.create', 'offers.update', 'offers.delete',
-            'products.view', 'products.create', 'products.update', 'products.delete',
-            'product_categories.view', 'product_categories.create', 'product_categories.update', 'product_categories.delete',
-            'taxes.view', 'taxes.create', 'taxes.update', 'taxes.delete',
-            'payment_methods.view', 'payment_methods.create', 'payment_methods.update', 'payment_methods.delete',
-            'maintenance_tickets.view', 'maintenance_tickets.create', 'maintenance_tickets.update', 'maintenance_tickets.close',
-            'invoices.view', 'invoices.create', 'invoices.update', 'invoices.delete',
-            'pos.view', 'pos.create',
-            'night_audit.view', 'night_audit.export',
-        ];
-
-        foreach ($permissions as $permission) {
-            Gate::define($permission, static fn ($user): bool => $user?->hasPermissionTo($permission) ?? false);
+        foreach (PermissionsCatalog::all() as $permission) {
+            Gate::define($permission, static fn ($user): bool => $user?->checkPermissionTo($permission) ?? false);
         }
     }
 }

@@ -227,7 +227,10 @@
                             Choisissez une méthode de paiement disponible pour cet hôtel.
                         </p>
                     </header>
-                    <form class="space-y-4" @submit.prevent="submitPayment">
+                    <div v-if="!canCreatePayments" class="rounded-xl border border-dashed border-serena-border/50 bg-white/50 p-4 text-sm text-serena-text-muted">
+                        Vous n’avez pas l’autorisation d’enregistrer un paiement.
+                    </div>
+                    <form v-else class="space-y-4" @submit.prevent="submitPayment">
                         <div>
                             <label class="mb-1 block text-xs font-semibold uppercase text-serena-text-muted">
                                 Montant
@@ -447,6 +450,13 @@ export default {
                 close_folio: false,
             }),
         };
+    },
+    computed: {
+        canCreatePayments() {
+            const permissions = this.$page?.props?.auth?.can ?? {};
+
+            return Boolean(permissions.payments_create ?? false);
+        },
     },
     methods: {
         formatAmount(value) {

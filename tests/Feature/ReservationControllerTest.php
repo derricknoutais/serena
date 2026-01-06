@@ -18,11 +18,19 @@ beforeEach(function (): void {
 
     $guard = config('auth.defaults.guard', 'web');
     $permissions = [
+        'frontdesk.view',
+        'housekeeping.view',
+        'analytics.view',
         'reservations.override_datetime',
+        'reservations.extend_stay',
+        'reservations.shorten_stay',
+        'reservations.change_room',
+        'payments.create',
         'folio_items.void',
         'housekeeping.mark_inspected',
         'housekeeping.mark_clean',
         'housekeeping.mark_dirty',
+        'cash_sessions.view',
         'cash_sessions.open',
         'cash_sessions.close',
         'rooms.view', 'rooms.create', 'rooms.update', 'rooms.delete',
@@ -45,6 +53,13 @@ beforeEach(function (): void {
         ]);
     }
 });
+
+if (! function_exists('grantFrontdeskAccess')) {
+    function grantFrontdeskAccess($user): void
+    {
+        $user->givePermissionTo('frontdesk.view');
+    }
+}
 
 function reservationPayload(array $overrides = []): array
 {
@@ -73,6 +88,8 @@ it('rejects forbidden status on reservation creation', function (): void {
         'roomType' => $roomType,
     ] = setupReservationEnvironment('reservation-create-status');
 
+    grantFrontdeskAccess($user);
+
     $payload = reservationPayload([
         'guest_id' => $guest->id,
         'room_type_id' => $roomType->id,
@@ -96,6 +113,8 @@ it('allows pending or confirmed status on reservation creation', function (strin
         'guest' => $guest,
         'roomType' => $roomType,
     ] = setupReservationEnvironment('reservation-create-ok');
+
+    grantFrontdeskAccess($user);
 
     $payload = reservationPayload([
         'code' => sprintf('RSV-TEST-%s', $status),
@@ -128,6 +147,8 @@ it('allows hourly offers to pass midnight', function (): void {
         'room' => $room,
         'hotel' => $hotel,
     ] = setupReservationEnvironment('reservation-hourly-midnight');
+
+    grantFrontdeskAccess($user);
 
     $offer = Offer::query()->create([
         'tenant_id' => $tenant->id,
@@ -173,6 +194,8 @@ it('prevents status changes via reservation update', function (): void {
         'guest' => $guest,
         'roomType' => $roomType,
     ] = setupReservationEnvironment('reservation-update-status');
+
+    grantFrontdeskAccess($user);
 
     $reservation->update([
         'status' => Reservation::STATUS_CONFIRMED,

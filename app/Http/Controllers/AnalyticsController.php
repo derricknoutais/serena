@@ -109,6 +109,6 @@ class AnalyticsController extends Controller
     private function authorizeRole(Request $request): void
     {
         $user = $request->user();
-        abort_unless($user && $user->hasAnyRole(['owner', 'manager', 'superadmin']), 403);
+        abort_unless($user && $user->can('analytics.view'), 403);
     }
 }
