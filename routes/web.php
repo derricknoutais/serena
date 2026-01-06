@@ -62,7 +62,7 @@ if (app()->environment('local') && ! app()->runningInConsole()) {
     // This is useful for testing purposes.
     // config(['tenancy.central_domains' => ['saas-template.test']]);
     // config(['tenancy.database.connection' => 'tenant']);
-    Auth::loginUsingId(6);
+    Auth::loginUsingId(11);
 }
 Route::middleware([
     'web',

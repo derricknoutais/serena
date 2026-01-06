@@ -1,5 +1,5 @@
-const CACHE_NAME = 'serena-shell-v1';
-const OFFLINE_URLS = ['/', '/dashboard', '/rooms/board', '/reservations'];
+const CACHE_NAME = 'serena-shell-v2';
+const OFFLINE_URLS = ['/', '/rooms/board', '/reservations'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -19,10 +19,24 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(new Request(event.request, { redirect: 'follow' }))
+        .then((response) => {
+          if (response.redirected) {
+            return fetch(response.url, { redirect: 'follow' });
+          }
+          return response;
+        })
+        .catch(() => caches.match('/'))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
-      return fetch(event.request).catch(() => caches.match('/'));
+      return fetch(event.request);
     })
   );
 });
