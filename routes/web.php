@@ -7,6 +7,8 @@ use App\Http\Controllers\Auth\CheckEmailAvailabilityController;
 use App\Http\Controllers\Auth\CheckTenantSlugController;
 use App\Http\Controllers\Config\ActiveHotelController;
 use App\Http\Controllers\Config\HotelConfigController;
+use App\Http\Controllers\Config\HousekeepingChecklistController;
+use App\Http\Controllers\Config\HousekeepingChecklistItemController;
 use App\Http\Controllers\Config\OfferController;
 use App\Http\Controllers\Config\PaymentMethodController;
 use App\Http\Controllers\Config\ProductCategoryController;
@@ -25,6 +27,7 @@ use App\Http\Controllers\Frontdesk\RoomBoardWalkInController;
 use App\Http\Controllers\Frontdesk\RoomHousekeepingController;
 use App\Http\Controllers\Frontdesk\WalkInReservationController;
 use App\Http\Controllers\HousekeepingController;
+use App\Http\Controllers\HousekeepingReportController;
 use App\Http\Controllers\Invitations\AcceptInvitationController;
 use App\Http\Controllers\Invitations\InvitationController;
 use App\Http\Controllers\InvoiceController;
@@ -145,6 +148,9 @@ Route::middleware([
         Route::get('/resources/hotel', function () {
             return redirect()->route('ressources.hotel.edit');
         });
+        Route::get('/resources/housekeeping-checklists', function () {
+            return redirect()->route('ressources.housekeeping-checklists.index');
+        });
 
         Route::patch('/users/{user}/role', UpdateUserRoleController::class)
             ->middleware(['auth', 'verified', 'role:owner|manager|superadmin'])
@@ -181,10 +187,23 @@ Route::middleware([
 
         Route::get('/housekeeping', [HousekeepingController::class, 'index'])
             ->name('housekeeping.index');
+        Route::get('/housekeeping/reports', [HousekeepingReportController::class, 'index'])
+            ->middleware('role:owner|manager|superadmin')
+            ->name('housekeeping.reports');
         Route::get('/hk/rooms/{room}', [HousekeepingController::class, 'show'])
             ->name('housekeeping.rooms.show');
         Route::patch('/hk/rooms/{room}/status', [HousekeepingController::class, 'updateStatus'])
             ->name('housekeeping.rooms.update');
+        Route::post('/hk/rooms/{room}/tasks/start', [HousekeepingController::class, 'startTask'])
+            ->name('housekeeping.rooms.tasks.start');
+        Route::post('/hk/rooms/{room}/tasks/join', [HousekeepingController::class, 'joinTask'])
+            ->name('housekeeping.rooms.tasks.join');
+        Route::post('/hk/rooms/{room}/tasks/finish', [HousekeepingController::class, 'finishTask'])
+            ->name('housekeeping.rooms.tasks.finish');
+        Route::post('/hk/rooms/{room}/inspections/start', [HousekeepingController::class, 'startInspection'])
+            ->name('housekeeping.rooms.inspections.start');
+        Route::post('/hk/rooms/{room}/inspections/finish', [HousekeepingController::class, 'finishInspection'])
+            ->name('housekeeping.rooms.inspections.finish');
 
         Route::get('/rooms/board', [RoomBoardController::class, 'index'])
             ->name('rooms.board');
@@ -301,6 +320,24 @@ Route::middleware([
             Route::resource('products', ProductController::class)->except(['show']);
             Route::resource('product-categories', ProductCategoryController::class)->only(['index', 'store', 'update', 'destroy']);
             Route::resource('users', UserConfigController::class)->except(['show']);
+            Route::get('housekeeping-checklists', [HousekeepingChecklistController::class, 'index'])
+                ->name('housekeeping-checklists.index');
+            Route::post('housekeeping-checklists', [HousekeepingChecklistController::class, 'store'])
+                ->name('housekeeping-checklists.store');
+            Route::put('housekeeping-checklists/{housekeepingChecklist}', [HousekeepingChecklistController::class, 'update'])
+                ->name('housekeeping-checklists.update');
+            Route::delete('housekeeping-checklists/{housekeepingChecklist}', [HousekeepingChecklistController::class, 'destroy'])
+                ->name('housekeeping-checklists.destroy');
+            Route::post('housekeeping-checklists/{housekeepingChecklist}/duplicate', [HousekeepingChecklistController::class, 'duplicate'])
+                ->name('housekeeping-checklists.duplicate');
+            Route::post('housekeeping-checklists/{housekeepingChecklist}/items', [HousekeepingChecklistItemController::class, 'store'])
+                ->name('housekeeping-checklists.items.store');
+            Route::put('housekeeping-checklists/{housekeepingChecklist}/items/{item}', [HousekeepingChecklistItemController::class, 'update'])
+                ->name('housekeeping-checklists.items.update');
+            Route::delete('housekeeping-checklists/{housekeepingChecklist}/items/{item}', [HousekeepingChecklistItemController::class, 'destroy'])
+                ->name('housekeeping-checklists.items.destroy');
+            Route::post('housekeeping-checklists/{housekeepingChecklist}/items/reorder', [HousekeepingChecklistItemController::class, 'reorder'])
+                ->name('housekeeping-checklists.items.reorder');
         });
 });
 

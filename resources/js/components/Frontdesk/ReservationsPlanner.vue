@@ -1886,10 +1886,10 @@
                 if (action === 'check_in') {
                     const hkStatus = this.getReservationHkStatus(targetId);
 
-                    if (hkStatus && !['clean', 'inspected'].includes(hkStatus)) {
+                    if (hkStatus && hkStatus !== 'inspected') {
                         const warning = await Swal.fire({
                             title: 'Chambre non prête',
-                            text: 'Cette chambre est signalée comme sale ou à inspecter. Voulez-vous continuer le check-in ?',
+                            text: 'Cette chambre n’est pas inspectée. Voulez-vous continuer le check-in ?',
                             icon: 'warning',
                             showCancelButton: true,
                             confirmButtonText: 'Oui',

@@ -8,6 +8,7 @@ use App\Http\Requests\UpdateReservationRequest;
 use App\Models\Offer;
 use App\Models\Reservation;
 use App\Services\FolioBillingService;
+use App\Services\HousekeepingPriorityService;
 use App\Services\Offers\OfferReservationService;
 use App\Services\ReservationAvailabilityService;
 use App\Services\ReservationConflictService;
@@ -51,6 +52,7 @@ class ReservationController extends Controller
         OfferReservationService $offerReservationService,
         ReservationConflictService $conflictService,
         \App\Services\Notifier $notifier,
+        HousekeepingPriorityService $priorityService,
     ) {
         $tenantId = $request->user()->tenant_id;
         $hotelId = $request->user()->active_hotel_id ?? $request->session()->get('active_hotel_id');
@@ -145,6 +147,13 @@ class ReservationController extends Controller
 
         $reservation = Reservation::query()->create($data);
 
+        if ($reservation->room_id) {
+            $reservation->loadMissing('room');
+            if ($reservation->room) {
+                $priorityService->syncRoomTasks($reservation->room, $request->user());
+            }
+        }
+
         $this->logReservationActivity(
             event: 'created',
             reservation: $reservation,
@@ -183,6 +192,7 @@ class ReservationController extends Controller
         OfferReservationService $offerReservationService,
         ReservationConflictService $conflictService,
         \App\Services\Notifier $notifier,
+        HousekeepingPriorityService $priorityService,
     ) {
         $tenantId = $request->user()->tenant_id;
 
@@ -282,6 +292,13 @@ class ReservationController extends Controller
         $reservation->fill($data);
         $dirty = $reservation->getDirty();
         $reservation->save();
+
+        if ($reservation->room_id) {
+            $reservation->loadMissing('room');
+            if ($reservation->room) {
+                $priorityService->syncRoomTasks($reservation->room, $request->user());
+            }
+        }
 
         if (in_array(
             $reservation->status,

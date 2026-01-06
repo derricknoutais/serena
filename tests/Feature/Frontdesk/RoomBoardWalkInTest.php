@@ -57,7 +57,7 @@ test('walk-in reservation returns a redirect for inertia requests', function () 
         'room_type_id' => $roomType->id,
         'number' => '101',
         'status' => 'active',
-        'hk_status' => 'clean',
+        'hk_status' => Room::HK_STATUS_INSPECTED,
     ]);
 
     $offer = Offer::query()->create([
@@ -117,7 +117,7 @@ test('walk-in reservation returns a redirect for inertia requests', function () 
     expect($reservation->check_in_date?->format('Y-m-d H:i:s'))->toBe('2025-12-24 09:30:00');
     expect($reservation->check_out_date?->format('Y-m-d H:i:s'))->toBe('2025-12-25 11:00:00');
     expect($reservation->actual_check_in_at?->format('Y-m-d H:i:s'))->toBe('2025-12-24 09:30:00');
-    expect($room->refresh()->hk_status)->toBe('clean');
+    expect($room->refresh()->hk_status)->toBe(Room::HK_STATUS_INSPECTED);
 
     Carbon::setTestNow();
 });
@@ -162,7 +162,7 @@ test('walk-in reservation requires amount received', function () {
         'room_type_id' => $roomType->id,
         'number' => '101',
         'status' => 'active',
-        'hk_status' => 'clean',
+        'hk_status' => Room::HK_STATUS_INSPECTED,
     ]);
 
     $offer = Offer::query()->create([
@@ -252,7 +252,7 @@ test('walk-in reservation requires a payment method when amount is received', fu
         'room_type_id' => $roomType->id,
         'number' => '101',
         'status' => 'active',
-        'hk_status' => 'clean',
+        'hk_status' => Room::HK_STATUS_INSPECTED,
     ]);
 
     $offer = Offer::query()->create([

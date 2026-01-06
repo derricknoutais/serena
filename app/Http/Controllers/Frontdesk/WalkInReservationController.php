@@ -11,6 +11,7 @@ use App\Models\OfferRoomTypePrice;
 use App\Models\Reservation;
 use App\Models\Room;
 use App\Models\RoomType;
+use App\Services\HousekeepingPriorityService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -93,7 +94,7 @@ class WalkInReservationController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, HousekeepingPriorityService $priorityService): RedirectResponse
     {
         $user = $request->user();
         $tenantId = (string) $user->tenant_id;
@@ -214,6 +215,13 @@ class WalkInReservationController extends Controller
                 'total_amount' => $totalAmount,
             ]);
         });
+
+        if ($reservation->room_id) {
+            $reservation->loadMissing('room');
+            if ($reservation->room) {
+                $priorityService->syncRoomTasks($reservation->room, $request->user());
+            }
+        }
 
         return redirect()
             ->route('rooms.board', ['date' => $checkInDate])

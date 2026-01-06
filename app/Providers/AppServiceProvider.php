@@ -2,8 +2,10 @@
 
 namespace App\Providers;
 
+use App\Models\HousekeepingChecklist;
 use App\Models\Tenant;
 use App\Notifications\Channels\TenantDatabaseChannel;
+use App\Policies\HousekeepingChecklistPolicy;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Database\DatabaseManager;
@@ -32,6 +34,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->make(ChannelManager::class)->extend('tenant_database', function ($app) {
             return new TenantDatabaseChannel($app->make(DatabaseManager::class));
         });
+
+        Gate::policy(HousekeepingChecklist::class, HousekeepingChecklistPolicy::class);
 
         $this->registerPermissionGates();
 

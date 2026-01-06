@@ -107,6 +107,14 @@ class PermissionSeeder extends Seeder
                 'maintenance_tickets.view',
                 'maintenance_tickets.create',
             ],
+            'supervisor' => [
+                'rooms.view',
+                'housekeeping.mark_inspected',
+                'housekeeping.mark_clean',
+                'housekeeping.mark_dirty',
+                'maintenance_tickets.view',
+                'maintenance_tickets.create',
+            ],
             'maintenance' => $permissions,
         ];
 

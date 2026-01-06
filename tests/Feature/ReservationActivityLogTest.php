@@ -41,7 +41,7 @@ it('logs activity when a reservation is created', function (): void {
         'number' => 'ACT-201',
         'floor' => '2',
         'status' => 'active',
-        'hk_status' => 'clean',
+        'hk_status' => Room::HK_STATUS_INSPECTED,
     ]);
 
     actingAs($user);

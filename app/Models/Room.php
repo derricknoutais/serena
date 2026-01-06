@@ -20,6 +20,16 @@ class Room extends Model
 
     public const STATUS_OUT_OF_ORDER = 'out_of_order';
 
+    public const HK_STATUS_DIRTY = 'dirty';
+
+    public const HK_STATUS_CLEANING = 'cleaning';
+
+    public const HK_STATUS_AWAITING_INSPECTION = 'awaiting_inspection';
+
+    public const HK_STATUS_INSPECTED = 'inspected';
+
+    public const HK_STATUS_REDO = 'redo';
+
     /**
      * @var list<string>
      */
@@ -31,7 +41,7 @@ class Room extends Model
         'floor',
         'status',
         'hk_status',
-        'block_sale_after_checkout'
+        'block_sale_after_checkout',
     ];
 
     /**
@@ -74,6 +84,11 @@ class Room extends Model
         return $this->hasMany(MaintenanceTicket::class);
     }
 
+    public function housekeepingTasks(): HasMany
+    {
+        return $this->hasMany(HousekeepingTask::class);
+    }
+
     public function scopeOpenMaintenanceTickets(Builder $query): Builder
     {
         return $query->whereHas('maintenanceTickets', function (Builder $ticketQuery): void {
@@ -88,6 +103,7 @@ class Room extends Model
     {
         return $query
             ->whereNotIn('status', [self::STATUS_OUT_OF_ORDER, 'inactive'])
+            ->where('hk_status', self::HK_STATUS_INSPECTED)
             ->where(function (Builder $roomQuery): void {
                 $roomQuery
                     ->where('block_sale_after_checkout', false)
@@ -108,6 +124,10 @@ class Room extends Model
         }
 
         if (in_array($this->status, [self::STATUS_OUT_OF_ORDER, 'inactive'], true)) {
+            return false;
+        }
+
+        if ($this->hk_status !== self::HK_STATUS_INSPECTED) {
             return false;
         }
 

@@ -317,6 +317,12 @@ export default defineComponent({
                                 Chambres
                             </Link>
                             <Link
+                                href="/ressources/housekeeping-checklists"
+                                class="block rounded-lg px-3 py-1.5 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
+                            >
+                                Checklists HK
+                            </Link>
+                            <Link
                                 href="/resources/guests"
                                 class="block rounded-lg px-3 py-1.5 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
                             >
@@ -367,12 +373,6 @@ export default defineComponent({
                         </div>
                     </div>
                     <Link
-                        href="/resources/guests"
-                        class="rounded-full px-3 py-1 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
-                    >
-                        Guests
-                    </Link>
-                    <Link
                         :href="frontdeskDashboard()"
                         class="rounded-full px-3 py-1 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
                     >
@@ -395,6 +395,12 @@ export default defineComponent({
                                 class="block px-3 py-2 text-sm text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
                             >
                                 Housekeeping
+                            </Link>
+                            <Link
+                                href="/housekeeping/reports"
+                                class="block px-3 py-2 text-sm text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
+                            >
+                                Rapports HK
                             </Link>
                             <Link
                                 v-if="maintenanceLinkVisible"
@@ -539,9 +545,6 @@ export default defineComponent({
                 <div class="space-y-2">
                     <p class="text-xs font-semibold uppercase tracking-wide text-serena-text-muted">Navigation</p>
                     <div class="flex flex-col gap-2">
-                        <Link href="/resources/guests" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
-                            Guests
-                        </Link>
                         <Link :href="frontdeskDashboard()" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
                             FrontDesk
                         </Link>
@@ -568,6 +571,9 @@ export default defineComponent({
                     <div class="grid grid-cols-2 gap-2">
                         <Link href="/ressources/hotel" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
                             Hôtel
+                        </Link>
+                        <Link href="/resources/guests" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
+                            Guests
                         </Link>
                         <Link href="/ressources/room-types" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
                             Types de chambres

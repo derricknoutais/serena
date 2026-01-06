@@ -259,9 +259,11 @@ export default {
         },
         hkStatusLabels() {
             return {
-                clean: 'Propre',
                 dirty: 'Sale',
+                cleaning: 'En cours',
+                awaiting_inspection: 'En attente d’inspection',
                 inspected: 'Inspectée',
+                redo: 'À refaire',
             };
         },
     },

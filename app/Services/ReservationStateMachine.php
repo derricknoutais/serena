@@ -40,6 +40,8 @@ class ReservationStateMachine
         private readonly RoomStateMachine $roomStateMachine,
         private readonly StayAdjustmentService $stayAdjustmentService,
         private readonly Notifier $notifier,
+        private readonly HousekeepingService $housekeepingService,
+        private readonly HousekeepingPriorityService $housekeepingPriorityService,
     ) {}
 
     public function canTransition(string $from, string $to): bool
@@ -96,7 +98,7 @@ class ReservationStateMachine
             ]);
         }
 
-        if ($reservation->room->hk_status && ! in_array($reservation->room->hk_status, ['clean', 'inspected'], true)) {
+        if ($reservation->room->hk_status !== Room::HK_STATUS_INSPECTED) {
             $this->notifier->notify('room.sold_but_dirty', $reservation->hotel_id, [
                 'tenant_id' => $reservation->tenant_id,
                 'room_id' => $reservation->room_id,
@@ -126,6 +128,10 @@ class ReservationStateMachine
         $this->billing->syncStayChargeFromReservation($reservation);
 
         $updated = $this->applyStatus($reservation, Reservation::STATUS_IN_HOUSE);
+
+        if ($updated->room) {
+            $this->housekeepingPriorityService->syncRoomTasks($updated->room, auth()->user());
+        }
 
         $this->stayAdjustmentService->applyFeesToFolio(
             $updated,
@@ -200,10 +206,12 @@ class ReservationStateMachine
 
         if ($reservation->room) {
             $this->roomStateMachine->markAvailable($reservation->room);
-            $reservation->room->hk_status = 'dirty';
             $shouldBlockAfterCheckout = (bool) $reservation->room->block_sale_after_checkout;
             $reservation->room->block_sale_after_checkout = false;
             $reservation->room->save();
+
+            $this->housekeepingService->markRoomDirtyAfterCheckout($reservation->room, auth()->user());
+            $this->housekeepingService->createTaskAfterCheckout($reservation->room, auth()->user());
 
             $hasBlockingMaintenance = $reservation->room->maintenanceTickets()
                 ->whereIn('status', [

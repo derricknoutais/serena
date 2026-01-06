@@ -103,6 +103,19 @@
                                     {{ hkBadge(room).label }}
                                 </span>
                                 <span
+                                    v-if="room.hk_priority"
+                                    class="rounded-full border px-2 py-0.5 font-medium"
+                                    :class="priorityBadge(room.hk_priority).classes"
+                                >
+                                    <component
+                                        v-if="priorityBadge(room.hk_priority).icon"
+                                        :is="priorityBadge(room.hk_priority).icon"
+                                        class="mr-1 inline-block h-3 w-3"
+                                        :class="priorityBadge(room.hk_priority).iconClass"
+                                    />
+                                    {{ priorityBadge(room.hk_priority).label }}
+                                </span>
+                                <span
                                     v-if="room.current_reservation?.is_overstay"
                                     class="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 font-medium text-amber-700"
                                 >
@@ -229,7 +242,7 @@
                             </div>
                             <div>
                                 <span class="font-semibold text-gray-700">Statut ménage :</span>
-                                <span class="ml-1">{{ selectedRoom.hk_status }}</span>
+                                <span class="ml-1">{{ hkStatusLabel(selectedRoom.hk_status) }}</span>
                             </div>
                             <div>
                                 <span class="font-semibold text-gray-700">Vente :</span>
@@ -333,12 +346,64 @@
                                     v-if="canMarkClean"
                                     type="button"
                                     class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
-                                    @click="updateRoomHkStatus(selectedRoom.id, 'clean')"
+                                    @click="updateRoomHkStatus(selectedRoom.id, 'cleaning')"
                                 >
-                                    Marquer comme propre
+                                    Marquer en cours
+                                </button>
+                                <button
+                                    v-if="canMarkClean"
+                                    type="button"
+                                    class="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                                    @click="updateRoomHkStatus(selectedRoom.id, 'awaiting_inspection')"
+                                >
+                                    En attente d’inspection
+                                </button>
+                                <button
+                                    v-if="canMarkDirty"
+                                    type="button"
+                                    class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+                                    @click="updateRoomHkStatus(selectedRoom.id, 'redo')"
+                                >
+                                    Marquer à refaire
                                 </button>
                             </div>
 
+                        </div>
+
+                        <div class="rounded-lg border border-gray-100 bg-gray-50/60 p-3">
+                            <div class="flex items-center justify-between">
+                                <h4 class="text-xs font-semibold text-gray-700">
+                                    Inspection
+                                </h4>
+                                <span
+                                    v-if="selectedRoom?.last_inspection?.outcome"
+                                    class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                                    :class="inspectionOutcomeClasses(selectedRoom.last_inspection.outcome)"
+                                >
+                                    {{ inspectionOutcomeLabel(selectedRoom.last_inspection.outcome) }}
+                                </span>
+                            </div>
+                            <p v-if="selectedRoom?.last_inspection?.ended_at" class="mt-1 text-[11px] text-gray-500">
+                                Dernière inspection : {{ formatDateTime(selectedRoom.last_inspection.ended_at) }}
+                            </p>
+                            <p v-else class="mt-1 text-[11px] text-gray-400">
+                                Aucune inspection enregistrée.
+                            </p>
+                            <div
+                                v-if="selectedRoom?.last_inspection?.remarks?.length"
+                                class="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-2 text-[11px] text-rose-800"
+                            >
+                                <p class="font-semibold">Remarques (à refaire)</p>
+                                <ul class="mt-1 space-y-1">
+                                    <li
+                                        v-for="(remark, idx) in selectedRoom.last_inspection.remarks"
+                                        :key="idx"
+                                    >
+                                        <span v-if="remark.label" class="font-semibold">{{ remark.label }} :</span>
+                                        <span>{{ remark.note }}</span>
+                                    </li>
+                                </ul>
+                            </div>
                         </div>
 
                         <div class="space-y-3 rounded-lg border border-amber-100 bg-amber-50/40 p-3">
@@ -1333,9 +1398,11 @@ export default {
             hkFilter: 'all',
             hkFilterOptions: [
                 { value: 'all', label: 'Toutes' },
-                { value: 'clean', label: 'Propre' },
                 { value: 'dirty', label: 'Sale' },
+                { value: 'cleaning', label: 'En cours' },
+                { value: 'awaiting_inspection', label: 'En attente d’inspection' },
                 { value: 'inspected', label: 'Inspectée' },
+                { value: 'redo', label: 'À refaire' },
             ],
             showReservationModal: false,
             showStayModal: false,
@@ -2987,8 +3054,10 @@ export default {
         },
         async updateRoomHkStatus(roomId, hkStatus) {
             const permissionMap = {
-                clean: this.canMarkClean,
                 dirty: this.canMarkDirty,
+                redo: this.canMarkDirty,
+                cleaning: this.canMarkClean,
+                awaiting_inspection: this.canMarkClean,
                 inspected: this.canMarkInspected,
             };
 
@@ -3126,8 +3195,18 @@ export default {
             const event = entry.event || entry.description || '';
 
             switch (event) {
-                case 'hk_updated':
-                    return 'Statut ménage mis à jour';
+                case 'hk_updated': {
+                    const fromStatus = entry.properties?.from_hk_status;
+                    const toStatus = entry.properties?.to_hk_status;
+                    const remarks = entry.properties?.remarks;
+                    const label = `${this.hkStatusLabel(fromStatus)} → ${this.hkStatusLabel(toStatus)}`;
+
+                    if (remarks) {
+                        return `Ménage: ${label} · ${remarks}`;
+                    }
+
+                    return `Ménage: ${label}`;
+                }
                 default:
                     return entry.description || 'Action';
             }
@@ -3150,6 +3229,9 @@ export default {
         roomClasses(room) {
             const base =
                 'cursor-pointer rounded-xl border p-5 text-sm shadow-sm transition';
+            const urgentHighlight = room.hk_priority === 'urgent'
+                ? ' ring-2 ring-rose-300 animate-pulse'
+                : '';
 
             if (
                 room.status === 'out_of_order' ||
@@ -3157,6 +3239,7 @@ export default {
             ) {
                 return (
                     base +
+                    urgentHighlight +
                     ' bg-black border-black text-white'
                 );
             }
@@ -3164,6 +3247,7 @@ export default {
             if (room.ui_status === 'occupied') {
                 return (
                     base +
+                    urgentHighlight +
                     ' bg-red-50 border-red-200 text-red-800'
                 );
             }
@@ -3171,6 +3255,7 @@ export default {
             if (room.status === 'inactive') {
                 return (
                     base +
+                    urgentHighlight +
                     ' bg-neutral-100 border-neutral-300 text-neutral-500'
                 );
             }
@@ -3178,19 +3263,46 @@ export default {
             if (room.hk_status === 'dirty') {
                 return (
                     base +
+                    urgentHighlight +
                     ' bg-gray-100 border-gray-300 text-gray-700'
+                );
+            }
+
+            if (room.hk_status === 'cleaning') {
+                return (
+                    base +
+                    urgentHighlight +
+                    ' bg-blue-50 border-blue-200 text-blue-800'
+                );
+            }
+
+            if (room.hk_status === 'awaiting_inspection') {
+                return (
+                    base +
+                    urgentHighlight +
+                    ' bg-teal-50 border-teal-200 text-teal-800'
+                );
+            }
+
+            if (room.hk_status === 'redo') {
+                return (
+                    base +
+                    urgentHighlight +
+                    ' bg-rose-50 border-rose-200 text-rose-800'
                 );
             }
 
             if (room.status === 'active') {
                 return (
                     base +
+                    urgentHighlight +
                     ' bg-emerald-50 border-emerald-200 text-emerald-800'
                 );
             }
 
             return (
                 base +
+                urgentHighlight +
                 ' bg-emerald-50 border-emerald-200 text-emerald-800'
             );
         },
@@ -3223,13 +3335,6 @@ export default {
                 };
             }
 
-            if (room.hk_status === 'dirty') {
-                return {
-                    label: 'Disponible',
-                    classes: 'bg-gray-200 text-gray-700 border-gray-300',
-                };
-            }
-
             return {
                 label: 'Disponible',
                 classes: 'bg-emerald-100 text-emerald-700 border-emerald-300',
@@ -3239,11 +3344,16 @@ export default {
             switch (status) {
                 case 'dirty':
                     return 'Sale';
+                case 'cleaning':
+                    return 'En cours';
+                case 'awaiting_inspection':
+                    return 'En attente d’inspection';
                 case 'inspected':
                     return 'Inspectée';
-                case 'clean':
+                case 'redo':
+                    return 'À refaire';
                 default:
-                    return 'Propre';
+                    return status ?? '—';
             }
         },
         hkBadge(room) {
@@ -3255,27 +3365,86 @@ export default {
                         icon: Wrench,
                         iconClass: 'text-slate-600',
                     };
+                case 'cleaning':
+                    return {
+                        label: 'En cours',
+                        classes: 'bg-blue-100 text-blue-700 border-blue-300',
+                        icon: CheckCircle,
+                        iconClass: 'text-blue-600',
+                    };
+                case 'awaiting_inspection':
+                    return {
+                        label: 'En attente d’inspection',
+                        classes: 'bg-teal-100 text-teal-700 border-teal-300',
+                        icon: ShieldCheck,
+                        iconClass: 'text-teal-600',
+                    };
                 case 'inspected':
                     return {
                         label: 'Inspectée',
-                        classes: 'bg-sky-100 text-sky-700 border-sky-300',
+                        classes: 'bg-emerald-100 text-emerald-700 border-emerald-300',
                         icon: ShieldCheck,
-                        iconClass: 'text-sky-600',
+                        iconClass: 'text-emerald-600',
                     };
                 case 'dirty':
                     return {
                         label: 'Sale',
+                        classes: 'bg-gray-100 text-gray-700 border-gray-300',
+                        icon: AlertTriangle,
+                        iconClass: 'text-gray-600',
+                    };
+                case 'redo':
+                    return {
+                        label: 'À refaire',
+                        classes: 'bg-rose-100 text-rose-700 border-rose-300',
+                        icon: AlertTriangle,
+                        iconClass: 'text-rose-600',
+                    };
+                default:
+                    return {
+                        label: room.hk_status ?? '—',
+                        classes: 'bg-gray-100 text-gray-600 border-gray-300',
+                        icon: null,
+                        iconClass: '',
+                    };
+            }
+        },
+        priorityBadge(priority) {
+            switch (priority) {
+                case 'urgent':
+                    return {
+                        label: 'Urgent',
+                        classes: 'bg-rose-100 text-rose-700 border-rose-300',
+                        icon: AlertTriangle,
+                        iconClass: 'text-rose-600',
+                    };
+                case 'high':
+                    return {
+                        label: 'Haute',
                         classes: 'bg-amber-100 text-amber-700 border-amber-300',
                         icon: AlertTriangle,
                         iconClass: 'text-amber-600',
                     };
-                case 'clean':
+                case 'normal':
+                    return {
+                        label: 'Normale',
+                        classes: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+                        icon: CheckCircle,
+                        iconClass: 'text-indigo-600',
+                    };
+                case 'low':
+                    return {
+                        label: 'Basse',
+                        classes: 'bg-gray-100 text-gray-600 border-gray-300',
+                        icon: ShieldCheck,
+                        iconClass: 'text-gray-500',
+                    };
                 default:
                     return {
-                        label: 'Propre',
-                        classes: 'bg-emerald-100 text-emerald-700 border-emerald-300',
-                        icon: CheckCircle,
-                        iconClass: 'text-emerald-600',
+                        label: priority ?? '—',
+                        classes: 'bg-gray-100 text-gray-600 border-gray-300',
+                        icon: null,
+                        iconClass: '',
                     };
             }
         },
@@ -3326,6 +3495,26 @@ export default {
                 case 'medium':
                 default:
                     return 'Gravité moyenne';
+            }
+        },
+        inspectionOutcomeLabel(outcome) {
+            switch (outcome) {
+                case 'passed':
+                    return 'Validée';
+                case 'failed':
+                    return 'À refaire';
+                default:
+                    return 'Inconnue';
+            }
+        },
+        inspectionOutcomeClasses(outcome) {
+            switch (outcome) {
+                case 'passed':
+                    return 'bg-emerald-100 text-emerald-700';
+                case 'failed':
+                    return 'bg-rose-100 text-rose-700';
+                default:
+                    return 'bg-gray-100 text-gray-600';
             }
         },
         maintenanceStatusLabel(status) {
@@ -3399,10 +3588,10 @@ export default {
             if (action === 'check_in') {
                 const hkStatus = this.getReservationHkStatus(reservation.id);
 
-                if (hkStatus && !['clean', 'inspected'].includes(hkStatus)) {
+                if (hkStatus && hkStatus !== 'inspected') {
                     const warning = await Swal.fire({
                         title: 'Chambre non prête',
-                        text: 'Cette chambre est signalée comme sale ou à inspecter. Voulez-vous continuer le check-in ?',
+                        text: 'Cette chambre n’est pas inspectée. Voulez-vous continuer le check-in ?',
                         icon: 'warning',
                         showCancelButton: true,
                         confirmButtonText: 'Oui',

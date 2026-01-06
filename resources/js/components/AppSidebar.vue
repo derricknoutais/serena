@@ -76,6 +76,11 @@ const baseRessourcesNavItems: (NavItem & { requiredPermission?: string })[] = [
         requiredPermission: 'rooms_view',
     },
     {
+        title: 'Checklists HK',
+        href: '/ressources/housekeeping-checklists',
+        icon: Activity,
+    },
+    {
         title: 'Offres',
         href: '/ressources/offers',
         icon: Sparkles,

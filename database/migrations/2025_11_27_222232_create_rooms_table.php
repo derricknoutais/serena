@@ -19,7 +19,7 @@ return new class extends Migration
             $table->string('number');
             $table->string('floor')->nullable();
             $table->string('status');
-            $table->string('hk_status')->default('clean');
+            $table->string('hk_status')->default('inspected');
             $table->timestamps();
 
             $table->unique(['tenant_id', 'hotel_id', 'number']);

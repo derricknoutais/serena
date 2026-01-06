@@ -54,7 +54,7 @@ test('updates housekeeping status and notifies recipients', function (): void {
         'number' => '101',
         'floor' => '1',
         'status' => Room::STATUS_AVAILABLE,
-        'hk_status' => 'clean',
+        'hk_status' => Room::HK_STATUS_DIRTY,
     ]);
 
     $user = User::factory()->create([
@@ -68,11 +68,11 @@ test('updates housekeeping status and notifies recipients', function (): void {
         $tenant->domains()->value('domain'),
         $room->id,
     ), [
-        'hk_status' => 'dirty',
+        'hk_status' => 'cleaning',
     ]);
 
     $response->assertOk();
-    expect($room->refresh()->hk_status)->toBe('dirty');
+    expect($room->refresh()->hk_status)->toBe(Room::HK_STATUS_CLEANING);
 
     Notification::assertSentTo($user, \App\Notifications\AppNotification::class);
 });

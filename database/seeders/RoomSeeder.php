@@ -29,7 +29,7 @@ class RoomSeeder extends Seeder
                         ],
                         [
                             'status' => 'active',
-                            'hk_status' => 'clean',
+                            'hk_status' => Room::HK_STATUS_INSPECTED,
                             'floor' => null,
                         ],
                     );

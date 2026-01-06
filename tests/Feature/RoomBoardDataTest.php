@@ -2,6 +2,10 @@
 
 use App\Models\Guest;
 use App\Models\Hotel;
+use App\Models\HousekeepingChecklist;
+use App\Models\HousekeepingChecklistItem;
+use App\Models\HousekeepingTask;
+use App\Models\HousekeepingTaskChecklistItem;
 use App\Models\Offer;
 use App\Models\Reservation;
 use App\Models\Room;
@@ -91,7 +95,7 @@ it('reflects occupied room status from database', function (): void {
         'number' => '101',
         'floor' => '1',
         'status' => Room::STATUS_OCCUPIED,
-        'hk_status' => 'clean',
+        'hk_status' => Room::HK_STATUS_INSPECTED,
     ]);
 
     $request = Request::create('/frontdesk/dashboard', 'GET', [
@@ -120,7 +124,7 @@ it('marks inactive rooms as inactive in room board', function (): void {
         'number' => '102',
         'floor' => '1',
         'status' => 'inactive',
-        'hk_status' => 'clean',
+        'hk_status' => Room::HK_STATUS_INSPECTED,
     ]);
 
     $request = Request::create('/frontdesk/dashboard', 'GET', [
@@ -149,7 +153,7 @@ it('includes current reservation details for occupied rooms', function (): void 
         'number' => '103',
         'floor' => '1',
         'status' => Room::STATUS_OCCUPIED,
-        'hk_status' => 'clean',
+        'hk_status' => Room::HK_STATUS_INSPECTED,
     ]);
 
     $guest = Guest::query()->create([
@@ -257,6 +261,76 @@ it('shows in-house reservations even after the checkout date', function (): void
 
     expect($payload['current_reservation'])->not->toBeNull();
     expect($payload['current_reservation']['is_overstay'])->toBeTrue();
+});
+
+it('includes failed inspection remarks in room board data', function (): void {
+    [
+        'hotel' => $hotel,
+        'roomType' => $roomType,
+        'user' => $user,
+    ] = setupRoomBoardTenant();
+
+    $room = Room::query()->create([
+        'tenant_id' => $user->tenant_id,
+        'hotel_id' => $hotel->id,
+        'room_type_id' => $roomType->id,
+        'number' => '201',
+        'floor' => '2',
+        'status' => Room::STATUS_AVAILABLE,
+        'hk_status' => Room::HK_STATUS_REDO,
+    ]);
+
+    $checklist = HousekeepingChecklist::query()->create([
+        'tenant_id' => $user->tenant_id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Checklist Standard',
+        'scope' => HousekeepingChecklist::SCOPE_GLOBAL,
+        'is_active' => true,
+    ]);
+
+    $item = HousekeepingChecklistItem::query()->create([
+        'checklist_id' => $checklist->id,
+        'label' => 'Salle de bain',
+        'sort_order' => 1,
+        'is_required' => true,
+        'is_active' => true,
+    ]);
+
+    $inspection = HousekeepingTask::query()->create([
+        'tenant_id' => $user->tenant_id,
+        'hotel_id' => $hotel->id,
+        'room_id' => $room->id,
+        'type' => HousekeepingTask::TYPE_INSPECTION,
+        'status' => HousekeepingTask::STATUS_DONE,
+        'priority' => HousekeepingTask::PRIORITY_NORMAL,
+        'created_from' => HousekeepingTask::SOURCE_CHECKOUT,
+        'ended_at' => now(),
+        'outcome' => HousekeepingTask::OUTCOME_FAILED,
+    ]);
+
+    HousekeepingTaskChecklistItem::query()->create([
+        'task_id' => $inspection->id,
+        'checklist_item_id' => $item->id,
+        'is_ok' => false,
+        'note' => 'Serviettes manquantes',
+    ]);
+
+    $request = Request::create('/frontdesk/dashboard', 'GET', [
+        'date' => now()->toDateString(),
+    ]);
+    $request->setUserResolver(fn () => $user);
+
+    $data = RoomBoardData::build($request);
+    $rooms = collect($data['roomsByFloor'])->flatten(1);
+    $payload = $rooms->firstWhere('id', $room->id);
+
+    expect($payload['last_inspection']['outcome'])->toBe(HousekeepingTask::OUTCOME_FAILED);
+    expect($payload['last_inspection']['remarks'])->toBe([
+        [
+            'label' => 'Salle de bain',
+            'note' => 'Serviettes manquantes',
+        ],
+    ]);
 });
 
 it('exposes offer time config for room board summary calculations', function (): void {

@@ -68,7 +68,7 @@ if (! function_exists('setupReservationEnvironment')) {
             'number' => sprintf('RM-%s', Str::upper(Str::random(4))),
             'floor' => '1',
             'status' => 'active',
-            'hk_status' => 'clean',
+            'hk_status' => Room::HK_STATUS_INSPECTED,
         ]);
 
         $guest = Guest::query()->create([

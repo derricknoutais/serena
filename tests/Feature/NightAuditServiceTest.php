@@ -23,7 +23,7 @@ it('returns empty values when no data exists for the business date', function ()
         'hotel_id' => $hotel->id,
         'number' => '101',
         'status' => 'active',
-        'hk_status' => 'clean',
+        'hk_status' => Room::HK_STATUS_INSPECTED,
     ]);
 
     Room::query()->create([
@@ -31,7 +31,7 @@ it('returns empty values when no data exists for the business date', function ()
         'hotel_id' => $hotel->id,
         'number' => '102',
         'status' => 'active',
-        'hk_status' => 'clean',
+        'hk_status' => Room::HK_STATUS_INSPECTED,
     ]);
 
     $service = app(NightAuditService::class);

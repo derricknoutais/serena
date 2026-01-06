@@ -20,6 +20,7 @@ class UserSeeder extends Seeder
         $roleMap = collect([
             'owner',
             'manager',
+            'supervisor',
             'receptionist',
             'housekeeping',
             'accountant',
@@ -39,6 +40,10 @@ class UserSeeder extends Seeder
                 'manager' => [
                     'name' => "{$tenant->name} Manager",
                     'email' => "manager+{$tenant->slug}@example.com",
+                ],
+                'supervisor' => [
+                    'name' => "{$tenant->name} Supervisor",
+                    'email' => "supervisor+{$tenant->slug}@example.com",
                 ],
                 'receptionist' => [
                     'name' => "{$tenant->name} Receptionist",

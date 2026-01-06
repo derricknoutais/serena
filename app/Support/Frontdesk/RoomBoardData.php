@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Support\Frontdesk;
 
 use App\Models\Guest;
+use App\Models\HousekeepingTask;
+use App\Models\HousekeepingTaskChecklistItem;
 use App\Models\MaintenanceTicket;
 use App\Models\Offer;
 use App\Models\OfferRoomTypePrice;
@@ -12,6 +14,7 @@ use App\Models\PaymentMethod;
 use App\Models\Reservation;
 use App\Models\Room;
 use App\Models\RoomType;
+use App\Services\HousekeepingPriorityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -30,6 +33,8 @@ class RoomBoardData
             abort(404, 'Aucun hôtel actif sélectionné.');
         }
 
+        app(HousekeepingPriorityService::class)->syncHotelTasks($tenantId, $hotelId);
+
         $dateParam = $request->query('date');
         $date = $dateParam ? Carbon::parse((string) $dateParam)->startOfDay() : now()->startOfDay();
         $dateString = $date->toDateString();
@@ -37,10 +42,52 @@ class RoomBoardData
         $rooms = Room::query()
             ->where('tenant_id', $tenantId)
             ->where('hotel_id', $hotelId)
-            ->with('roomType')
+            ->with(['roomType', 'hotel:id,timezone'])
             ->orderBy('floor')
             ->orderBy('number')
             ->get();
+
+        $inspectionTasks = HousekeepingTask::query()
+            ->where('tenant_id', $tenantId)
+            ->where('hotel_id', $hotelId)
+            ->where('type', HousekeepingTask::TYPE_INSPECTION)
+            ->where('status', HousekeepingTask::STATUS_DONE)
+            ->whereIn('room_id', $rooms->pluck('id'))
+            ->orderByDesc('ended_at')
+            ->orderByDesc('id')
+            ->get()
+            ->groupBy('room_id')
+            ->map(fn ($tasks) => $tasks->first());
+
+        $failedInspectionIds = $inspectionTasks
+            ->filter(fn (HousekeepingTask $task): bool => $task->outcome === HousekeepingTask::OUTCOME_FAILED)
+            ->map(fn (HousekeepingTask $task): int|string => $task->id)
+            ->values()
+            ->all();
+
+        $failedInspectionRemarks = HousekeepingTaskChecklistItem::query()
+            ->when($failedInspectionIds === [], fn ($query) => $query->whereRaw('1 = 0'))
+            ->whereIn('task_id', $failedInspectionIds)
+            ->with('checklistItem:id,label')
+            ->get()
+            ->groupBy('task_id');
+
+        $openTasks = HousekeepingTask::query()
+            ->where('tenant_id', $tenantId)
+            ->where('hotel_id', $hotelId)
+            ->whereIn('room_id', $rooms->pluck('id'))
+            ->whereIn('status', [
+                HousekeepingTask::STATUS_PENDING,
+                HousekeepingTask::STATUS_IN_PROGRESS,
+            ])
+            ->orderByRaw("case status when 'in_progress' then 0 else 1 end")
+            ->orderByRaw("case type when 'inspection' then 0 else 1 end")
+            ->orderByDesc('created_at')
+            ->get()
+            ->groupBy('room_id')
+            ->map(fn ($tasks) => $tasks->first());
+
+        $priorityService = app(HousekeepingPriorityService::class);
 
         $activeTickets = MaintenanceTicket::query()
             ->where('tenant_id', $tenantId)
@@ -65,7 +112,15 @@ class RoomBoardData
             ->get()
             ->groupBy('room_id');
 
-        $roomsData = $rooms->map(function (Room $room) use ($reservations, $dateString, $activeTickets): array {
+        $roomsData = $rooms->map(function (Room $room) use (
+            $reservations,
+            $dateString,
+            $activeTickets,
+            $inspectionTasks,
+            $failedInspectionRemarks,
+            $openTasks,
+            $priorityService
+        ): array {
             /** @var Collection<int, Reservation> $roomReservations */
             $roomReservations = $reservations->get($room->id, collect());
 
@@ -84,6 +139,19 @@ class RoomBoardData
                 fn (Reservation $reservation): bool => $reservation->status === Reservation::STATUS_IN_HOUSE
                     && $reservation->check_out_date?->toDateString() === $dateString,
             );
+
+            $arrivalToday = $arrivalReservation !== null;
+            $openTask = $openTasks->get($room->id);
+
+            if ($openTask) {
+                $openTask->setRelation('room', $room);
+            }
+
+            $hkPriority = $openTask
+                ? $priorityService->computePriorityForTask($openTask, $arrivalToday)
+                : $priorityService->computePriorityForRoom($room, $arrivalToday);
+
+            $hkSort = self::hkSortWeight($room->hk_status, $arrivalToday);
 
             $uiStatus = 'available';
             $currentReservation = null;
@@ -145,7 +213,23 @@ class RoomBoardData
             $activeTicket = $roomTickets->first();
             $isSellable = $blockingTickets->isEmpty()
                 && ! $room->block_sale_after_checkout
+                && $room->hk_status === Room::HK_STATUS_INSPECTED
                 && ! in_array($room->status, [Room::STATUS_OUT_OF_ORDER, 'inactive'], true);
+
+            $lastInspectionTask = $inspectionTasks->get($room->id);
+            $inspectionRemarks = null;
+
+            if ($lastInspectionTask && $lastInspectionTask->outcome === HousekeepingTask::OUTCOME_FAILED) {
+                $inspectionRemarks = $failedInspectionRemarks
+                    ->get($lastInspectionTask->id, collect())
+                    ->filter(fn ($item): bool => ! $item->is_ok && (string) $item->note !== '')
+                    ->map(fn ($item): array => [
+                        'label' => $item->checklistItem?->label,
+                        'note' => $item->note,
+                    ])
+                    ->values()
+                    ->all();
+            }
 
             return [
                 'id' => $room->id,
@@ -154,9 +238,17 @@ class RoomBoardData
                 'room_type_name' => $room->roomType?->name,
                 'status' => $room->status,
                 'hk_status' => $room->hk_status,
+                'hk_priority' => $hkPriority,
+                'arrival_today' => $arrivalToday,
+                'hk_sort' => $hkSort,
                 'ui_status' => $uiStatus,
                 'is_occupied' => $isOccupied,
                 'is_sellable' => $isSellable,
+                'last_inspection' => $lastInspectionTask ? [
+                    'outcome' => $lastInspectionTask->outcome,
+                    'ended_at' => self::formatDateTimeLocal($lastInspectionTask->ended_at),
+                    'remarks' => $inspectionRemarks,
+                ] : null,
                 'block_sale_after_checkout' => (bool) $room->block_sale_after_checkout,
                 'maintenance_open_count' => $roomTickets->count(),
                 'maintenance_blocking_count' => $blockingTickets->count(),
@@ -191,6 +283,14 @@ class RoomBoardData
         $roomsByFloor = $roomsData
             ->groupBy('floor')
             ->sortKeys()
+            ->map(function (Collection $rooms): Collection {
+                return $rooms
+                    ->sortBy([
+                        fn (array $room): int => (int) ($room['hk_sort'] ?? 99),
+                        fn (array $room): string => (string) ($room['number'] ?? ''),
+                    ])
+                    ->values();
+            })
             ->values();
 
         $walkInRoomId = (string) $request->query('room_id', '');
@@ -315,6 +415,18 @@ class RoomBoardData
             'guests' => $guests,
             'paymentMethods' => $paymentMethods,
         ];
+    }
+
+    private static function hkSortWeight(?string $status, bool $arrivalToday): int
+    {
+        return match ($status) {
+            Room::HK_STATUS_REDO => 1,
+            Room::HK_STATUS_AWAITING_INSPECTION => $arrivalToday ? 2 : 5,
+            Room::HK_STATUS_DIRTY => $arrivalToday ? 3 : 4,
+            Room::HK_STATUS_CLEANING => 6,
+            Room::HK_STATUS_INSPECTED => 7,
+            default => 99,
+        };
     }
 
     private static function formatDateTimeLocal(?Carbon $value): ?string

@@ -9,6 +9,7 @@ use App\Models\OfferRoomTypePrice;
 use App\Models\Reservation;
 use App\Models\Room;
 use App\Services\FolioBillingService;
+use App\Services\HousekeepingPriorityService;
 use App\Services\ReservationAvailabilityService;
 use App\Services\ReservationConflictService;
 use App\Services\RoomStateMachine;
@@ -26,6 +27,7 @@ class ReservationStayController extends Controller
         private readonly FolioBillingService $billingService,
         private readonly RoomStateMachine $roomStateMachine,
         private readonly ReservationConflictService $conflictService,
+        private readonly HousekeepingPriorityService $priorityService,
     ) {}
 
     public function updateDates(Request $request, Reservation $reservation): JsonResponse
@@ -177,6 +179,13 @@ class ReservationStayController extends Controller
                 ]);
             }
 
+            if ($reservation->room_id) {
+                $reservation->loadMissing('room');
+                if ($reservation->room) {
+                    $this->priorityService->syncRoomTasks($reservation->room, $request->user());
+                }
+            }
+
             return response()->json([
                 'reservation' => $reservation->fresh(['room']),
                 'base_amount' => $oldBaseAmount,
@@ -257,6 +266,13 @@ class ReservationStayController extends Controller
                     'new_check_out' => $newCheckOut->toDateString(),
                 ],
             ]);
+        }
+
+        if ($reservation->room_id) {
+            $reservation->loadMissing('room');
+            if ($reservation->room) {
+                $this->priorityService->syncRoomTasks($reservation->room, $request->user());
+            }
         }
 
         return response()->json([
@@ -366,6 +382,15 @@ class ReservationStayController extends Controller
 
         if (abs($delta) >= 0.01) {
             $this->billingService->addStayAdjustment($reservation, $delta, 'Changement de chambre');
+        }
+
+        if ($previousRoom) {
+            $this->priorityService->syncRoomTasks($previousRoom, $request->user());
+        }
+
+        $reservation->loadMissing('room');
+        if ($reservation->room) {
+            $this->priorityService->syncRoomTasks($reservation->room, $request->user());
         }
 
         return response()->json([

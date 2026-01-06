@@ -196,10 +196,10 @@ export default {
                 const reservation = this.findReservation(reservationId);
                 const hkStatus = reservation?.room?.hk_status ?? null;
 
-                if (hkStatus && !['clean', 'inspected'].includes(hkStatus)) {
+                if (hkStatus && hkStatus !== 'inspected') {
                     const warning = await Swal.fire({
                         title: 'Chambre non prête',
-                        text: 'Cette chambre est marquée comme sale ou à inspecter. Voulez-vous quand même effectuer le check-in ?',
+                        text: 'Cette chambre n’est pas inspectée. Voulez-vous quand même effectuer le check-in ?',
                         icon: 'warning',
                         showCancelButton: true,
                         confirmButtonText: 'Oui',
@@ -363,18 +363,32 @@ export default {
                 case 'dirty':
                     return {
                         label: 'Sale',
-                        classes: 'border border-amber-300 bg-amber-50 text-amber-700',
+                        classes: 'border border-gray-300 bg-gray-50 text-gray-700',
+                    };
+                case 'cleaning':
+                    return {
+                        label: 'En cours',
+                        classes: 'border border-blue-300 bg-blue-50 text-blue-700',
+                    };
+                case 'awaiting_inspection':
+                    return {
+                        label: 'En attente d’inspection',
+                        classes: 'border border-teal-300 bg-teal-50 text-teal-700',
                     };
                 case 'inspected':
                     return {
                         label: 'Inspectée',
-                        classes: 'border border-green-300 bg-green-50 text-green-700',
+                        classes: 'border border-emerald-300 bg-emerald-50 text-emerald-700',
                     };
-                case 'clean':
+                case 'redo':
+                    return {
+                        label: 'À refaire',
+                        classes: 'border border-rose-300 bg-rose-50 text-rose-700',
+                    };
                 default:
                     return {
-                        label: 'Propre',
-                        classes: 'border border-blue-300 bg-blue-50 text-blue-700',
+                        label: status ?? '—',
+                        classes: 'border border-gray-200 bg-gray-50 text-gray-600',
                     };
             }
         },

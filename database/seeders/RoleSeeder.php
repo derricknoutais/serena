@@ -17,6 +17,7 @@ class RoleSeeder extends Seeder
         foreach ([
             'owner',
             'manager',
+            'supervisor',
             'receptionist',
             'housekeeping',
             'accountant',

@@ -53,7 +53,7 @@ beforeEach(function (): void {
         'number' => '101',
         'floor' => '1',
         'status' => 'active',
-        'hk_status' => 'clean',
+        'hk_status' => Room::HK_STATUS_INSPECTED,
     ]);
 
     $this->guest = Guest::query()->create([
@@ -309,7 +309,7 @@ it('soft deletes stay items and recreates segments on room change', function ():
         'number' => '201',
         'floor' => '2',
         'status' => 'active',
-        'hk_status' => 'clean',
+        'hk_status' => Room::HK_STATUS_INSPECTED,
     ]);
 
     $pivot = Carbon::parse('2025-05-03 00:00:00');
@@ -353,7 +353,7 @@ it('does not allow stay item soft deletes once an invoice is issued', function (
         'number' => '202',
         'floor' => '2',
         'status' => 'active',
-        'hk_status' => 'clean',
+        'hk_status' => Room::HK_STATUS_INSPECTED,
     ]);
 
     $service->resegmentStayForRoomChange(

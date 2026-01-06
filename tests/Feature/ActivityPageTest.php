@@ -115,7 +115,7 @@ test('activity page shows readable names for related ids', function (): void {
         'number' => '201',
         'floor' => '2',
         'status' => 'active',
-        'hk_status' => 'clean',
+        'hk_status' => Room::HK_STATUS_INSPECTED,
     ]);
 
     $guest = Guest::query()->create([

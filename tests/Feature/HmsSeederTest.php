@@ -16,7 +16,7 @@ it('seeds tenants, roles, and users for the HMS', function () {
 
     $guardName = config('auth.defaults.guard', 'web');
 
-    $expectedRoles = ['owner', 'manager', 'receptionist', 'housekeeping', 'accountant'];
+    $expectedRoles = ['owner', 'manager', 'supervisor', 'receptionist', 'housekeeping', 'accountant'];
 
     $roleNames = Role::query()
         ->whereIn('name', $expectedRoles)

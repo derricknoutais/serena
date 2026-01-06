@@ -29,6 +29,8 @@
 </template>
 
 <script>
+import jsQR from 'jsqr';
+
 export default {
     name: 'QrScanner',
     emits: ['close', 'detected'],
@@ -38,6 +40,7 @@ export default {
             animationFrame: null,
             error: '',
             stream: null,
+            useJsQr: false,
         };
     },
     mounted() {
@@ -48,20 +51,17 @@ export default {
     },
     methods: {
         async initScanner() {
-            if (!('BarcodeDetector' in window)) {
-                this.error = 'Le scanner n’est pas supporté sur ce navigateur.';
+            this.useJsQr = !('BarcodeDetector' in window);
 
-                return;
-            }
-
-            try {
-                this.detector = new window.BarcodeDetector({
-                    formats: ['qr_code'],
-                });
-            } catch (error) {
-                this.error = 'Impossible de démarrer le scanner.';
-
-                return;
+            if (!this.useJsQr) {
+                try {
+                    this.detector = new window.BarcodeDetector({
+                        formats: ['qr_code'],
+                    });
+                } catch (error) {
+                    this.useJsQr = true;
+                    this.detector = null;
+                }
             }
 
             try {
@@ -76,7 +76,7 @@ export default {
             }
         },
         async scanFrame() {
-            if (!this.detector || !this.$refs.video) {
+            if ((!this.detector && !this.useJsQr) || !this.$refs.video) {
                 return;
             }
 
@@ -95,13 +95,25 @@ export default {
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
             try {
-                const barcodes = await this.detector.detect(canvas);
-                if (barcodes.length) {
-                    const value = barcodes[0].rawValue || '';
-                    this.$emit('detected', value);
-                    this.stopScanner(false);
+                if (this.useJsQr) {
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const result = jsQR(imageData.data, imageData.width, imageData.height);
 
-                    return;
+                    if (result?.data) {
+                        this.$emit('detected', result.data);
+                        this.stopScanner(false);
+
+                        return;
+                    }
+                } else if (this.detector) {
+                    const barcodes = await this.detector.detect(canvas);
+                    if (barcodes.length) {
+                        const value = barcodes[0].rawValue || '';
+                        this.$emit('detected', value);
+                        this.stopScanner(false);
+
+                        return;
+                    }
                 }
             } catch (error) {
                 // Ignore detection errors and continue scanning.

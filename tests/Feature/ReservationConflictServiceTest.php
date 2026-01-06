@@ -17,7 +17,7 @@ function makeRoom(int $hotelId, string $tenantId, string $number, int $roomTypeI
         'number' => $number,
         'room_type_id' => $roomTypeId,
         'status' => 'active',
-        'hk_status' => 'clean',
+        'hk_status' => Room::HK_STATUS_INSPECTED,
     ]);
 }
 

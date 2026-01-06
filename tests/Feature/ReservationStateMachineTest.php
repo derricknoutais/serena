@@ -56,7 +56,7 @@ it('releases the room on check out', function (): void {
     expect($fresh->status)->toBe(Reservation::STATUS_CHECKED_OUT)
         ->and($fresh->actual_check_out_at)->not->toBeNull()
         ->and($fresh->room?->status)->toBe(Room::STATUS_AVAILABLE)
-        ->and($fresh->room?->hk_status)->toBe('dirty');
+        ->and($fresh->room?->hk_status)->toBe(Room::HK_STATUS_DIRTY);
 });
 
 it('marks rooms out of order after checkout when blocking maintenance is open', function (): void {
@@ -90,7 +90,7 @@ it('marks rooms out of order after checkout when blocking maintenance is open', 
 
     expect($fresh->status)->toBe(Reservation::STATUS_CHECKED_OUT)
         ->and($fresh->room?->status)->toBe(Room::STATUS_OUT_OF_ORDER)
-        ->and($fresh->room?->hk_status)->toBe('dirty');
+        ->and($fresh->room?->hk_status)->toBe(Room::HK_STATUS_DIRTY);
 });
 
 it('rejects invalid transitions', function (): void {

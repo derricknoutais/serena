@@ -7,6 +7,7 @@ use App\Http\Requests\UpdateMaintenanceTicketRequest;
 use App\Models\MaintenanceTicket;
 use App\Models\Room;
 use App\Models\User;
+use App\Services\HousekeepingService;
 use App\Services\RoomStateMachine;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,7 +16,10 @@ use Inertia\Response;
 
 class MaintenanceTicketController extends Controller
 {
-    public function __construct(private readonly RoomStateMachine $roomStateMachine) {}
+    public function __construct(
+        private readonly RoomStateMachine $roomStateMachine,
+        private readonly HousekeepingService $housekeepingService,
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -262,7 +266,7 @@ class MaintenanceTicketController extends Controller
 
             if ($room->status === Room::STATUS_OUT_OF_ORDER && $request->boolean('restore_room_status')) {
                 $this->roomStateMachine->markAvailable($room);
-                $room->hk_status = 'dirty';
+                $this->housekeepingService->forceRoomStatus($room, Room::HK_STATUS_DIRTY, $user);
             }
 
             $room->save();
