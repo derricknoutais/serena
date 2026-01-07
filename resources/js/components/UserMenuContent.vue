@@ -10,7 +10,7 @@ import { logout } from '@/routes';
 import { edit } from '@/routes/profile/index';
 import type { User } from '@/types';
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { Hotel, LogOut, Settings } from 'lucide-vue-next';
+import { Hotel, LogOut, Settings, Users } from 'lucide-vue-next';
 import { computed, onMounted, ref, watch } from 'vue';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
@@ -132,6 +132,13 @@ onMounted(() => {
     <div v-if="hotelNotice" class="px-3 pb-2 text-xs text-indigo-700">
         {{ hotelNotice }}
     </div>
+    <DropdownMenuSeparator />
+    <DropdownMenuItem :as-child="true">
+        <Link class="block w-full" href="/switch-user" prefetch as="button">
+            <Users class="mr-2 h-4 w-4" />
+            Changer d'utilisateur
+        </Link>
+    </DropdownMenuItem>
     <DropdownMenuSeparator />
     <DropdownMenuItem :as-child="true">
         <Link

@@ -2,10 +2,8 @@
 import Heading from '@/components/Heading.vue';
 import { Separator } from '@/components/ui/separator';
 import { toUrl, urlIsActive } from '@/lib/utils';
-import { edit as editAppearance } from '@/routes/appearance';
 import { edit as editProfile } from '@/routes/profile';
 import { index as rolesIndex } from '@/routes/settings/roles';
-import { show } from '@/routes/two-factor';
 import { edit as editPassword } from '@/routes/user-password';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
@@ -15,7 +13,10 @@ import type { AppPageProps } from '@/types';
 const page = usePage<AppPageProps>();
 
 const canManageRoles = computed(() =>
-    (page.props.auth.user?.roles ?? []).some((role) => ['owner', 'admin'].includes(role.name)),
+    (page.props.auth.user?.roles ?? []).some((role) => ['owner', 'admin', 'superadmin'].includes(role.name)),
+);
+const canManageBadges = computed(() =>
+    (page.props.auth.user?.roles ?? []).some((role) => ['owner', 'manager', 'admin', 'superadmin'].includes(role.name)),
 );
 
 const sidebarNavItems = computed<NavItem[]>(() => [
@@ -40,6 +41,14 @@ const sidebarNavItems = computed<NavItem[]>(() => [
             {
                 title: 'Rôles & permissions',
                 href: rolesIndex().url,
+            } satisfies NavItem,
+        ]
+        : []),
+    ...(canManageBadges.value
+        ? [
+            {
+                title: 'Badges & QR',
+                href: '/settings/badges',
             } satisfies NavItem,
         ]
         : []),

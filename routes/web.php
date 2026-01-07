@@ -3,8 +3,10 @@
 use App\Http\Controllers\Activity\ActivityController;
 use App\Http\Controllers\Api\ActivityFeedController;
 use App\Http\Controllers\Api\OfferTimeController;
+use App\Http\Controllers\Auth\BadgeLoginController;
 use App\Http\Controllers\Auth\CheckEmailAvailabilityController;
 use App\Http\Controllers\Auth\CheckTenantSlugController;
+use App\Http\Controllers\Auth\SwitchUserController;
 use App\Http\Controllers\Config\ActiveHotelController;
 use App\Http\Controllers\Config\HotelConfigController;
 use App\Http\Controllers\Config\HousekeepingChecklistController;
@@ -74,6 +76,10 @@ Route::middleware([
 
     Route::post('/invitations/accept', [AcceptInvitationController::class, 'store'])->name('invitations.accept.store');
 
+    Route::post('/login/badge', [BadgeLoginController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('login.badge');
+
     Route::middleware('auth')->group(function () {
         Route::get('/dashboard', function () {
             /** @var \App\Models\User $user */
@@ -140,6 +146,16 @@ Route::middleware([
         })
             ->middleware(['auth', 'verified'])
             ->name('dashboard');
+
+        Route::get('/switch-user', [SwitchUserController::class, 'show'])
+            ->name('switch-user.show');
+
+        Route::post('/switch-user', [SwitchUserController::class, 'store'])
+            ->name('switch-user.store');
+
+        Route::post('/switch-user/badge', [SwitchUserController::class, 'storeBadge'])
+            ->middleware('throttle:10,1')
+            ->name('switch-user.badge');
 
         Route::post('/invitations', [InvitationController::class, 'store'])
             ->middleware(['auth', 'verified'])

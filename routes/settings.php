@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Settings\AppearanceController;
+use App\Http\Controllers\Settings\BadgeAccessController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\RolesController;
@@ -29,6 +30,22 @@ Route::middleware(['web', InitializeTenancyByDomain::class, PreventAccessFromCen
     Route::patch('settings/roles/{role}/permissions', [RolesController::class, 'update'])
         ->middleware('role:owner|manager|superadmin')
         ->name('settings.roles.update');
+
+    Route::get('settings/badges', [BadgeAccessController::class, 'index'])
+        ->middleware('role:owner|manager|superadmin')
+        ->name('settings.badges.index');
+
+    Route::post('settings/badges/{user}/code', [BadgeAccessController::class, 'generateCode'])
+        ->middleware('role:owner|manager|superadmin')
+        ->name('settings.badges.code');
+
+    Route::post('settings/badges/{user}/pin', [BadgeAccessController::class, 'updatePin'])
+        ->middleware('role:owner|manager|superadmin')
+        ->name('settings.badges.pin');
+
+    Route::get('settings/badges/{user}/download', [BadgeAccessController::class, 'download'])
+        ->middleware('role:owner|manager|superadmin')
+        ->name('settings.badges.download');
 
     Route::get('settings/appearance', [AppearanceController::class, 'edit'])->name('appearance.edit');
 

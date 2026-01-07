@@ -33,7 +33,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
      *
      * @var list<string>
      */
-    protected $hidden = ['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'];
+    protected $hidden = ['password', 'badge_pin', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'];
 
     /**
      * Get the attributes that should be cast.
@@ -81,7 +81,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
 
     public function canBeImpersonated(): bool
     {
-        return !$this->is_superadmin;
+        return ! $this->is_superadmin;
     }
 
     public function activeCashSession(): \Illuminate\Database\Eloquent\Relations\HasOne
