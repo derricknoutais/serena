@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Frontdesk;
 
 use App\Http\Controllers\Controller;
+use App\Models\CashSession;
 use App\Models\Guest;
 use App\Models\Offer;
 use App\Models\OfferRoomTypePrice;
@@ -195,24 +196,20 @@ class RoomBoardWalkInController extends Controller
                     ]);
                 }
 
-                $cashSessionId = null;
+                $activeSession = CashSession::query()
+                    ->where('tenant_id', $tenantId)
+                    ->where('hotel_id', $hotelId)
+                    ->where('type', 'frontdesk')
+                    ->where('status', 'open')
+                    ->first();
 
-                if ($paymentMethod->type === 'cash') {
-                    $activeSession = \App\Models\CashSession::query()
-                        ->where('tenant_id', $tenantId)
-                        ->where('hotel_id', $hotelId)
-                        ->where('type', 'frontdesk')
-                        ->where('status', 'open')
-                        ->first();
-
-                    if (! $activeSession) {
-                        throw ValidationException::withMessages([
-                            'amount_received' => 'Aucune caisse réception ouverte. Veuillez ouvrir une session de caisse.',
-                        ]);
-                    }
-
-                    $cashSessionId = $activeSession->id;
+                if (! $activeSession) {
+                    throw ValidationException::withMessages([
+                        'amount_received' => 'Aucune caisse réception ouverte. Veuillez ouvrir une session de caisse.',
+                    ]);
                 }
+
+                $cashSessionId = $activeSession->id;
 
                 $folio->addPayment([
                     'amount' => $amountReceived,
