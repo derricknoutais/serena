@@ -179,6 +179,8 @@ class ReservationStayController extends Controller
                 ]);
             }
 
+            $this->billingService->syncStayChargeFromReservation($reservation);
+
             if ($reservation->room_id) {
                 $reservation->loadMissing('room');
                 if ($reservation->room) {
@@ -267,6 +269,8 @@ class ReservationStayController extends Controller
                 ],
             ]);
         }
+
+        $this->billingService->syncStayChargeFromReservation($reservation);
 
         if ($reservation->room_id) {
             $reservation->loadMissing('room');
