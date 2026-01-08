@@ -325,14 +325,14 @@
                             </div>
 
                             <div class="mt-2 flex flex-wrap gap-2">
-                                <button
+                                <!-- <button
                                     v-if="canMarkInspected"
                                     type="button"
                                     class="rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100"
                                     @click="updateRoomHkStatus(selectedRoom.id, 'inspected')"
                                 >
                                     Marquer comme inspectée
-                                </button>
+                                </button> -->
 
                                 <button
                                     v-if="canMarkDirty"
@@ -342,7 +342,7 @@
                                 >
                                     Marquer comme sale
                                 </button>
-                                <button
+                                <!-- <button
                                     v-if="canMarkClean"
                                     type="button"
                                     class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
@@ -365,7 +365,7 @@
                                     @click="updateRoomHkStatus(selectedRoom.id, 'redo')"
                                 >
                                     Marquer à refaire
-                                </button>
+                                </button> -->
                             </div>
 
                         </div>

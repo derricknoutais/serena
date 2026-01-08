@@ -158,28 +158,39 @@ class ReservationStayController extends Controller
             if (abs($extensionAmount) >= 0.01) {
                 $description = 'Prolongation de séjour';
                 $offerLabel = $extensionOffer->name ?? 'Séjour';
-                $lineDescription = sprintf(
-                    '%s - %s · Séjour du %s - %s',
+                $lineDescription = $this->formatExtensionLineDescription(
                     $description,
                     $offerLabel,
-                    $currentCheckOut->format('d/m/Y'),
-                    $newCheckOut->format('d/m/Y'),
+                    $currentCheckOut,
+                    $newCheckOut,
                 );
 
-                $this->billingService->addStayAdjustment($reservation, $extensionAmount, $description, [
-                    'line_description' => $lineDescription,
-                    'quantity' => $extensionQuantity,
-                    'unit_price' => $extensionUnitPrice,
-                    'meta' => [
-                        'previous_check_out' => $currentCheckOut->toDateString(),
-                        'new_check_out' => $newCheckOut->toDateString(),
+                $this->billingService->addStayExtensionItem(
+                    $reservation,
+                    $extensionAmount,
+                    $currentCheckOut,
+                    $newCheckOut,
+                    [
+                        'description' => $description,
+                        'line_description' => $lineDescription,
+                        'quantity' => $extensionQuantity,
+                        'unit_price' => $extensionUnitPrice,
                         'offer_id' => $extensionOffer->id,
                         'offer_name' => $extensionOffer->name,
+                        'offer_kind' => $extensionOffer->kind,
+                        'meta' => [
+                            'previous_check_out' => $currentCheckOut->toDateString(),
+                            'new_check_out' => $newCheckOut->toDateString(),
+                            'type_of_offer' => $extensionOffer->kind,
+                            'period' => sprintf(
+                                '%s - %s',
+                                $currentCheckOut->toDateString(),
+                                $newCheckOut->toDateString(),
+                            ),
+                        ],
                     ],
-                ]);
+                );
             }
-
-            $this->billingService->syncStayChargeFromReservation($reservation);
 
             if ($reservation->room_id) {
                 $reservation->loadMissing('room');
@@ -251,26 +262,64 @@ class ReservationStayController extends Controller
         if (abs($delta) >= 0.01) {
             $description = $action === 'extend' ? 'Prolongation de séjour' : 'Réduction de séjour';
             $offerLabel = $reservation->offer?->name ?? $reservation->offer_name ?? 'Séjour';
-            $lineDescription = sprintf(
-                '%s - %s · Séjour du %s - %s',
-                $description,
-                $offerLabel,
-                $currentCheckOut->format('d/m/Y'),
-                $newCheckOut->format('d/m/Y'),
-            );
 
-            $this->billingService->addStayAdjustment($reservation, $delta, $description, [
-                'line_description' => $lineDescription,
-                'quantity' => abs($quantityDelta),
-                'unit_price' => $unitPrice * ($quantityDelta >= 0 ? 1 : -1),
-                'meta' => [
-                    'previous_check_out' => $currentCheckOut->toDateString(),
-                    'new_check_out' => $newCheckOut->toDateString(),
-                ],
-            ]);
+            if ($action === 'extend') {
+                $lineDescription = $this->formatExtensionLineDescription(
+                    $description,
+                    $offerLabel,
+                    $currentCheckOut,
+                    $newCheckOut,
+                );
+                $extensionQuantity = $this->calculateStayQuantity(
+                    $currentCheckOut,
+                    $newCheckOut,
+                    $currentOfferKind,
+                    $this->resolveBundleNights($reservation->offer, $currentOfferKind),
+                );
+
+                $this->billingService->addStayExtensionItem(
+                    $reservation,
+                    $delta,
+                    $currentCheckOut,
+                    $newCheckOut,
+                    [
+                        'description' => $description,
+                        'line_description' => $lineDescription,
+                        'quantity' => $extensionQuantity,
+                        'unit_price' => $unitPrice,
+                        'offer_name' => $offerLabel,
+                        'offer_kind' => $currentOfferKind,
+                        'meta' => [
+                            'previous_check_out' => $currentCheckOut->toDateString(),
+                            'new_check_out' => $newCheckOut->toDateString(),
+                            'offer_id' => $reservation->offer_id,
+                        ],
+                    ],
+                );
+            } else {
+                $lineDescription = sprintf(
+                    '%s - %s · Séjour du %s - %s',
+                    $description,
+                    $offerLabel,
+                    $currentCheckOut->format('d/m/Y'),
+                    $newCheckOut->format('d/m/Y'),
+                );
+
+                $this->billingService->addStayAdjustment($reservation, $delta, $description, [
+                    'line_description' => $lineDescription,
+                    'quantity' => abs($quantityDelta),
+                    'unit_price' => $unitPrice * ($quantityDelta >= 0 ? 1 : -1),
+                    'meta' => [
+                        'previous_check_out' => $currentCheckOut->toDateString(),
+                        'new_check_out' => $newCheckOut->toDateString(),
+                    ],
+                ]);
+            }
         }
 
-        $this->billingService->syncStayChargeFromReservation($reservation);
+        if ($action !== 'extend') {
+            $this->billingService->syncStayChargeFromReservation($reservation);
+        }
 
         if ($reservation->room_id) {
             $reservation->loadMissing('room');
@@ -503,5 +552,20 @@ class ReservationStayController extends Controller
         }
 
         abort(403);
+    }
+
+    private function formatExtensionLineDescription(
+        string $description,
+        string $offerLabel,
+        Carbon $previousCheckOut,
+        Carbon $newCheckOut,
+    ): string {
+        return sprintf(
+            '%s - %s · Séjour du %s - %s',
+            $description,
+            $offerLabel,
+            $previousCheckOut->format('d/m/Y'),
+            $newCheckOut->format('d/m/Y'),
+        );
     }
 }

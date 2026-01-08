@@ -267,6 +267,60 @@ class FolioBillingService
         ]);
     }
 
+    public function addStayExtensionItem(
+        Reservation $reservation,
+        float $amount,
+        Carbon $previousCheckOut,
+        Carbon $newCheckOut,
+        array $context = [],
+    ): ?FolioItem {
+        if (abs($amount) < 0.01) {
+            return null;
+        }
+
+        $folio = $this->ensureMainFolioForReservation($reservation);
+
+        $offerLabel = $context['offer_label']
+            ?? $context['offer_name']
+            ?? $reservation->offer?->name
+            ?? $reservation->offer_name
+            ?? 'Séjour';
+
+        $description = $context['description'] ?? 'Prolongation de séjour';
+        $lineDescription = $context['line_description'] ?? sprintf(
+            '%s - %s · Séjour du %s au %s',
+            $description,
+            $offerLabel,
+            $previousCheckOut->format('d/m/Y'),
+            $newCheckOut->format('d/m/Y'),
+        );
+
+        $quantity = max(1.0, (float) ($context['quantity'] ?? 1));
+        $unitPrice = (float) ($context['unit_price'] ?? ($quantity > 0 ? $amount / $quantity : $amount));
+
+        $meta = array_merge([
+            'reservation_id' => $reservation->id,
+            'reason' => $description,
+            'offer_id' => $context['offer_id'] ?? $reservation->offer_id,
+            'offer_kind' => $context['offer_kind'] ?? $reservation->offer?->kind ?? $reservation->offer_kind,
+            'previous_check_out' => $previousCheckOut->toDateString(),
+            'new_check_out' => $newCheckOut->toDateString(),
+        ], $context['meta'] ?? []);
+
+        return $folio->addCharge([
+            'description' => $lineDescription,
+            'quantity' => $quantity,
+            'unit_price' => $unitPrice,
+            'tax_amount' => $context['tax_amount'] ?? 0,
+            'discount_percent' => $context['discount_percent'] ?? 0,
+            'discount_amount' => $context['discount_amount'] ?? 0,
+            'type' => 'stay_extension',
+            'is_stay_item' => true,
+            'meta' => $meta,
+            'date' => $context['date'] ?? today()->toDateString(),
+        ]);
+    }
+
     public function resegmentStayForRoomChange(
         Reservation $reservation,
         ?Room $previousRoom,

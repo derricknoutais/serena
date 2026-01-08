@@ -5,10 +5,12 @@ require_once __DIR__.'/FolioTestHelpers.php';
 use App\Models\Folio;
 use App\Models\Offer;
 use App\Models\OfferRoomTypePrice;
+use App\Models\Reservation;
 use App\Services\FolioBillingService;
 use App\Services\ReservationAvailabilityService;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
+use Illuminate\Support\Carbon;
 use Spatie\Permission\Models\Permission;
 
 beforeEach(function (): void {
@@ -128,11 +130,9 @@ it('rounds stay quantities up when checkout time adds a partial day', function (
         ->andReturnTrue();
 
     $billingMock = $this->mock(FolioBillingService::class);
-    $billingMock->shouldReceive('addStayAdjustment')
+    $billingMock->shouldReceive('addStayExtensionItem')
         ->once();
-    $billingMock->shouldReceive('syncStayChargeFromReservation')
-        ->once()
-        ->andReturn(\Mockery::mock(Folio::class));
+    $billingMock->shouldNotReceive('syncStayChargeFromReservation');
 
     $response = $this->actingAs($user)->patch(sprintf(
         'http://%s/reservations/%s/stay/dates',
@@ -199,11 +199,9 @@ it('charges weekend offers per configured night bundle when extending a stay', f
         ->andReturnTrue();
 
     $billingMock = $this->mock(FolioBillingService::class);
-    $billingMock->shouldReceive('addStayAdjustment')
+    $billingMock->shouldReceive('addStayExtensionItem')
         ->once();
-    $billingMock->shouldReceive('syncStayChargeFromReservation')
-        ->once()
-        ->andReturn(\Mockery::mock(Folio::class));
+    $billingMock->shouldNotReceive('syncStayChargeFromReservation');
 
     $response = $this->actingAs($user)->patch(sprintf(
         'http://%s/reservations/%s/stay/dates',
@@ -270,11 +268,9 @@ it('charges package offers per configured night bundle when extending a stay', f
         ->andReturnTrue();
 
     $billingMock = $this->mock(FolioBillingService::class);
-    $billingMock->shouldReceive('addStayAdjustment')
+    $billingMock->shouldReceive('addStayExtensionItem')
         ->once();
-    $billingMock->shouldReceive('syncStayChargeFromReservation')
-        ->once()
-        ->andReturn(\Mockery::mock(Folio::class));
+    $billingMock->shouldNotReceive('syncStayChargeFromReservation');
 
     $response = $this->actingAs($user)->patch(sprintf(
         'http://%s/reservations/%s/stay/dates',
@@ -359,23 +355,23 @@ it('calculates package extension quantities from the current checkout date', fun
         ->andReturnTrue();
 
     $billingMock = $this->mock(FolioBillingService::class);
-    $billingMock->shouldReceive('addStayAdjustment')
+    $billingMock->shouldReceive('addStayExtensionItem')
         ->once()
-        ->withArgs(function ($reservationArg, $amount, $description, $context) use ($reservation, $packageOffer): bool {
+        ->withArgs(function (Reservation $reservationArg, float $amount, Carbon $previousCheckOut, Carbon $newCheckOut, array $context) use ($reservation, $packageOffer): bool {
             expect($reservationArg->id)->toBe($reservation->id);
             expect($amount)->toBe(35000.0);
-            expect($description)->toBe('Prolongation de séjour');
-            expect($context['quantity'])->toBe(1.0);
-            expect($context['unit_price'])->toBe(35000.0);
+            expect($previousCheckOut->format('Y-m-d'))->toBe('2025-05-02');
+            expect($newCheckOut->format('Y-m-d'))->toBe('2025-05-04');
+            expect($context['offer_id'])->toBe($packageOffer->id);
+            expect($context['offer_kind'])->toBe($packageOffer->kind);
             expect($context['meta']['previous_check_out'])->toBe('2025-05-02');
             expect($context['meta']['new_check_out'])->toBe('2025-05-04');
-            expect($context['meta']['offer_id'])->toBe($packageOffer->id);
+            expect($context['meta']['type_of_offer'])->toBe('package');
+            expect($context['meta']['period'])->toBe('2025-05-02 - 2025-05-04');
 
             return true;
         });
-    $billingMock->shouldReceive('syncStayChargeFromReservation')
-        ->once()
-        ->andReturn(\Mockery::mock(Folio::class));
+    $billingMock->shouldNotReceive('syncStayChargeFromReservation');
 
     $response = $this->actingAs($user)->patch(sprintf(
         'http://%s/reservations/%s/stay/dates',
@@ -463,21 +459,20 @@ it('charges fixed billing offers as a single unit when extending', function (): 
         ->andReturnTrue();
 
     $billingMock = $this->mock(FolioBillingService::class);
-    $billingMock->shouldReceive('addStayAdjustment')
+    $billingMock->shouldReceive('addStayExtensionItem')
         ->once()
-        ->withArgs(function ($reservationArg, $amount, $description, $context) use ($reservation, $fixedOffer): bool {
+        ->withArgs(function (Reservation $reservationArg, float $amount, Carbon $previousCheckOut, Carbon $newCheckOut, array $context) use ($reservation, $fixedOffer): bool {
             expect($reservationArg->id)->toBe($reservation->id);
             expect($amount)->toBe(55000.0);
-            expect($description)->toBe('Prolongation de séjour');
-            expect($context['quantity'])->toBe(1.0);
-            expect($context['unit_price'])->toBe(55000.0);
-            expect($context['meta']['offer_id'])->toBe($fixedOffer->id);
+            expect($previousCheckOut->format('Y-m-d'))->toBe('2025-05-02');
+            expect($newCheckOut->format('Y-m-d'))->toBe('2025-05-04');
+            expect($context['offer_id'])->toBe($fixedOffer->id);
+            expect($context['offer_kind'])->toBe($fixedOffer->kind);
+            expect($context['meta']['period'])->toBe('2025-05-02 - 2025-05-04');
 
             return true;
         });
-    $billingMock->shouldReceive('syncStayChargeFromReservation')
-        ->once()
-        ->andReturn(\Mockery::mock(Folio::class));
+    $billingMock->shouldNotReceive('syncStayChargeFromReservation');
 
     $response = $this->actingAs($user)->patch(sprintf(
         'http://%s/reservations/%s/stay/dates',
@@ -559,11 +554,23 @@ it('prices an extension with a selected offer without replacing the original', f
         ->andReturnTrue();
 
     $billingMock = $this->mock(FolioBillingService::class);
-    $billingMock->shouldReceive('addStayAdjustment')
-        ->once();
-    $billingMock->shouldReceive('syncStayChargeFromReservation')
+    $billingMock->shouldReceive('addStayExtensionItem')
         ->once()
-        ->andReturn(\Mockery::mock(Folio::class));
+        ->withArgs(function (Reservation $reservationArg, float $amount, Carbon $previousCheckOut, Carbon $newCheckOut, array $context) use ($reservation, $offerB): bool {
+            expect($reservationArg->id)->toBe($reservation->id);
+            expect($amount)->toBe(20000.0);
+            expect($previousCheckOut->format('Y-m-d'))->toBe('2025-05-03');
+            expect($newCheckOut->format('Y-m-d'))->toBe('2025-05-05');
+            expect($context['offer_id'])->toBe($offerB->id);
+            expect($context['offer_kind'])->toBe($offerB->kind);
+            expect($context['meta']['previous_check_out'])->toBe('2025-05-03');
+            expect($context['meta']['new_check_out'])->toBe('2025-05-05');
+            expect($context['meta']['type_of_offer'])->toBe('night');
+            expect($context['meta']['period'])->toBe('2025-05-03 - 2025-05-05');
+
+            return true;
+        });
+    $billingMock->shouldNotReceive('syncStayChargeFromReservation');
 
     $newCheckout = '2025-05-05T12:00:00';
 
