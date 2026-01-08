@@ -117,6 +117,106 @@ it('soft deletes a payment and refreshes totals', function (): void {
     expect(Payment::query()->count())->toBe(0);
 });
 
+it('updates a payment via json when permitted', function (): void {
+    [
+        'tenant' => $tenant,
+        'hotel' => $hotel,
+        'reservation' => $reservation,
+        'user' => $user,
+    ] = setupReservationEnvironment('updatepay');
+
+    $user->assignRole('owner');
+
+    $billingService = app(FolioBillingService::class);
+    $folio = $billingService->ensureMainFolioForReservation($reservation);
+
+    $methodA = PaymentMethod::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Carte',
+        'code' => 'CARD',
+        'type' => 'card',
+        'is_active' => true,
+    ]);
+
+    $methodB = PaymentMethod::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Mobile money',
+        'code' => 'MOMO',
+        'type' => 'mobile',
+        'is_active' => true,
+    ]);
+
+    $payment = $folio->addPayment([
+        'amount' => 5000,
+        'currency' => 'XAF',
+        'payment_method_id' => $methodA->id,
+        'created_by_user_id' => $user->id,
+    ]);
+
+    $response = $this->actingAs($user)->patchJson(sprintf(
+        'http://%s/folios/%s/payments/%s',
+        tenantDomain($tenant),
+        $folio->id,
+        $payment->id,
+    ), [
+        'amount' => 7000,
+        'payment_method_id' => $methodB->id,
+        'note' => 'Ajustement',
+    ]);
+
+    $response->assertOk();
+
+    $payment->refresh();
+    expect($payment->amount)->toBe(7000.0);
+    expect((int) $payment->payment_method_id)->toBe((int) $methodB->id);
+    expect($payment->notes)->toBe('Ajustement');
+});
+
+it('forbids updating a payment without the edit permission', function (): void {
+    [
+        'tenant' => $tenant,
+        'hotel' => $hotel,
+        'reservation' => $reservation,
+        'user' => $user,
+    ] = setupReservationEnvironment('updatepay-deny');
+
+    $user->givePermissionTo('payments.create');
+
+    $billingService = app(FolioBillingService::class);
+    $folio = $billingService->ensureMainFolioForReservation($reservation);
+
+    $method = PaymentMethod::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Carte',
+        'code' => 'CARD',
+        'type' => 'card',
+        'is_active' => true,
+    ]);
+
+    $payment = $folio->addPayment([
+        'amount' => 5000,
+        'currency' => 'XAF',
+        'payment_method_id' => $method->id,
+        'created_by_user_id' => $user->id,
+    ]);
+
+    $response = $this->actingAs($user)->patchJson(sprintf(
+        'http://%s/folios/%s/payments/%s',
+        tenantDomain($tenant),
+        $folio->id,
+        $payment->id,
+    ), [
+        'amount' => 7000,
+        'payment_method_id' => $method->id,
+        'note' => 'Ajustement',
+    ]);
+
+    $response->assertForbidden();
+});
+
 it('generates an invoice from a folio and exposes the pdf view', function (): void {
     [
         'tenant' => $tenant,

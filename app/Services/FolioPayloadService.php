@@ -106,6 +106,8 @@ class FolioPayloadService
                 'can_delete_charges' => $user?->can('folio_items.delete') ?? false,
                 'can_manage_payments' => $user?->can('folio_items.void') ?? false,
                 'can_collect_payments' => $user?->can('payments.create') ?? false,
+                'can_edit_payments' => $user?->can('payments.edit') ?? false,
+                'can_delete_payments' => $user?->can('payments.delete') ?? false,
                 'can_manage_invoices' => $user?->can('invoices.create') ?? false,
             ],
         ];

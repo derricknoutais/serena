@@ -172,7 +172,7 @@
                                         <button
                                             v-if="canManageCharges && !item.deleted_at"
                                             type="button"
-                                            class="text-xs text-indigo-500 hover:text-indigo-700"
+                                            class="text-xs text-indigo-500 hover:text-indigo-700 hover:cursor-pointer"
                                             @click="startEditingItem(item)"
                                         >
                                             Éditer
@@ -180,7 +180,7 @@
                                         <button
                                             v-if="canDeleteCharges && !item.deleted_at"
                                             type="button"
-                                            class="ml-2 text-xs text-red-500 hover:text-red-600"
+                                            class="ml-2 text-xs text-red-500 hover:text-red-600 hover:cursor-pointer"
                                             @click="deleteItem(item.id)"
                                         >
                                             Supprimer
@@ -331,7 +331,7 @@
                                         <th class="px-3 py-2 text-left">Méthode</th>
                                         <th class="px-3 py-2 text-right">Montant</th>
                                     <th class="px-3 py-2 text-left">Note</th>
-                                    <th class="px-3 py-2 text-right" v-if="canVoidPayments">Actions</th>
+                                    <th class="px-3 py-2 text-right" v-if="canEditPayments || canDeletePayments">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -347,12 +347,21 @@
                                         </td>
                                         <td class="px-3 py-1.5">{{ payment.notes || '—' }}</td>
                                         <td
-                                            v-if="canVoidPayments"
+                                            v-if="canEditPayments || canDeletePayments"
                                             class="px-3 py-1.5 text-right"
                                         >
                                             <button
+                                                v-if="canEditPayments"
                                                 type="button"
-                                                class="text-xs text-red-500 hover:text-red-600"
+                                                class="text-xs text-indigo-500 hover:text-indigo-700 hover:cursor-pointer"
+                                                @click="startEditingPayment(payment)"
+                                            >
+                                                Éditer
+                                            </button>
+                                            <button
+                                                v-if="canDeletePayments"
+                                                type="button"
+                                                class="ml-2 text-xs text-red-500 hover:text-red-600 hover:cursor-pointer"
                                                 @click="deletePayment(payment.id)"
                                             >
                                                 Supprimer
@@ -365,7 +374,9 @@
                     </div>
 
                     <div v-if="canCreatePayments" class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                        <h3 class="text-sm font-semibold text-gray-800">Enregistrer un paiement</h3>
+                        <h3 class="text-sm font-semibold text-gray-800">
+                            {{ isEditingPayment ? 'Modifier le paiement' : 'Enregistrer un paiement' }}
+                        </h3>
                         <form class="mt-3 grid gap-3 md:grid-cols-2" @submit.prevent="submitPayment">
                             <div>
                                 <label class="text-xs font-medium text-gray-700">Montant</label>
@@ -401,13 +412,21 @@
                                     class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm"
                                 ></textarea>
                             </div>
-                            <div class="md:col-span-2 flex items-center justify-end">
+                            <div class="md:col-span-2 flex items-center justify-end gap-2">
+                                <button
+                                    v-if="isEditingPayment"
+                                    type="button"
+                                    class="text-xs text-gray-600 hover:text-gray-800"
+                                    @click="cancelEditingPayment"
+                                >
+                                    Annuler
+                                </button>
                                 <button
                                     type="submit"
                                     class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700"
                                     :disabled="isSubmitting"
                                 >
-                                    Enregistrer le paiement
+                                    {{ isEditingPayment ? 'Mettre à jour' : 'Enregistrer le paiement' }}
                                 </button>
                             </div>
                         </form>
@@ -509,6 +528,8 @@ export default {
             paymentForm: this.defaultPaymentForm(),
             isEditingCharge: false,
             editingItemId: null,
+            isEditingPayment: false,
+            editingPaymentId: null,
         };
     },
     computed: {
@@ -537,6 +558,14 @@ export default {
         canCreatePayments() {
             return this.permissionFlags.payments_create
                 ?? (this.permissions?.can_collect_payments ?? false);
+        },
+        canEditPayments() {
+            return this.permissionFlags.payments_edit
+                ?? (this.permissions?.can_edit_payments ?? false);
+        },
+        canDeletePayments() {
+            return this.permissionFlags.payments_delete
+                ?? (this.permissions?.can_delete_payments ?? false);
         },
         canManageInvoices() {
             return this.permissionFlags.invoices_create
@@ -609,6 +638,24 @@ export default {
                 payment_method_id: '',
                 note: '',
             };
+        },
+        startEditingPayment(payment) {
+            if (!this.canEditPayments || !this.canCreatePayments) {
+                return;
+            }
+
+            this.isEditingPayment = true;
+            this.editingPaymentId = payment.id;
+            this.paymentForm = {
+                amount: Number(payment.amount),
+                payment_method_id: payment.payment_method?.id || payment.method?.id || '',
+                note: payment.notes || '',
+            };
+        },
+        cancelEditingPayment() {
+            this.isEditingPayment = false;
+            this.editingPaymentId = null;
+            this.paymentForm = this.defaultPaymentForm();
         },
         startEditingItem(item) {
             if (!this.canManageCharges || item.deleted_at) {
@@ -720,13 +767,23 @@ export default {
 
             try {
                 const http = window.axios ?? axios;
-                await http.post(`/folios/${this.folio.id}/payments`, {
+                const payload = {
                     amount: this.paymentForm.amount,
                     payment_method_id: this.paymentForm.payment_method_id,
                     note: this.paymentForm.note,
                     currency: this.folio.currency,
-                });
-                this.paymentForm = this.defaultPaymentForm();
+                };
+
+                if (this.isEditingPayment && this.editingPaymentId) {
+                    await http.patch(
+                        `/folios/${this.folio.id}/payments/${this.editingPaymentId}`,
+                        payload,
+                    );
+                    this.cancelEditingPayment();
+                } else {
+                    await http.post(`/folios/${this.folio.id}/payments`, payload);
+                    this.paymentForm = this.defaultPaymentForm();
+                }
                 this.$emit('updated');
                 window.dispatchEvent(new CustomEvent('cash-session-updated', {
                     detail: { type: 'frontdesk' },
@@ -742,7 +799,7 @@ export default {
             }
         },
         async deletePayment(paymentId) {
-            if (!this.folio || !this.canVoidPayments) {
+            if (!this.folio || !this.canDeletePayments) {
                 Swal.fire({
                     icon: 'error',
                     title: 'Action non autorisée',
@@ -865,11 +922,13 @@ export default {
             if (value) {
                 this.activeTab = this.initialTab || 'charges';
                 this.resetChargeModal();
+                this.cancelEditingPayment();
                 this.paymentForm = this.defaultPaymentForm();
             }
         },
         folio() {
             this.resetChargeModal();
+            this.cancelEditingPayment();
             this.paymentForm = this.defaultPaymentForm();
         },
         initialTab(value) {

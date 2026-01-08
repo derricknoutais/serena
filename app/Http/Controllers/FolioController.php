@@ -131,21 +131,19 @@ class FolioController extends Controller
         $paymentMethod = \App\Models\PaymentMethod::where('tenant_id', $folio->tenant_id)->findOrFail($data['payment_method_id']);
         $cashSessionId = null;
 
-        if ($paymentMethod->type === 'cash') {
-            $activeSession = \App\Models\CashSession::query()
-                ->where('tenant_id', $folio->tenant_id)
-                ->where('hotel_id', $folio->hotel_id)
-                ->where('type', 'frontdesk')
-                ->where('status', 'open')
-                ->first();
+        $activeSession = \App\Models\CashSession::query()
+            ->where('tenant_id', $folio->tenant_id)
+            ->where('hotel_id', $folio->hotel_id)
+            ->where('type', 'frontdesk')
+            ->where('status', 'open')
+            ->first();
 
-            if (! $activeSession) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    'payment_method_id' => 'Aucune caisse réception ouverte. Veuillez ouvrir une session de caisse.',
-                ]);
-            }
-            $cashSessionId = $activeSession->id;
+        if (! $activeSession) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'payment_method_id' => 'Aucune caisse réception ouverte. Veuillez ouvrir une session de caisse.',
+            ]);
         }
+        $cashSessionId = $activeSession->id;
 
         $folio->addPayment([
             'amount' => $data['amount'],
@@ -167,9 +165,71 @@ class FolioController extends Controller
         return response()->json($this->paymentResponsePayload($folio));
     }
 
+    public function updatePayment(Request $request, Folio $folio, Payment $payment): JsonResponse
+    {
+        Gate::authorize('payments.edit');
+
+        $this->authorizeFolio($request, $folio);
+
+        abort_if((int) $payment->folio_id !== (int) $folio->id, 404);
+
+        $data = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'currency' => ['nullable', 'string', 'size:3'],
+            'payment_method_id' => [
+                'required',
+                Rule::exists('payment_methods', 'id')
+                    ->where('tenant_id', $folio->tenant_id)
+                    ->where(function ($query) use ($folio) {
+                        $query->whereNull('hotel_id')->orWhere('hotel_id', $folio->hotel_id);
+                    }),
+            ],
+            'paid_at' => ['nullable', 'date'],
+            'reference' => ['nullable', 'string', 'max:255'],
+            'note' => ['nullable', 'string'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        $paymentMethod = \App\Models\PaymentMethod::where('tenant_id', $folio->tenant_id)->findOrFail($data['payment_method_id']);
+        $cashSessionId = null;
+
+            $activeSession = \App\Models\CashSession::query()
+                ->where('tenant_id', $folio->tenant_id)
+                ->where('hotel_id', $folio->hotel_id)
+                ->where('type', 'frontdesk')
+                ->where('status', 'open')
+                ->first();
+
+            if (! $activeSession) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'payment_method_id' => 'Aucune caisse réception ouverte. Veuillez ouvrir une session de caisse.',
+                ]);
+            }
+
+            $cashSessionId = $activeSession->id;
+
+        $payment->forceFill([
+            'amount' => (float) $data['amount'],
+            'currency' => $data['currency'] ?? $folio->currency,
+            'payment_method_id' => $data['payment_method_id'],
+            'paid_at' => $data['paid_at'] ?? $payment->paid_at ?? now(),
+            'reference' => $data['reference'] ?? null,
+            'notes' => $data['note'] ?? $data['notes'] ?? null,
+            'cash_session_id' => $cashSessionId,
+        ])->save();
+
+        $folio->recalculateTotals();
+        $folio->refresh()->loadMissing('payments.paymentMethod');
+
+        return response()->json($this->paymentResponsePayload($folio, 'Paiement mis à jour.'));
+    }
+
     public function destroyPayment(Request $request, Folio $folio, Payment $payment): RedirectResponse|JsonResponse
     {
-        Gate::authorize('folio_items.void');
+        abort_unless(
+            $request->user()->can('payments.delete') || $request->user()->can('folio_items.void'),
+            403
+        );
 
         $this->authorizeFolio($request, $folio);
 

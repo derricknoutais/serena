@@ -23,6 +23,8 @@ class PermissionsCatalog
             'reservations.shorten_stay',
             'reservations.change_room',
             'payments.create',
+            'payments.edit',
+            'payments.delete',
             'folio_items.void',
             'folio_items.edit',
             'folio_items.delete',
