@@ -24,6 +24,8 @@ class PermissionsCatalog
             'reservations.change_room',
             'payments.create',
             'folio_items.void',
+            'folio_items.edit',
+            'folio_items.delete',
             'housekeeping.mark_inspected',
             'housekeeping.mark_clean',
             'housekeeping.mark_dirty',
@@ -114,6 +116,8 @@ class PermissionsCatalog
                 'pos.create',
                 'night_audit.view',
                 'night_audit.export',
+                'folio_items.edit',
+                'folio_items.delete',
             ],
             'housekeeping' => [
                 'housekeeping.view',

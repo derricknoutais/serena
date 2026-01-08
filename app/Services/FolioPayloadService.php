@@ -102,6 +102,8 @@ class FolioPayloadService
             ])->values(),
             'paymentMethods' => $paymentMethods,
             'permissions' => [
+                'can_manage_charges' => $user?->can('folio_items.edit') ?? false,
+                'can_delete_charges' => $user?->can('folio_items.delete') ?? false,
                 'can_manage_payments' => $user?->can('folio_items.void') ?? false,
                 'can_collect_payments' => $user?->can('payments.create') ?? false,
                 'can_manage_invoices' => $user?->can('invoices.create') ?? false,

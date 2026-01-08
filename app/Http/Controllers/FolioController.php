@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Folio;
+use App\Models\FolioItem;
 use App\Models\Payment;
 use App\Services\FolioPayloadService;
 use Illuminate\Http\JsonResponse;
@@ -34,15 +35,7 @@ class FolioController extends Controller
     {
         $this->authorizeFolio($request, $folio);
 
-        $data = $request->validate([
-            'description' => ['required', 'string', 'max:255'],
-            'quantity' => ['required', 'numeric', 'min:0.01'],
-            'unit_price' => ['required', 'numeric', 'min:0'],
-            'tax_amount' => ['nullable', 'numeric', 'min:0'],
-            'discount_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'discount_amount' => ['nullable', 'numeric', 'min:0'],
-            'date' => ['nullable', 'date'],
-        ]);
+        $data = $request->validate($this->chargeValidationRules());
 
         $quantity = (float) $data['quantity'];
         $unitPrice = (float) $data['unit_price'];
@@ -63,7 +56,53 @@ class FolioController extends Controller
             'product_id' => $data['product_id'] ?? null,
         ]);
 
+        if ($request->wantsJson()) {
+            return response()->json($this->chargeResponsePayload($folio, 'Charge ajoutée au folio.'));
+        }
+
         return back()->with('success', 'Charge ajoutée au folio.');
+    }
+
+    public function updateItem(Request $request, Folio $folio, FolioItem $item): JsonResponse
+    {
+        Gate::authorize('folio_items.edit');
+
+        $this->authorizeFolio($request, $folio);
+
+        abort_if((int) $item->folio_id !== (int) $folio->id, 404);
+
+        $data = $request->validate($this->chargeValidationRules());
+
+        $item->fill([
+            'description' => $data['description'],
+            'quantity' => (float) $data['quantity'],
+            'unit_price' => (float) $data['unit_price'],
+            'tax_amount' => (float) ($data['tax_amount'] ?? 0),
+            'discount_percent' => (float) ($data['discount_percent'] ?? 0),
+            'discount_amount' => (float) ($data['discount_amount'] ?? 0),
+            'date' => $data['date'] ?? $item->date?->toDateString(),
+        ]);
+
+        $item->recalculateAmounts();
+        $item->save();
+
+        $folio->recalculateTotals();
+
+        return response()->json($this->chargeResponsePayload($folio, 'Charge mise à jour.'));
+    }
+
+    public function destroyItem(Request $request, Folio $folio, FolioItem $item): JsonResponse
+    {
+        Gate::authorize('folio_items.delete');
+
+        $this->authorizeFolio($request, $folio);
+
+        abort_if((int) $item->folio_id !== (int) $folio->id, 404);
+
+        $item->delete();
+        $folio->recalculateTotals();
+
+        return response()->json($this->chargeResponsePayload($folio, 'Charge supprimée.'));
     }
 
     public function storePayment(Request $request, Folio $folio): RedirectResponse|JsonResponse
@@ -178,6 +217,31 @@ class FolioController extends Controller
                     'payment_method' => $method,
                 ];
             })->values(),
+        ];
+    }
+
+    private function chargeResponsePayload(Folio $folio, string $message): array
+    {
+        return [
+            'message' => $message,
+            'totals' => [
+                'charges' => $folio->charges_total,
+                'payments' => $folio->payments_total,
+                'balance' => $folio->balance,
+            ],
+        ];
+    }
+
+    private function chargeValidationRules(): array
+    {
+        return [
+            'description' => ['required', 'string', 'max:255'],
+            'quantity' => ['required', 'numeric', 'min:0.01'],
+            'unit_price' => ['required', 'numeric', 'min:0'],
+            'tax_amount' => ['nullable', 'numeric', 'min:0'],
+            'discount_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'discount_amount' => ['nullable', 'numeric', 'min:0'],
+            'date' => ['nullable', 'date'],
         ];
     }
 }

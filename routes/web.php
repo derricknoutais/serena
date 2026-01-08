@@ -304,6 +304,8 @@ Route::middleware([
 
             Route::get('/folios/{folio}', [FolioController::class, 'show'])->name('folios.show');
             Route::post('/folios/{folio}/items', [FolioController::class, 'storeItem'])->name('folios.items.store');
+            Route::patch('/folios/{folio}/items/{item}', [FolioController::class, 'updateItem'])->name('folios.items.update');
+            Route::delete('/folios/{folio}/items/{item}', [FolioController::class, 'destroyItem'])->name('folios.items.destroy');
             Route::post('/folios/{folio}/payments', [FolioController::class, 'storePayment'])->name('folios.payments.store');
             Route::delete('/folios/{folio}/payments/{payment}', [FolioController::class, 'destroyPayment'])->name('folios.payments.destroy');
             Route::post('/folios/{folio}/invoices', [InvoiceController::class, 'storeFromFolio'])->name('folios.invoices.store');

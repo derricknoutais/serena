@@ -98,6 +98,12 @@
                                     <th class="px-3 py-2 text-right">Remise</th>
                                     <th class="px-3 py-2 text-right">Taxe</th>
                                     <th class="px-3 py-2 text-right">Total</th>
+                                    <th
+                                        v-if="canManageCharges || canDeleteCharges"
+                                        class="px-3 py-2 text-right"
+                                    >
+                                        Actions
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -108,9 +114,14 @@
                                 >
                                     <td class="px-3 py-1.5">
                                         <div class="flex items-center gap-2">
-                                            <span :class="item.deleted_at ? 'line-through' : ''">
-                                                {{ item.description }}
-                                            </span>
+                                            <div class="flex flex-col">
+                                                <span :class="item.deleted_at ? 'line-through' : ''">
+                                                    {{ item.description }}
+                                                </span>
+                                                <span v-if="item.date" class="text-[10px] text-gray-400">
+                                                    {{ item.date }}
+                                                </span>
+                                            </div>
                                             <span
                                                 v-if="item.deleted_at"
                                                 class="inline-flex items-center rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-600"
@@ -154,6 +165,27 @@
                                             {{ formatMoney(item.total_amount, folio?.currency) }}
                                         </span>
                                     </td>
+                                    <td
+                                        v-if="canManageCharges || canDeleteCharges"
+                                        class="px-3 py-1.5 text-right"
+                                    >
+                                        <button
+                                            v-if="canManageCharges && !item.deleted_at"
+                                            type="button"
+                                            class="text-xs text-indigo-500 hover:text-indigo-700"
+                                            @click="startEditingItem(item)"
+                                        >
+                                            Éditer
+                                        </button>
+                                        <button
+                                            v-if="canDeleteCharges && !item.deleted_at"
+                                            type="button"
+                                            class="ml-2 text-xs text-red-500 hover:text-red-600"
+                                            @click="deleteItem(item.id)"
+                                        >
+                                            Supprimer
+                                        </button>
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -165,7 +197,9 @@
                         @click.self="closeAddCharge"
                     >
                         <div class="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
-                            <h3 class="mb-3 text-sm font-semibold text-gray-800">Ajouter une charge</h3>
+                            <h3 class="mb-3 text-sm font-semibold text-gray-800">
+                                {{ chargeModalTitle }}
+                            </h3>
                             <div class="space-y-3 text-sm">
                                 <div>
                                     <label class="text-xs font-medium text-gray-700">Description</label>
@@ -252,7 +286,7 @@
                                     @click="submitCharge"
                                     :disabled="isSubmitting"
                                 >
-                                    Enregistrer
+                                    {{ chargeSubmitLabel }}
                                 </button>
                             </div>
                         </div>
@@ -473,6 +507,8 @@ export default {
             isSubmitting: false,
             chargeForm: this.defaultChargeForm(),
             paymentForm: this.defaultPaymentForm(),
+            isEditingCharge: false,
+            editingItemId: null,
         };
     },
     computed: {
@@ -512,6 +548,20 @@ export default {
             }
 
             return this.canManageInvoices;
+        },
+        canManageCharges() {
+            return this.permissionFlags.folio_items_edit
+                ?? (this.permissions?.can_manage_charges ?? false);
+        },
+        canDeleteCharges() {
+            return this.permissionFlags.folio_items_delete
+                ?? (this.permissions?.can_delete_charges ?? false);
+        },
+        chargeModalTitle() {
+            return this.isEditingCharge ? 'Modifier la charge' : 'Ajouter une charge';
+        },
+        chargeSubmitLabel() {
+            return this.isEditingCharge ? 'Mettre à jour' : 'Enregistrer';
         },
     },
     methods: {
@@ -560,9 +610,32 @@ export default {
                 note: '',
             };
         },
-        closeAddCharge() {
-            this.showAddCharge = false;
+        startEditingItem(item) {
+            if (!this.canManageCharges || item.deleted_at) {
+                return;
+            }
+
+            this.chargeForm = {
+                description: item.description,
+                quantity: item.quantity,
+                unit_price: item.unit_price,
+                tax_amount: item.tax_amount,
+                discount_percent: item.discount_percent,
+                discount_amount: item.discount_amount,
+                date: item.date,
+            };
+            this.isEditingCharge = true;
+            this.editingItemId = item.id;
+            this.showAddCharge = true;
+        },
+        resetChargeModal() {
+            this.isEditingCharge = false;
+            this.editingItemId = null;
             this.chargeForm = this.defaultChargeForm();
+            this.showAddCharge = false;
+        },
+        closeAddCharge() {
+            this.resetChargeModal();
         },
         async submitCharge() {
             if (!this.folio) {
@@ -573,11 +646,65 @@ export default {
 
             try {
                 const http = window.axios ?? axios;
-                await http.post(`/folios/${this.folio.id}/items`, this.chargeForm);
-                this.closeAddCharge();
+                const payload = { ...this.chargeForm };
+
+                if (this.isEditingCharge && this.editingItemId) {
+                    await http.patch(
+                        `/folios/${this.folio.id}/items/${this.editingItemId}`,
+                        payload,
+                    );
+                } else {
+                    await http.post(`/folios/${this.folio.id}/items`, payload);
+                }
+                this.resetChargeModal();
                 this.$emit('updated');
             } finally {
                 this.isSubmitting = false;
+            }
+        },
+        async deleteItem(itemId) {
+            if (!this.folio || !this.canDeleteCharges) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Action non autorisée',
+                    text: 'Vous ne disposez pas des droits suffisants.',
+                });
+
+                return;
+            }
+
+            const result = await Swal.fire({
+                title: 'Supprimer la charge',
+                text: 'Êtes-vous sûr de vouloir supprimer cette charge ?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Supprimer',
+                cancelButtonText: 'Annuler',
+            });
+
+            if (!result.isConfirmed) {
+                return;
+            }
+
+            const http = window.axios ?? axios;
+
+            try {
+                await http.delete(`/folios/${this.folio.id}/items/${itemId}`);
+                this.$emit('updated');
+            } catch (error) {
+                if (error?.response?.status === 403) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Action non autorisée',
+                        text: 'Vous ne disposez pas des droits suffisants.',
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erreur',
+                        text: 'Impossible de supprimer cette charge.',
+                    });
+                }
             }
         },
         async submitPayment() {
@@ -737,11 +864,12 @@ export default {
         show(value) {
             if (value) {
                 this.activeTab = this.initialTab || 'charges';
-                this.chargeForm = this.defaultChargeForm();
+                this.resetChargeModal();
                 this.paymentForm = this.defaultPaymentForm();
             }
         },
         folio() {
+            this.resetChargeModal();
             this.paymentForm = this.defaultPaymentForm();
         },
         initialTab(value) {
