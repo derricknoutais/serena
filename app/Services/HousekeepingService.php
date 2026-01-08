@@ -10,6 +10,7 @@ use App\Models\HousekeepingTask;
 use App\Models\HousekeepingTaskChecklistItem;
 use App\Models\Room;
 use App\Models\User;
+use App\Notifications\GenericPushNotification;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
@@ -17,6 +18,8 @@ class HousekeepingService
 {
     public function __construct(
         private readonly HousekeepingPriorityService $priorityService,
+        private readonly NotificationRecipientResolver $recipientResolver,
+        private readonly PushNotificationSender $pushNotificationSender,
     ) {}
 
     public function createTaskAfterCheckout(Room $room, ?User $user = null): ?HousekeepingTask
@@ -255,6 +258,8 @@ class HousekeepingService
         } else {
             $this->transitionRoomStatus($room, Room::HK_STATUS_INSPECTED, $user);
         }
+
+        $this->sendInspectionOutcomePush($room, $user, ! $hasFailure);
 
         $this->closeParticipants($task);
 
@@ -580,7 +585,111 @@ class HousekeepingService
             ->event('hk_updated')
             ->log('hk_updated');
 
+        if ($toStatus === Room::HK_STATUS_DIRTY) {
+            $this->sendRoomDirtyPush($room, $user);
+        }
+
         $this->priorityService->syncRoomTasks($room, $user);
+    }
+
+    private function sendRoomDirtyPush(Room $room, ?User $user): void
+    {
+        $userIds = $this->resolvePushRecipientIds($room);
+
+        if ($userIds === []) {
+            return;
+        }
+
+        $status = Room::HK_STATUS_DIRTY;
+        $title = 'Chambre sale';
+        $body = $this->buildRoomStatusBody($room, $status, $user);
+        $url = sprintf('/housekeeping?room=%s', $room->id);
+
+        $notification = new GenericPushNotification(
+            title: $title,
+            body: $body,
+            url: $url,
+            icon: null,
+            badge: null,
+            tag: 'hk-dirty',
+            tenantId: (string) $room->tenant_id,
+            hotelId: $room->hotel_id,
+        );
+
+        $this->pushNotificationSender->send(
+            tenantId: (string) $room->tenant_id,
+            notification: $notification,
+            userIds: $userIds,
+        );
+    }
+
+    private function sendInspectionOutcomePush(Room $room, User $user, bool $approved): void
+    {
+        $userIds = $this->resolvePushRecipientIds($room);
+
+        if ($userIds === []) {
+            return;
+        }
+
+        $status = $approved ? Room::HK_STATUS_INSPECTED : Room::HK_STATUS_REDO;
+        $title = $approved ? 'Inspection approuvée' : 'Inspection refusée';
+        $body = $this->buildRoomStatusBody($room, $status, $user);
+        $url = sprintf('/housekeeping?room=%s', $room->id);
+        $tag = $approved ? 'hk-inspection-approved' : 'hk-inspection-refused';
+
+        $notification = new GenericPushNotification(
+            title: $title,
+            body: $body,
+            url: $url,
+            icon: null,
+            badge: null,
+            tag: $tag,
+            tenantId: (string) $room->tenant_id,
+            hotelId: $room->hotel_id,
+        );
+
+        $this->pushNotificationSender->send(
+            tenantId: (string) $room->tenant_id,
+            notification: $notification,
+            userIds: $userIds,
+        );
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function resolvePushRecipientIds(Room $room): array
+    {
+        return $this->recipientResolver
+            ->resolve('room.hk_status_updated', (string) $room->tenant_id, (int) $room->hotel_id)
+            ->pluck('id')
+            ->all();
+    }
+
+    private function buildRoomStatusBody(Room $room, string $status, ?User $user): string
+    {
+        $statusLabel = $this->hkStatusLabel($status);
+        $causerName = $user?->name ?? 'Système';
+
+        return sprintf(
+            'Chambre %s — %s (%s). Par %s.',
+            $room->number,
+            $statusLabel,
+            $status,
+            $causerName,
+        );
+    }
+
+    private function hkStatusLabel(string $status): string
+    {
+        return match ($status) {
+            Room::HK_STATUS_DIRTY => 'Sale',
+            Room::HK_STATUS_CLEANING => 'En cours',
+            Room::HK_STATUS_AWAITING_INSPECTION => 'En attente d’inspection',
+            Room::HK_STATUS_REDO => 'À refaire',
+            Room::HK_STATUS_INSPECTED => 'Inspectée',
+            default => 'Propre',
+        };
     }
 
     private function isAllowedRoomTransition(?string $fromStatus, string $toStatus): bool

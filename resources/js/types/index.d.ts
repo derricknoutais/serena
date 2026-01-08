@@ -28,6 +28,9 @@ export type AppPageProps<
     quote: { message: string; author: string };
     auth: Auth;
     sidebarOpen: boolean;
+    webpush?: {
+        publicKey?: string | null;
+    };
 };
 
 export interface User {

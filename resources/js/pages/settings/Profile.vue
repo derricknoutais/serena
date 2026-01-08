@@ -8,6 +8,7 @@ import DeleteUser from '@/components/DeleteUser.vue';
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import InputError from '@/components/InputError.vue';
 import PrimaryButton from '@/components/PrimaryButton.vue';
+import PushNotificationsCard from '@/components/PushNotificationsCard.vue';
 import TextInput from '@/components/TextInput.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
@@ -117,6 +118,8 @@ const user = page.props.auth.user;
                     </div>
                 </Form>
             </div>
+
+            <PushNotificationsCard />
 
             <DeleteUser />
         </SettingsLayout>

@@ -36,6 +36,7 @@ use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\MaintenanceTicketController;
 use App\Http\Controllers\NightAuditController;
 use App\Http\Controllers\PosController;
+use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\ReservationFolioController;
 use App\Http\Controllers\ReservationStayController;
 use App\Http\Controllers\Users\UpdateUserHotelsController;
@@ -79,6 +80,16 @@ Route::middleware([
     Route::post('/login/badge', [BadgeLoginController::class, 'store'])
         ->middleware('throttle:10,1')
         ->name('login.badge');
+
+    Route::post('/push/subscribe', [PushSubscriptionController::class, 'store'])
+        ->name('push.subscribe');
+
+    Route::post('/push/unsubscribe', [PushSubscriptionController::class, 'destroy'])
+        ->name('push.unsubscribe');
+
+    Route::post('/push/test', [PushSubscriptionController::class, 'test'])
+        ->middleware(['auth', 'role:owner|manager|superadmin'])
+        ->name('push.test');
 
     Route::middleware('auth')->group(function () {
         Route::get('/dashboard', function () {

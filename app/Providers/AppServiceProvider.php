@@ -12,10 +12,14 @@ use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Notifications\ChannelManager;
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
+use NotificationChannels\WebPush\Events\NotificationFailed;
+use NotificationChannels\WebPush\Events\NotificationSent;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -34,6 +38,33 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->make(ChannelManager::class)->extend('tenant_database', function ($app) {
             return new TenantDatabaseChannel($app->make(DatabaseManager::class));
+        });
+
+        Event::listen(NotificationSent::class, function (NotificationSent $event): void {
+            $response = $event->report->getResponse();
+
+            Log::info('webpush.sent', [
+                'subscription_id' => $event->subscription->id ?? null,
+                'tenant_id' => $event->subscription->tenant_id ?? null,
+                'user_id' => $event->subscription->user_id ?? null,
+                'endpoint' => $event->report->getEndpoint(),
+                'status_code' => $response?->getStatusCode(),
+                'reason' => $event->report->getReason(),
+            ]);
+        });
+
+        Event::listen(NotificationFailed::class, function (NotificationFailed $event): void {
+            $response = $event->report->getResponse();
+
+            Log::warning('webpush.failed', [
+                'subscription_id' => $event->subscription->id ?? null,
+                'tenant_id' => $event->subscription->tenant_id ?? null,
+                'user_id' => $event->subscription->user_id ?? null,
+                'endpoint' => $event->report->getEndpoint(),
+                'status_code' => $response?->getStatusCode(),
+                'reason' => $event->report->getReason(),
+                'expired' => $event->report->isSubscriptionExpired(),
+            ]);
         });
 
         Gate::policy(HousekeepingChecklist::class, HousekeepingChecklistPolicy::class);

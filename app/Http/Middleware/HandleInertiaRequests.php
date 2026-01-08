@@ -61,6 +61,9 @@ class HandleInertiaRequests extends Middleware
             'notifications' => [
                 'unread_count' => $this->notificationCount($request),
             ],
+            'webpush' => [
+                'publicKey' => config('webpush.vapid.public_key'),
+            ],
         ];
     }
 
