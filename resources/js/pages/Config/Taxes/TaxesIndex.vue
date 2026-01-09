@@ -322,7 +322,7 @@ export default {
             };
 
             const method = this.editingTaxId ? 'put' : 'post';
-            const url = this.editingTaxId ? `/ressources/taxes/${this.editingTaxId}` : '/ressources/taxes';
+            const url = this.editingTaxId ? `/settings/resources/taxes/${this.editingTaxId}` : '/settings/resources/taxes';
 
             router[method](url, payload, {
                 preserveScroll: true,
@@ -350,7 +350,7 @@ export default {
                 confirmButtonColor: '#dc2626',
             }).then((result) => {
                 if (result.isConfirmed) {
-                    router.delete(`/ressources/taxes/${id}`, { preserveScroll: true });
+                    router.delete(`/settings/resources/taxes/${id}`, { preserveScroll: true });
                 }
             });
         },

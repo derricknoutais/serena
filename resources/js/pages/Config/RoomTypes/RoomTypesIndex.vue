@@ -243,7 +243,7 @@ export default {
             this.showModal = true;
         },
         goToShow(id) {
-            router.visit(`/ressources/room-types/${id}`);
+            router.visit(`/settings/resources/room-types/${id}`);
         },
         openEditModal(item) {
             this.isEditing = true;
@@ -273,7 +273,7 @@ export default {
         },
         handleSubmit(values) {
             this.submitting = true;
-            const url = this.isEditing ? `/ressources/room-types/${this.editId}` : '/ressources/room-types';
+            const url = this.isEditing ? `/settings/resources/room-types/${this.editId}` : '/settings/resources/room-types';
 
             if (this.isEditing) {
                 router.put(url, values, {
@@ -335,7 +335,7 @@ export default {
                 confirmButtonColor: '#dc2626',
             }).then((result) => {
                 if (result.isConfirmed) {
-                    router.delete(`/ressources/room-types/${id}`, { preserveScroll: true });
+                    router.delete(`/settings/resources/room-types/${id}`, { preserveScroll: true });
                 }
             });
         },

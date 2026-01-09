@@ -178,6 +178,9 @@ Route::middleware([
         Route::get('/resources/housekeeping-checklists', function () {
             return redirect()->route('ressources.housekeeping-checklists.index');
         });
+        Route::get('/resources/guests', function () {
+            return redirect()->route('ressources.guests.index');
+        });
 
         Route::patch('/users/{user}/role', UpdateUserRoleController::class)
             ->middleware(['auth', 'verified', 'role:owner|manager|superadmin'])
@@ -250,15 +253,6 @@ Route::middleware([
 
             Route::post('/reservations/walk-in', [WalkInReservationController::class, 'store'])
                 ->name('reservations.walk_in.store');
-
-            Route::get('/resources/guests', [GuestController::class, 'index'])->name('guests.index');
-            Route::get('/resources/guests/create', [GuestController::class, 'create'])->name('guests.create');
-            Route::post('/resources/guests', [GuestController::class, 'store'])->name('guests.store');
-            Route::get('/resources/guests/search', [GuestController::class, 'search'])->name('guests.search');
-            Route::get('/resources/guests/{guest}', [GuestController::class, 'show'])->name('guests.show');
-            Route::get('/resources/guests/{guest}/edit', [GuestController::class, 'edit'])->name('guests.edit');
-            Route::put('/resources/guests/{guest}', [GuestController::class, 'update'])->name('guests.update');
-            Route::delete('/resources/guests/{guest}', [GuestController::class, 'destroy'])->name('guests.destroy');
 
             Route::get('/reservations', [ReservationController::class, 'index'])->name('reservations.index');
             Route::get('/frontdesk/dashboard', [FrontdeskController::class, 'dashboard'])->name('frontdesk.dashboard');
@@ -341,9 +335,9 @@ Route::middleware([
         ->middleware(['auth', 'verified'])
         ->name('activity.index');
 
-    Route::prefix('ressources')
+    Route::prefix('settings/resources')
         ->name('ressources.')
-        ->middleware(['auth'])
+        ->middleware(['auth', 'can:resources.view'])
         ->group(function () {
             Route::post('/active-hotel', ActiveHotelController::class)->name('active-hotel');
             Route::get('/hotel', [HotelConfigController::class, 'edit'])->name('hotel.edit');
@@ -376,6 +370,17 @@ Route::middleware([
                 ->name('housekeeping-checklists.items.destroy');
             Route::post('housekeeping-checklists/{housekeepingChecklist}/items/reorder', [HousekeepingChecklistItemController::class, 'reorder'])
                 ->name('housekeeping-checklists.items.reorder');
+
+            Route::get('guests', [GuestController::class, 'index'])->name('guests.index');
+            Route::get('guests/create', [GuestController::class, 'create'])->name('guests.create');
+            Route::post('guests', [GuestController::class, 'store'])->name('guests.store');
+            Route::get('guests/search', [GuestController::class, 'search'])->name('guests.search');
+            Route::get('guests/{guest}', [GuestController::class, 'show'])->name('guests.show');
+            Route::get('guests/{guest}/edit', [GuestController::class, 'edit'])->name('guests.edit');
+            Route::put('guests/{guest}', [GuestController::class, 'update'])->name('guests.update');
+            Route::delete('guests/{guest}', [GuestController::class, 'destroy'])->name('guests.destroy');
+
+            Route::get('activity', [ActivityController::class, 'index'])->name('activity.index');
         });
 });
 

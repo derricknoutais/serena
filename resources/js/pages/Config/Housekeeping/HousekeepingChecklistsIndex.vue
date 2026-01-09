@@ -447,8 +447,8 @@ export default {
             };
 
             const url = this.isEditing
-                ? `/ressources/housekeeping-checklists/${this.editId}`
-                : '/ressources/housekeeping-checklists';
+                ? `/settings/resources/housekeeping-checklists/${this.editId}`
+                : '/settings/resources/housekeeping-checklists';
             const method = this.isEditing ? 'put' : 'post';
 
             router[method](url, payload, {
@@ -479,7 +479,7 @@ export default {
             };
             const executeUpdate = () => {
                 router.put(
-                    `/ressources/housekeeping-checklists/${checklist.id}`,
+                    `/settings/resources/housekeeping-checklists/${checklist.id}`,
                     {
                         name: checklist.name,
                         scope: checklist.scope,
@@ -538,7 +538,7 @@ export default {
                     return;
                 }
 
-                router.post(`/ressources/housekeeping-checklists/${checklist.id}/duplicate`, {}, {
+                router.post(`/settings/resources/housekeeping-checklists/${checklist.id}/duplicate`, {}, {
                     preserveScroll: true,
                     preserveState: true,
                     onSuccess: () => {
@@ -566,7 +566,7 @@ export default {
                 confirmButtonColor: '#dc2626',
             }).then((result) => {
                 if (result.isConfirmed) {
-                    router.delete(`/ressources/housekeeping-checklists/${checklist.id}`, {
+                    router.delete(`/settings/resources/housekeeping-checklists/${checklist.id}`, {
                         preserveScroll: true,
                         preserveState: true,
                         onSuccess: () => {
@@ -632,8 +632,8 @@ export default {
             };
 
             const url = this.itemEditingId
-                ? `/ressources/housekeeping-checklists/${this.activeChecklistId}/items/${this.itemEditingId}`
-                : `/ressources/housekeeping-checklists/${this.activeChecklistId}/items`;
+                ? `/settings/resources/housekeeping-checklists/${this.activeChecklistId}/items/${this.itemEditingId}`
+                : `/settings/resources/housekeeping-checklists/${this.activeChecklistId}/items`;
             const method = this.itemEditingId ? 'put' : 'post';
 
             router[method](url, payload, {
@@ -670,7 +670,7 @@ export default {
             item[field] = nextValue;
 
             router.put(
-                `/ressources/housekeeping-checklists/${this.activeChecklistId}/items/${item.id}`,
+                `/settings/resources/housekeeping-checklists/${this.activeChecklistId}/items/${item.id}`,
                 {
                     label: item.label,
                     is_required: item.is_required,
@@ -714,7 +714,7 @@ export default {
                 })),
             };
 
-            router.post(`/ressources/housekeeping-checklists/${this.activeChecklistId}/items/reorder`, payload, {
+            router.post(`/settings/resources/housekeeping-checklists/${this.activeChecklistId}/items/reorder`, payload, {
                 preserveScroll: true,
                 preserveState: true,
                 onSuccess: () => {
@@ -744,7 +744,7 @@ export default {
                 }
 
                 router.delete(
-                    `/ressources/housekeeping-checklists/${this.activeChecklistId}/items/${item.id}`,
+                    `/settings/resources/housekeeping-checklists/${this.activeChecklistId}/items/${item.id}`,
                     {
                         preserveScroll: true,
                         preserveState: true,

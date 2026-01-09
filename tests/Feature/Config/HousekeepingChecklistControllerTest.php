@@ -55,7 +55,7 @@ it('creates an active checklist and deactivates others in the same scope', funct
     ];
 
     $response = actingAs($user)->post(sprintf(
-        'http://%s/ressources/housekeeping-checklists',
+        'http://%s/settings/resources/housekeeping-checklists',
         tenantDomain($tenant),
     ), $payload);
 
@@ -93,7 +93,7 @@ it('creates updates and reorders checklist items', function (): void {
     ]);
 
     actingAs($user)->post(sprintf(
-        'http://%s/ressources/housekeeping-checklists/%s/items',
+        'http://%s/settings/resources/housekeeping-checklists/%s/items',
         tenantDomain($tenant),
         $checklist->id,
     ), [
@@ -103,7 +103,7 @@ it('creates updates and reorders checklist items', function (): void {
     ])->assertRedirect();
 
     actingAs($user)->post(sprintf(
-        'http://%s/ressources/housekeeping-checklists/%s/items',
+        'http://%s/settings/resources/housekeeping-checklists/%s/items',
         tenantDomain($tenant),
         $checklist->id,
     ), [
@@ -123,7 +123,7 @@ it('creates updates and reorders checklist items', function (): void {
         ->firstOrFail();
 
     actingAs($user)->put(sprintf(
-        'http://%s/ressources/housekeeping-checklists/%s/items/%s',
+        'http://%s/settings/resources/housekeeping-checklists/%s/items/%s',
         tenantDomain($tenant),
         $checklist->id,
         $firstItem->id,
@@ -140,7 +140,7 @@ it('creates updates and reorders checklist items', function (): void {
         ->and($updatedItem->is_active)->toBeFalse();
 
     actingAs($user)->post(sprintf(
-        'http://%s/ressources/housekeeping-checklists/%s/items/reorder',
+        'http://%s/settings/resources/housekeeping-checklists/%s/items/reorder',
         tenantDomain($tenant),
         $checklist->id,
     ), [

@@ -48,6 +48,7 @@ function setupPaymentMethodTenant(): array
 
     $guard = config('auth.defaults.guard', 'web');
     $permissions = [
+        'resources.view',
         'payment_methods.view',
         'payment_methods.create',
         'payment_methods.update',
@@ -92,7 +93,7 @@ it('stores payment methods with config', function (): void {
     ];
 
     $response = actingAs($user)->post(
-        sprintf('http://%s/ressources/payment-methods', tenantDomain($tenant)),
+        sprintf('http://%s/settings/resources/payment-methods', tenantDomain($tenant)),
         $payload,
     );
 
@@ -136,7 +137,7 @@ it('updates payment methods', function (): void {
     ]);
 
     $response = actingAs($user)->put(
-        sprintf('http://%s/ressources/payment-methods/%d', tenantDomain($tenant), $method->id),
+        sprintf('http://%s/settings/resources/payment-methods/%d', tenantDomain($tenant), $method->id),
         [
             'name' => 'Mobile Money',
             'code' => 'MOMO',
@@ -172,7 +173,7 @@ it('rejects invalid config json', function (): void {
     ]);
 
     $response = actingAs($user)->post(
-        sprintf('http://%s/ressources/payment-methods', tenantDomain($tenant)),
+        sprintf('http://%s/settings/resources/payment-methods', tenantDomain($tenant)),
         [
             'name' => 'Espèces',
             'code' => 'CASH',
@@ -207,7 +208,7 @@ it('deletes payment methods', function (): void {
     ]);
 
     $response = actingAs($user)->delete(
-        sprintf('http://%s/ressources/payment-methods/%d', tenantDomain($tenant), $method->id),
+        sprintf('http://%s/settings/resources/payment-methods/%d', tenantDomain($tenant), $method->id),
     );
 
     $response->assertRedirect();

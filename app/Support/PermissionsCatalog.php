@@ -63,6 +63,7 @@ class PermissionsCatalog
             'payment_methods.create',
             'payment_methods.update',
             'payment_methods.delete',
+            'resources.view',
             // Maintenance
             'maintenance_tickets.view',
             'maintenance_tickets.create',

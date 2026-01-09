@@ -36,12 +36,6 @@ export default defineComponent({
                     Rooms
                 </Link>
                 <Link
-                    href="/resources/guests"
-                    class="rounded-full px-3 py-1 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
-                >
-                    Guests
-                </Link>
-                <Link
                     href="/reservations"
                     class="rounded-full px-3 py-1 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
                 >

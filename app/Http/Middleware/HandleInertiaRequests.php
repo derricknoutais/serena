@@ -64,6 +64,9 @@ class HandleInertiaRequests extends Middleware
             'webpush' => [
                 'publicKey' => config('webpush.vapid.public_key'),
             ],
+            'ui' => [
+                'settings_resources_layout' => str_starts_with($request->path(), 'settings/resources'),
+            ],
         ];
     }
 
@@ -97,6 +100,7 @@ class HandleInertiaRequests extends Middleware
             'product_categories.view', 'product_categories.create', 'product_categories.update', 'product_categories.delete',
             'taxes.view', 'taxes.create', 'taxes.update', 'taxes.delete',
             'payment_methods.view', 'payment_methods.create', 'payment_methods.update', 'payment_methods.delete',
+            'resources.view',
             'maintenance_tickets.view', 'maintenance_tickets.create', 'maintenance_tickets.update', 'maintenance_tickets.close',
             'invoices.view', 'invoices.create', 'invoices.update', 'invoices.delete',
             'pos.view', 'pos.create',

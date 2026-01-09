@@ -5,7 +5,7 @@
                 <h1 class="text-xl font-semibold">Modifier un produit</h1>
                 <p class="text-sm text-gray-500">Formulaire à implémenter.</p>
             </div>
-            <Link href="/ressources/products" class="text-sm text-indigo-600 hover:underline">Retour</Link>
+            <Link href="/settings/resources/products" class="text-sm text-indigo-600 hover:underline">Retour</Link>
         </div>
         <p class="text-sm text-gray-600">Formulaire à compléter.</p>
     </ConfigLayout>

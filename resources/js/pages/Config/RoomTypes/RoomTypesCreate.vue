@@ -5,7 +5,7 @@
                 <h1 class="text-xl font-semibold">Nouveau type de chambre</h1>
                 <p class="text-sm text-gray-500">Créer une nouvelle catégorie.</p>
             </div>
-            <Link href="/ressources/room-types" class="text-sm text-indigo-600 hover:underline">Retour</Link>
+            <Link href="/settings/resources/room-types" class="text-sm text-indigo-600 hover:underline">Retour</Link>
         </div>
 
         <form @submit.prevent="submit" class="space-y-4">
@@ -75,7 +75,7 @@ export default {
     methods: {
         submit() {
             this.processing = true;
-            router.post('/ressources/room-types', this.form, {
+            router.post('/settings/resources/room-types', this.form, {
                 onFinish: () => {
                     this.processing = false;
                 },

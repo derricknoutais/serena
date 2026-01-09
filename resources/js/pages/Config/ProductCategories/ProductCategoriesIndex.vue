@@ -258,7 +258,7 @@ export default {
                 is_active: this.form.is_active,
             };
 
-            const url = this.isEditing ? `/ressources/product-categories/${this.editId}` : '/ressources/product-categories';
+            const url = this.isEditing ? `/settings/resources/product-categories/${this.editId}` : '/settings/resources/product-categories';
             const method = this.isEditing ? 'put' : 'post';
 
             router[method](url, payload, {
@@ -290,7 +290,7 @@ export default {
                 confirmButtonColor: '#dc2626',
             }).then((result) => {
                 if (result.isConfirmed) {
-                    router.delete(`/ressources/product-categories/${id}`, { preserveScroll: true });
+                    router.delete(`/settings/resources/product-categories/${id}`, { preserveScroll: true });
                 }
             });
         },

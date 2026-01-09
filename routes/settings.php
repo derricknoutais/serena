@@ -47,6 +47,8 @@ Route::middleware(['web', InitializeTenancyByDomain::class, PreventAccessFromCen
         ->middleware('role:owner|manager|superadmin')
         ->name('settings.badges.download');
 
+    Route::redirect('settings/resources', '/settings/resources/hotel');
+
     Route::get('settings/appearance', [AppearanceController::class, 'edit'])->name('appearance.edit');
 
     Route::get('settings/two-factor', [TwoFactorAuthenticationController::class, 'show'])

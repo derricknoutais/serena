@@ -5,7 +5,7 @@
                 <h1 class="text-xl font-semibold">Modifier le type de chambre</h1>
                 <p class="text-sm text-gray-500">Mettre à jour les informations.</p>
             </div>
-            <Link href="/ressources/room-types" class="text-sm text-indigo-600 hover:underline">Retour</Link>
+            <Link href="/settings/resources/room-types" class="text-sm text-indigo-600 hover:underline">Retour</Link>
         </div>
 
         <form @submit.prevent="submit" class="space-y-4">
@@ -81,7 +81,7 @@ export default {
     methods: {
         submit() {
             this.processing = true;
-            router.put(`/ressources/room-types/${this.roomType.id}`, this.form, {
+            router.put(`/settings/resources/room-types/${this.roomType.id}`, this.form, {
                 onFinish: () => {
                     this.processing = false;
                 },

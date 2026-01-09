@@ -280,6 +280,11 @@ export default {
         errors() {
             return this.$page.props.errors || {};
         },
+        resourceBasePath() {
+            const currentUrl = this.$page?.url ?? '';
+
+            return currentUrl.startsWith('/settings/resources') ? '/settings/resources' : '/resources';
+        },
     },
     watch: {
         'localFilters.search'(value) {
@@ -313,7 +318,7 @@ export default {
     },
     methods: {
         applyFilters(value = this.localFilters.search) {
-            router.visit('/resources/guests', {
+            router.visit(`${this.resourceBasePath}/guests`, {
                 method: 'get',
                 data: { search: value },
                 preserveState: true,
@@ -378,7 +383,9 @@ export default {
                 notes: this.form.notes,
             };
 
-            const url = this.isEditing ? `/resources/guests/${this.editId}` : '/resources/guests';
+            const url = this.isEditing
+                ? `${this.resourceBasePath}/guests/${this.editId}`
+                : `${this.resourceBasePath}/guests`;
             const method = this.isEditing ? 'put' : 'post';
 
             router[method](url, payload, {
@@ -405,7 +412,7 @@ export default {
                 confirmButtonColor: '#dc2626',
             }).then((result) => {
                 if (result.isConfirmed) {
-                    router.delete(`/resources/guests/${id}`, { preserveScroll: true });
+                    router.delete(`${this.resourceBasePath}/guests/${id}`, { preserveScroll: true });
                 }
             });
         },

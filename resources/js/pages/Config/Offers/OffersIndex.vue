@@ -1058,7 +1058,7 @@ export default {
                         price: Number(p.price),
                     })),
             };
-            const url = this.isEditing ? `/ressources/offers/${this.editId}` : '/ressources/offers';
+            const url = this.isEditing ? `/settings/resources/offers/${this.editId}` : '/settings/resources/offers';
 
             if (this.isEditing) {
                 router.put(
@@ -1126,7 +1126,7 @@ export default {
                 confirmButtonColor: '#dc2626',
             }).then((result) => {
                 if (result.isConfirmed) {
-                    router.delete(`/ressources/offers/${id}`, { preserveScroll: true });
+                    router.delete(`/settings/resources/offers/${id}`, { preserveScroll: true });
                 }
             });
         },

@@ -5,7 +5,7 @@
                 <h1 class="text-xl font-semibold">Utilisateurs</h1>
                 <p class="text-sm text-gray-500">Gestion des membres du tenant.</p>
             </div>
-            <Link href="/ressources/users/create">
+            <Link href="/settings/resources/users/create">
                 <PrimaryButton type="button" class="px-4 py-2 text-sm">
                     Nouvel utilisateur
                 </PrimaryButton>
@@ -28,7 +28,7 @@
                         <td class="px-4 py-3 text-sm text-gray-600">{{ user.email }}</td>
                         <td class="px-4 py-3 text-sm text-gray-600">{{ user.role || '—' }}</td>
                         <td class="px-4 py-3 text-sm text-gray-600 space-x-3">
-                            <Link :href="`/ressources/users/${user.id}/edit`" class="text-indigo-600 hover:underline">
+                            <Link :href="`/settings/resources/users/${user.id}/edit`" class="text-indigo-600 hover:underline">
                                 Éditer
                             </Link>
                             <button
@@ -66,7 +66,7 @@ export default {
     methods: {
         destroy(id) {
             if (confirm('Supprimer cet utilisateur ?')) {
-                router.delete(`/ressources/users/${id}`);
+                router.delete(`/settings/resources/users/${id}`);
             }
         },
     },

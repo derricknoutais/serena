@@ -5,7 +5,7 @@
                 <h1 class="text-xl font-semibold">Créer une taxe</h1>
                 <p class="text-sm text-gray-500">Renseignez les informations de la taxe.</p>
             </div>
-            <Link href="/ressources/taxes" class="text-sm text-indigo-600 hover:underline">Retour</Link>
+            <Link href="/settings/resources/taxes" class="text-sm text-indigo-600 hover:underline">Retour</Link>
         </div>
 
         <Form :key="formKey" :initial-values="form" @submit="handleSubmit" class="space-y-4">
@@ -163,7 +163,7 @@ export default {
                 type: values.type ? String(values.type) : '',
             };
 
-            router.post('/ressources/taxes', payload, {
+            router.post('/settings/resources/taxes', payload, {
                 onFinish: () => {
                     this.submitting = false;
                 },

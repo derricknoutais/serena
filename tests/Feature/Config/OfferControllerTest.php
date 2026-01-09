@@ -6,6 +6,8 @@ use App\Models\Hotel;
 use App\Models\Offer;
 use App\Models\Tenant;
 use App\Models\User;
+use Database\Seeders\PermissionSeeder;
+use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Str;
 
 use function Pest\Laravel\actingAs;
@@ -49,11 +51,18 @@ function setupOfferTenant(): array
 }
 
 it('stores numeric valid_days_of_week for offers', function (): void {
+    $this->seed([
+        RoleSeeder::class,
+        PermissionSeeder::class,
+    ]);
+
     [
         'tenant' => $tenant,
         'hotel' => $hotel,
         'user' => $user,
     ] = setupOfferTenant();
+
+    $user->assignRole('owner');
 
     config([
         'app.url' => 'http://serena.test',
@@ -78,7 +87,7 @@ it('stores numeric valid_days_of_week for offers', function (): void {
     ];
 
     $response = actingAs($user)->post(sprintf(
-        'http://%s/ressources/offers',
+        'http://%s/settings/resources/offers',
         tenantDomain($tenant),
     ), $payload);
 

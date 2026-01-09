@@ -1193,7 +1193,7 @@
 
                 this.guestSearchTimeout = setTimeout(async () => {
                     try {
-                        const response = await axios.get('/resources/guests/search', {
+                        const response = await axios.get('/settings/resources/guests/search', {
                             params: { search: term },
                             headers: { Accept: 'application/json' },
                         });
@@ -1331,7 +1331,7 @@
 
                 try {
                     const response = await axios.post(
-                        '/resources/guests',
+                        '/settings/resources/guests',
                         {
                             first_name: formValues.first_name,
                             last_name: formValues.last_name,

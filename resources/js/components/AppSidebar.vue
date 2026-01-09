@@ -14,26 +14,14 @@ import {
 import { dashboard as appDashboard } from '@/routes';
 import { dashboard as frontdeskDashboard } from '@/routes/frontdesk';
 import { index as housekeepingIndex } from '@/routes/housekeeping';
-import { edit as settingsProfile } from '@/routes/profile';
 import { index as activityIndex } from '@/routes/activity/index';
 // import { index as activityIndex } from '@/routes/activity';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
 import {
     Activity,
-    BedDouble,
-    Building2,
-    CreditCard,
     LayoutGrid,
-    Layers,
-    Percent,
-    ShoppingBag,
-    Sparkles,
-    Tags,
-    UserCog,
     ConciergeBell,
-    Users,
-    UsersRound,
     CalendarDays,
 } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
@@ -58,71 +46,6 @@ const baseMainNavItems: (NavItem & { requiredPermission?: string })[] = [
     },
 ];
 
-const baseRessourcesNavItems: (NavItem & { requiredPermission?: string })[] = [
-    {
-        title: 'Hôtel',
-        href: '/ressources/hotel',
-        icon: Building2,
-    },
-    {
-        title: 'Types de chambres',
-        href: '/ressources/room-types',
-        icon: Layers,
-        requiredPermission: 'room_types_view',
-    },
-    {
-        title: 'Chambres',
-        href: '/ressources/rooms',
-        icon: BedDouble,
-        requiredPermission: 'rooms_view',
-    },
-    {
-        title: 'Checklists HK',
-        href: '/ressources/housekeeping-checklists',
-        icon: Activity,
-    },
-    {
-        title: 'Offres',
-        href: '/ressources/offers',
-        icon: Sparkles,
-        requiredPermission: 'offers_view',
-    },
-    {
-        title: 'Taxes',
-        href: '/ressources/taxes',
-        icon: Percent,
-        requiredPermission: 'taxes_view',
-    },
-    {
-        title: 'Méthodes de paiement',
-        href: '/ressources/payment-methods',
-        icon: CreditCard,
-        requiredPermission: 'payment_methods_view',
-    },
-    {
-        title: 'Catégories de produits',
-        href: '/ressources/product-categories',
-        icon: Tags,
-        requiredPermission: 'product_categories_view',
-    },
-    {
-        title: 'Produits',
-        href: '/ressources/products',
-        icon: ShoppingBag,
-        requiredPermission: 'products_view',
-    },
-    {
-        title: 'Utilisateurs (tenant)',
-        href: '/ressources/users',
-        icon: UserCog,
-    },
-    {
-        title: 'Journal d’activités',
-        href: activityIndex(),
-        icon: Activity,
-    }
-];
-
 const page = usePage();
 const pageProps = computed(() => (page?.props ? page.props : page.value.props));
 const permissions = computed<Record<string, boolean>>(
@@ -130,19 +53,6 @@ const permissions = computed<Record<string, boolean>>(
 );
 const canViewFrontdesk = computed(() => Boolean(permissions.value?.frontdesk_view ?? false));
 const canViewHousekeeping = computed(() => Boolean(permissions.value?.housekeeping_view ?? false));
-const canViewResources = computed(() => {
-    const resourceKeys = [
-        'rooms_view',
-        'room_types_view',
-        'offers_view',
-        'products_view',
-        'product_categories_view',
-        'taxes_view',
-        'payment_methods_view',
-    ];
-
-    return resourceKeys.some((key) => permissions.value?.[key]);
-});
 const currentUrl = computed(() => (page?.url ? page.url : page.value.url) || '');
 
 const mainNavItems = computed(() => {
@@ -159,16 +69,7 @@ const mainNavItems = computed(() => {
     });
 });
 
-const ressourcesNavItems = computed(() => baseRessourcesNavItems.filter((item) => {
-    if (!item.requiredPermission) {
-        return true;
-    }
-
-    return permissions.value[item.requiredPermission] ?? false;
-}));
-
-const ressourcesOpen = ref(currentUrl.value.startsWith('/ressources/') || currentUrl.value.startsWith('/activity'));
-const receptionOpen = ref(currentUrl.value.startsWith('/resources/guests') || currentUrl.value.startsWith('/frontdesk'));
+const receptionOpen = ref(currentUrl.value.startsWith('/frontdesk'));
 
 const footerNavItems: NavItem[] = [
     {
@@ -195,31 +96,6 @@ const footerNavItems: NavItem[] = [
 
         <SidebarContent>
             <NavMain :items="mainNavItems" />
-            <SidebarMenu v-if="canViewResources" class="px-2">
-                <SidebarMenuItem>
-                    <SidebarMenuButton
-                        class="justify-between"
-                        type="button"
-                        @click.stop="ressourcesOpen = !ressourcesOpen"
-                    >
-                        <div class="flex items-center gap-2">
-                            <Layers class="h-4 w-4" />
-                            <span>Ressources</span>
-                        </div>
-                        <span class="text-md text-muted-foreground">{{ ressourcesOpen ? '−' : '+' }}</span>
-                    </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenu v-if="ressourcesOpen">
-                    <SidebarMenuItem v-for="item in ressourcesNavItems" :key="item.title">
-                        <SidebarMenuButton as-child class="pl-6" @click.stop.prevent>
-                            <Link :href="item.href" @click.stop.prevent>
-                                <component :is="item.icon" />
-                                <span>{{ item.title }}</span>
-                            </Link>
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
-                </SidebarMenu>
-            </SidebarMenu>
             <SidebarMenu v-if="canViewFrontdesk" class="px-2">
                 <SidebarMenuItem>
                     <SidebarMenuButton
@@ -240,14 +116,6 @@ const footerNavItems: NavItem[] = [
                             <Link :href="frontdeskDashboard()" @click.stop.prevent>
                                 <ConciergeBell class="h-4 w-4" />
                                 <span>Frontdesk</span>
-                            </Link>
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                        <SidebarMenuButton as-child class="pl-6" @click.stop.prevent>
-                            <Link href="/resources/guests" @click.stop.prevent>
-                                <UsersRound class="h-4 w-4" />
-                                <span>Clients</span>
                             </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>

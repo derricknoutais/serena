@@ -366,7 +366,7 @@ export default {
         handleSubmit(values) {
             this.submitting = true;
             router.put(
-                '/ressources/hotel',
+                '/settings/resources/hotel',
                 values,
                 {
                     preserveScroll: true,

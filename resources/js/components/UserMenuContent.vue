@@ -39,7 +39,7 @@ const switchHotel = (hotelId: number) => {
     let timerInterval: ReturnType<typeof setInterval> | undefined;
 
     router.post(
-        '/ressources/active-hotel',
+        '/settings/resources/active-hotel',
         { hotel_id: hotelId },
         {
             preserveScroll: true,

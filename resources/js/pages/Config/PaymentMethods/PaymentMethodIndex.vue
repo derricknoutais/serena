@@ -402,7 +402,7 @@ export default {
             };
 
             const method = this.editingId ? 'put' : 'post';
-            const url = this.editingId ? `/ressources/payment-methods/${this.editingId}` : '/ressources/payment-methods';
+            const url = this.editingId ? `/settings/resources/payment-methods/${this.editingId}` : '/settings/resources/payment-methods';
 
             router[method](url, payload, {
                 preserveScroll: true,
@@ -431,7 +431,7 @@ export default {
                 confirmButtonColor: '#dc2626',
             }).then((result) => {
                 if (result.isConfirmed) {
-                    router.delete(`/ressources/payment-methods/${id}`, { preserveScroll: true });
+                    router.delete(`/settings/resources/payment-methods/${id}`, { preserveScroll: true });
                 }
             });
         },

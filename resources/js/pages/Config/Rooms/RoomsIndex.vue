@@ -325,7 +325,7 @@ export default {
             }
 
             this.submitting = true;
-            const url = this.isEditing ? `/ressources/rooms/${this.editId}` : '/ressources/rooms';
+            const url = this.isEditing ? `/settings/resources/rooms/${this.editId}` : '/settings/resources/rooms';
             if (this.isEditing) {
                 router.put(
                     url,
@@ -388,7 +388,7 @@ export default {
                 confirmButtonColor: '#dc2626',
             }).then((result) => {
                 if (result.isConfirmed) {
-                    router.delete(`/ressources/rooms/${id}`, { preserveScroll: true });
+                    router.delete(`/settings/resources/rooms/${id}`, { preserveScroll: true });
                 }
             });
         },

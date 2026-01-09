@@ -5,7 +5,7 @@
                 <h1 class="text-xl font-semibold">Type de chambre</h1>
                 <p class="text-sm text-gray-500">Configurer les tarifs par offre pour ce type de chambre.</p>
             </div>
-            <Link href="/ressources/room-types" class="text-sm text-indigo-600 hover:underline">Retour</Link>
+            <Link href="/settings/resources/room-types" class="text-sm text-indigo-600 hover:underline">Retour</Link>
         </div>
 
         <div class="mb-6 rounded-xl bg-white p-4 shadow-sm">
@@ -239,7 +239,7 @@ export default {
             };
 
             router.post(
-                `/ressources/room-types/${this.roomType.id}/prices`,
+                `/settings/resources/room-types/${this.roomType.id}/prices`,
                 payload,
                 {
                     preserveScroll: true,

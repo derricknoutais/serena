@@ -8,7 +8,6 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
 import HeaderUserMenu from '@/components/HeaderUserMenu.vue';
-import PrimaryButton from '@/components/PrimaryButton.vue';
 import { dashboard as frontdeskDashboard } from '@/routes/frontdesk';
 import { logout } from '@/routes';
 import { edit } from '@/routes/profile/index';
@@ -23,11 +22,9 @@ export default defineComponent({
         HeaderUserMenu,
         Head,
         Link,
-        PrimaryButton,
     },
     data() {
         return {
-            resourcesOpen: false as boolean,
             offline: !navigator.onLine,
             outboxOpen: false,
             outboxItems: [] as Array<any>,
@@ -139,10 +136,6 @@ export default defineComponent({
                 return;
             }
 
-            if (!target.closest('[data-dropdown="resources"]')) {
-                this.resourcesOpen = false;
-            }
-
             if (!target.closest('[data-dropdown="operations"]')) {
                 this.operationsOpen = false;
             }
@@ -224,20 +217,6 @@ export default defineComponent({
 
             return Boolean(permissions.housekeeping_view ?? false);
         },
-        canViewResources(): boolean {
-            const permissions = this.$page?.props?.auth?.can ?? {};
-            const resourceKeys = [
-                'rooms_view',
-                'room_types_view',
-                'offers_view',
-                'products_view',
-                'product_categories_view',
-                'taxes_view',
-                'payment_methods_view',
-            ];
-
-            return resourceKeys.some((key) => permissions[key]);
-        },
         operationsLinkVisible(): boolean {
             return this.maintenanceLinkVisible || this.posLinkVisible;
         },
@@ -315,97 +294,6 @@ export default defineComponent({
                 </button>
 
                 <nav class="hidden items-center space-x-4 text-sm lg:flex">
-                    <!-- Ressources -->
-                    <div v-if="canViewResources" class="relative" aria-label="Ressources" data-dropdown="resources">
-                        <PrimaryButton
-                            type="button"
-                            variant="primary"
-                            class="bg-serena-primary/90 text-xs font-medium text-white hover:bg-serena-primary-dark"
-                            @click="resourcesOpen = !resourcesOpen"
-                        >
-                            <span>Ressources</span>
-                            <span class="text-[10px] opacity-80">
-                                {{ resourcesOpen ? '▴' : '▾' }}
-                            </span>
-                        </PrimaryButton>
-                        <div
-                            v-if="resourcesOpen"
-                            class="absolute right-0 z-20 mt-2 w-56 rounded-xl border border-serena-border/60 bg-serena-card p-2 text-sm shadow-md"
-                        >
-                            <Link
-                                href="/ressources/hotel"
-                                class="block rounded-lg px-3 py-1.5 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
-                            >
-                                Hôtel
-                            </Link>
-                            <Link
-                                href="/ressources/room-types"
-                                class="block rounded-lg px-3 py-1.5 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
-                            >
-                                Types de chambres
-                            </Link>
-                            <Link
-                                href="/ressources/rooms"
-                                class="block rounded-lg px-3 py-1.5 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
-                            >
-                                Chambres
-                            </Link>
-                            <Link
-                                href="/ressources/housekeeping-checklists"
-                                class="block rounded-lg px-3 py-1.5 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
-                            >
-                                Checklists HK
-                            </Link>
-                            <Link
-                                href="/resources/guests"
-                                class="block rounded-lg px-3 py-1.5 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
-                            >
-                                Guests
-                            </Link>
-                            <Link
-                                href="/ressources/offers"
-                                class="block rounded-lg px-3 py-1.5 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
-                            >
-                                Offres
-                            </Link>
-                            <Link
-                                href="/ressources/taxes"
-                                class="block rounded-lg px-3 py-1.5 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
-                            >
-                                Taxes
-                            </Link>
-                            <Link
-                                href="/ressources/payment-methods"
-                                class="block rounded-lg px-3 py-1.5 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
-                            >
-                                Méthodes de paiement
-                            </Link>
-                            <Link
-                                href="/ressources/product-categories"
-                                class="block rounded-lg px-3 py-1.5 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
-                            >
-                                Catégories de produits
-                            </Link>
-                            <Link
-                                href="/ressources/products"
-                                class="block rounded-lg px-3 py-1.5 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
-                            >
-                                Produits
-                            </Link>
-                            <Link
-                                href="/ressources/users"
-                                class="block rounded-lg px-3 py-1.5 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
-                            >
-                                Utilisateurs
-                            </Link>
-                            <Link
-                                href="/activity"
-                                class="block rounded-lg px-3 py-1.5 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
-                            >
-                                Journal d’activités
-                            </Link>
-                        </div>
-                    </div>
                     <Link
                         v-if="canViewFrontdesk"
                         :href="frontdeskDashboard()"
@@ -592,45 +480,6 @@ export default defineComponent({
                         </Link>
                         <Link v-if="analyticsLinkVisible" href="/analytics" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
                             Analytics
-                        </Link>
-                    </div>
-                </div>
-
-                <div v-if="canViewResources" class="space-y-2">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-serena-text-muted">Ressources</p>
-                    <div class="grid grid-cols-2 gap-2">
-                        <Link href="/ressources/hotel" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
-                            Hôtel
-                        </Link>
-                        <Link href="/resources/guests" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
-                            Guests
-                        </Link>
-                        <Link href="/ressources/room-types" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
-                            Types de chambres
-                        </Link>
-                        <Link href="/ressources/rooms" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
-                            Chambres
-                        </Link>
-                        <Link href="/ressources/offers" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
-                            Offres
-                        </Link>
-                        <Link href="/ressources/taxes" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
-                            Taxes
-                        </Link>
-                        <Link href="/ressources/payment-methods" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
-                            Méthodes de paiement
-                        </Link>
-                        <Link href="/ressources/product-categories" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
-                            Catégories de produits
-                        </Link>
-                        <Link href="/ressources/products" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
-                            Produits
-                        </Link>
-                        <Link href="/ressources/users" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
-                            Utilisateurs
-                        </Link>
-                        <Link href="/activity" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
-                            Journal d’activités
                         </Link>
                     </div>
                 </div>

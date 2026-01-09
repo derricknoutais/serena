@@ -114,7 +114,7 @@ export default {
     methods: {
         submit() {
             this.processing = true;
-            router.put('/ressources/hotel', this.form, {
+            router.put('/settings/resources/hotel', this.form, {
                 onFinish: () => {
                     this.processing = false;
                 },
