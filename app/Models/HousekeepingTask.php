@@ -19,6 +19,10 @@ class HousekeepingTask extends Model
 
     public const TYPE_INSPECTION = 'inspection';
 
+    public const TYPE_REDO_CLEANING = 'redo-cleaning';
+
+    public const TYPE_REDO_INSPECTION = 'redo-inspection';
+
     public const STATUS_PENDING = 'pending';
 
     public const STATUS_IN_PROGRESS = 'in_progress';

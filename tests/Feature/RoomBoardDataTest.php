@@ -333,6 +333,133 @@ it('includes failed inspection remarks in room board data', function (): void {
     ]);
 });
 
+it('includes failed redo inspection remarks in room board data', function (): void {
+    [
+        'hotel' => $hotel,
+        'roomType' => $roomType,
+        'user' => $user,
+    ] = setupRoomBoardTenant();
+
+    $room = Room::query()->create([
+        'tenant_id' => $user->tenant_id,
+        'hotel_id' => $hotel->id,
+        'room_type_id' => $roomType->id,
+        'number' => '202',
+        'floor' => '2',
+        'status' => Room::STATUS_AVAILABLE,
+        'hk_status' => Room::HK_STATUS_REDO,
+    ]);
+
+    $checklist = HousekeepingChecklist::query()->create([
+        'tenant_id' => $user->tenant_id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Checklist Standard',
+        'scope' => HousekeepingChecklist::SCOPE_GLOBAL,
+        'is_active' => true,
+    ]);
+
+    $item = HousekeepingChecklistItem::query()->create([
+        'checklist_id' => $checklist->id,
+        'label' => 'Ventilation',
+        'sort_order' => 1,
+        'is_required' => true,
+        'is_active' => true,
+    ]);
+
+    $inspection = HousekeepingTask::query()->create([
+        'tenant_id' => $user->tenant_id,
+        'hotel_id' => $hotel->id,
+        'room_id' => $room->id,
+        'type' => HousekeepingTask::TYPE_REDO_INSPECTION,
+        'status' => HousekeepingTask::STATUS_DONE,
+        'priority' => HousekeepingTask::PRIORITY_NORMAL,
+        'created_from' => HousekeepingTask::SOURCE_CHECKOUT,
+        'ended_at' => now(),
+        'outcome' => HousekeepingTask::OUTCOME_FAILED,
+    ]);
+
+    HousekeepingTaskChecklistItem::query()->create([
+        'task_id' => $inspection->id,
+        'checklist_item_id' => $item->id,
+        'is_ok' => false,
+        'note' => 'Bruits anormaux',
+    ]);
+
+    $request = Request::create('/frontdesk/dashboard', 'GET', [
+        'date' => now()->toDateString(),
+    ]);
+    $request->setUserResolver(fn () => $user);
+
+    $data = RoomBoardData::build($request);
+    $rooms = collect($data['roomsByFloor'])->flatten(1);
+    $payload = $rooms->firstWhere('id', $room->id);
+
+    expect($payload['last_inspection']['outcome'])->toBe(HousekeepingTask::OUTCOME_FAILED);
+    expect($payload['last_inspection']['remarks'])->toBe([
+        [
+            'label' => 'Ventilation',
+            'note' => 'Bruits anormaux',
+        ],
+    ]);
+});
+
+it('does not show checked-out reservations as current on the room board', function (): void {
+    [
+        'hotel' => $hotel,
+        'roomType' => $roomType,
+        'user' => $user,
+    ] = setupRoomBoardTenant();
+
+    $room = Room::query()->create([
+        'tenant_id' => $user->tenant_id,
+        'hotel_id' => $hotel->id,
+        'room_type_id' => $roomType->id,
+        'number' => '203',
+        'floor' => '2',
+        'status' => Room::STATUS_AVAILABLE,
+        'hk_status' => Room::HK_STATUS_INSPECTED,
+    ]);
+
+    $guest = Guest::query()->create([
+        'tenant_id' => $user->tenant_id,
+        'first_name' => 'John',
+        'last_name' => 'Doe',
+        'email' => 'john.doe@example.com',
+    ]);
+
+    Reservation::query()->create([
+        'tenant_id' => $user->tenant_id,
+        'hotel_id' => $hotel->id,
+        'guest_id' => $guest->id,
+        'room_type_id' => $roomType->id,
+        'room_id' => $room->id,
+        'code' => 'RES-HOURLY',
+        'status' => Reservation::STATUS_CHECKED_OUT,
+        'source' => 'direct',
+        'check_in_date' => now()->toDateTimeString(),
+        'check_out_date' => now()->addHours(3)->toDateTimeString(),
+        'actual_check_in_at' => now()->toDateTimeString(),
+        'actual_check_out_at' => now()->addHours(3)->toDateTimeString(),
+        'currency' => $hotel->currency,
+        'unit_price' => 10000,
+        'base_amount' => 10000,
+        'tax_amount' => 0,
+        'total_amount' => 10000,
+    ]);
+
+    $request = Request::create('/frontdesk/dashboard', 'GET', [
+        'date' => now()->toDateString(),
+    ]);
+    $request->setUserResolver(fn () => $user);
+
+    $data = RoomBoardData::build($request);
+    $rooms = collect($data['roomsByFloor'])->flatten(1);
+    $payload = $rooms->firstWhere('id', $room->id);
+
+    expect($payload['current_reservation'])->toBeNull();
+    expect($payload['ui_status'])->toBe('available');
+});
+
 it('exposes offer time config for room board summary calculations', function (): void {
     [
         'hotel' => $hotel,

@@ -70,6 +70,16 @@ it('lists pending and in-progress housekeeping tasks on the housekeeping index',
         'tenant_id' => $tenant->id,
         'hotel_id' => $hotel->id,
         'room_id' => $secondRoom->id,
+        'type' => HousekeepingTask::TYPE_INSPECTION,
+        'status' => HousekeepingTask::STATUS_PENDING,
+        'priority' => HousekeepingTask::PRIORITY_NORMAL,
+        'created_from' => HousekeepingTask::SOURCE_MANUAL,
+    ]);
+
+    HousekeepingTask::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'room_id' => $secondRoom->id,
         'type' => HousekeepingTask::TYPE_CLEANING,
         'status' => HousekeepingTask::STATUS_DONE,
         'priority' => HousekeepingTask::PRIORITY_NORMAL,
@@ -86,15 +96,21 @@ it('lists pending and in-progress housekeeping tasks on the housekeeping index',
     $response->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('Housekeeping/Index')
-            ->has('tasks', 2)
+            ->has('tasks', 3)
             ->has('tasks.0.participants')
             ->has('tasks.0.room')
             ->where('tasks', function ($tasks): bool {
                 $statuses = collect($tasks)->pluck('status')->sort()->values()->all();
+                $types = collect($tasks)->pluck('type')->sort()->values()->all();
 
                 return $statuses === [
                     HousekeepingTask::STATUS_IN_PROGRESS,
                     HousekeepingTask::STATUS_PENDING,
+                    HousekeepingTask::STATUS_PENDING,
+                ] && $types === [
+                    HousekeepingTask::TYPE_CLEANING,
+                    HousekeepingTask::TYPE_CLEANING,
+                    HousekeepingTask::TYPE_INSPECTION,
                 ];
             }));
 });

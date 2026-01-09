@@ -68,6 +68,8 @@ it('creates an inspection task after cleaning and completes inspection', functio
         'created_from' => HousekeepingTask::SOURCE_CHECKOUT,
     ]);
 
+    $room->update(['hk_status' => Room::HK_STATUS_DIRTY]);
+
     $domain = tenantDomain($tenant);
 
     actingAs($user)->post(sprintf(
@@ -121,7 +123,7 @@ it('creates an inspection task after cleaning and completes inspection', functio
     expect($responseItem->is_ok)->toBeTrue();
 });
 
-it('creates a new cleaning task when inspection fails', function (): void {
+it('creates a redo cleaning task when inspection fails', function (): void {
     $this->seed([
         RoleSeeder::class,
         PermissionSeeder::class,
@@ -162,6 +164,8 @@ it('creates a new cleaning task when inspection fails', function (): void {
         'started_at' => now(),
     ]);
 
+    $room->update(['hk_status' => Room::HK_STATUS_AWAITING_INSPECTION]);
+
     $domain = tenantDomain($tenant);
 
     actingAs($user)->post(sprintf(
@@ -182,7 +186,7 @@ it('creates a new cleaning task when inspection fails', function (): void {
 
     $newCleaningTask = HousekeepingTask::query()
         ->where('room_id', $room->id)
-        ->where('type', HousekeepingTask::TYPE_CLEANING)
+        ->where('type', HousekeepingTask::TYPE_REDO_CLEANING)
         ->where('status', HousekeepingTask::STATUS_PENDING)
         ->first();
 

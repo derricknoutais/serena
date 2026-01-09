@@ -57,3 +57,27 @@ it('escalates dirty rooms with arrival today after noon', function (): void {
 
     Carbon::setTestNow();
 });
+
+it('keeps priority for redo cleaning in progress', function (): void {
+    [
+        'tenant' => $tenant,
+        'hotel' => $hotel,
+        'room' => $room,
+    ] = setupReservationEnvironment('hk-priority-redo-cleaning');
+
+    $task = HousekeepingTask::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'room_id' => $room->id,
+        'type' => HousekeepingTask::TYPE_REDO_CLEANING,
+        'status' => HousekeepingTask::STATUS_IN_PROGRESS,
+        'priority' => HousekeepingTask::PRIORITY_HIGH,
+        'created_from' => HousekeepingTask::SOURCE_MANUAL,
+        'started_at' => now(),
+    ]);
+
+    $service = app(HousekeepingPriorityService::class);
+
+    expect($service->computePriorityForTask($task))
+        ->toBe(HousekeepingTask::PRIORITY_HIGH);
+});

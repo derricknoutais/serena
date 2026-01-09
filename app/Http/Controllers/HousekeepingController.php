@@ -56,6 +56,8 @@ class HousekeepingController extends Controller
             ->whereIn('type', [
                 HousekeepingTask::TYPE_CLEANING,
                 HousekeepingTask::TYPE_INSPECTION,
+                HousekeepingTask::TYPE_REDO_CLEANING,
+                HousekeepingTask::TYPE_REDO_INSPECTION,
             ])
             ->whereIn('status', [
                 HousekeepingTask::STATUS_PENDING,
@@ -375,13 +377,15 @@ class HousekeepingController extends Controller
             ->whereIn('type', [
                 HousekeepingTask::TYPE_CLEANING,
                 HousekeepingTask::TYPE_INSPECTION,
+                HousekeepingTask::TYPE_REDO_CLEANING,
+                HousekeepingTask::TYPE_REDO_INSPECTION,
             ])
             ->whereIn('status', [
                 HousekeepingTask::STATUS_PENDING,
                 HousekeepingTask::STATUS_IN_PROGRESS,
             ])
             ->orderByRaw("case status when 'in_progress' then 0 else 1 end")
-            ->orderByRaw("case type when 'inspection' then 0 else 1 end")
+            ->orderByRaw("case when type in ('inspection', 'redo-inspection') then 0 else 1 end")
             ->orderByDesc('created_at')
             ->first();
     }
@@ -406,7 +410,10 @@ class HousekeepingController extends Controller
         $task->loadMissing('participants:id,name', 'checklistItems');
         $checklist = null;
 
-        if ($task->type === HousekeepingTask::TYPE_INSPECTION) {
+        if (in_array($task->type, [
+            HousekeepingTask::TYPE_INSPECTION,
+            HousekeepingTask::TYPE_REDO_INSPECTION,
+        ], true)) {
             $checklist = $this->inspectionChecklistPayload($room, $task);
         }
 
@@ -474,21 +481,30 @@ class HousekeepingController extends Controller
 
     private function currentCleaningTask(Room $room): ?HousekeepingTask
     {
-        return $this->findTaskByType($room, HousekeepingTask::TYPE_CLEANING);
+        return $this->findTaskByTypes($room, [
+            HousekeepingTask::TYPE_CLEANING,
+            HousekeepingTask::TYPE_REDO_CLEANING,
+        ]);
     }
 
     private function currentInspectionTask(Room $room): ?HousekeepingTask
     {
-        return $this->findTaskByType($room, HousekeepingTask::TYPE_INSPECTION);
+        return $this->findTaskByTypes($room, [
+            HousekeepingTask::TYPE_INSPECTION,
+            HousekeepingTask::TYPE_REDO_INSPECTION,
+        ]);
     }
 
-    private function findTaskByType(Room $room, string $type): ?HousekeepingTask
+    /**
+     * @param  array<int, string>  $types
+     */
+    private function findTaskByTypes(Room $room, array $types): ?HousekeepingTask
     {
         return HousekeepingTask::query()
             ->where('tenant_id', $room->tenant_id)
             ->where('hotel_id', $room->hotel_id)
             ->where('room_id', $room->id)
-            ->where('type', $type)
+            ->whereIn('type', $types)
             ->whereIn('status', [
                 HousekeepingTask::STATUS_PENDING,
                 HousekeepingTask::STATUS_IN_PROGRESS,
@@ -539,7 +555,10 @@ class HousekeepingController extends Controller
             ->where('tenant_id', $room->tenant_id)
             ->where('hotel_id', $room->hotel_id)
             ->where('room_id', $room->id)
-            ->where('type', HousekeepingTask::TYPE_INSPECTION)
+            ->whereIn('type', [
+                HousekeepingTask::TYPE_INSPECTION,
+                HousekeepingTask::TYPE_REDO_INSPECTION,
+            ])
             ->where('status', HousekeepingTask::STATUS_DONE)
             ->orderByDesc('ended_at')
             ->orderByDesc('id')

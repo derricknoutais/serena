@@ -96,11 +96,11 @@
                     <div class="flex items-center justify-between">
                         <p class="text-xs uppercase text-gray-500">Tâche ménage</p>
                         <span
-                            v-if="currentTask"
+                            v-if="currentTask && taskStatusLabel(currentTask)"
                             class="rounded-full px-2 py-1 text-[10px] font-semibold"
-                            :class="taskStatusClasses(currentTask.status)"
+                            :class="taskStatusClasses(currentTask)"
                         >
-                            {{ taskStatusLabel(currentTask.status) }}
+                            {{ taskStatusLabel(currentTask) }}
                         </span>
                     </div>
 
@@ -155,7 +155,7 @@
                         v-if="currentRoom.hk_status === 'awaiting_inspection' && !canMarkInspected"
                         class="rounded-lg border border-teal-200 bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-700"
                     >
-                        En attente d’inspection.
+                        A Inspecter.
                     </div>
                     <button
                         v-if="canStartCleaning"
@@ -363,10 +363,34 @@
                         <button
                             type="button"
                             class="rounded-full px-3 py-1 text-xs font-semibold"
-                            :class="taskFilter === 'pending' ? 'bg-amber-500 text-white' : 'bg-amber-50 text-amber-700'"
-                            @click="taskFilter = 'pending'"
+                            :class="taskFilter === 'pending_cleaning' ? 'bg-amber-500 text-white' : 'bg-amber-50 text-amber-700'"
+                            @click="taskFilter = 'pending_cleaning'"
                         >
-                            En attente
+                            A Nettoyer
+                        </button>
+                        <button
+                            type="button"
+                            class="rounded-full px-3 py-1 text-xs font-semibold"
+                            :class="taskFilter === 'pending_inspection' ? 'bg-teal-600 text-white' : 'bg-teal-50 text-teal-700'"
+                            @click="taskFilter = 'pending_inspection'"
+                        >
+                            Inspection en attente
+                        </button>
+                        <button
+                            type="button"
+                            class="rounded-full px-3 py-1 text-xs font-semibold"
+                            :class="taskFilter === 'redo_cleaning' ? 'bg-rose-700 text-white' : 'bg-rose-50 text-rose-700'"
+                            @click="taskFilter = 'redo_cleaning'"
+                        >
+                            A refaire
+                        </button>
+                        <button
+                            type="button"
+                            class="rounded-full px-3 py-1 text-xs font-semibold"
+                            :class="taskFilter === 'redo_inspection' ? 'bg-amber-700 text-white' : 'bg-amber-50 text-amber-700'"
+                            @click="taskFilter = 'redo_inspection'"
+                        >
+                            Inspection reprise
                         </button>
                         <button
                             type="button"
@@ -398,10 +422,11 @@
                                 </p>
                             </div>
                             <span
+                                v-if="taskStatusLabel(task)"
                                 class="rounded-full px-2 py-1 text-[10px] font-semibold"
-                                :class="taskStatusClasses(task.status)"
+                                :class="taskStatusClasses(task)"
                             >
-                                {{ taskStatusLabel(task.status) }}
+                                {{ taskStatusLabel(task) }}
                             </span>
                         </div>
                         <div class="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
@@ -599,13 +624,29 @@
                     return this.tasks;
                 }
 
+                if (this.taskFilter === 'pending_cleaning') {
+                    return this.tasks.filter((task) => task.type === 'cleaning' && task.status === 'pending');
+                }
+
+                if (this.taskFilter === 'pending_inspection') {
+                    return this.tasks.filter((task) => task.type === 'inspection' && task.status === 'pending');
+                }
+
+                if (this.taskFilter === 'redo_cleaning') {
+                    return this.tasks.filter((task) => task.type === 'redo-cleaning');
+                }
+
+                if (this.taskFilter === 'redo_inspection') {
+                    return this.tasks.filter((task) => task.type === 'redo-inspection');
+                }
+
                 return this.tasks.filter((task) => task.status === this.taskFilter);
             },
             isCleaningTask() {
-                return this.currentTask?.type === 'cleaning';
+                return ['cleaning', 'redo-cleaning'].includes(this.currentTask?.type);
             },
             isInspectionTask() {
-                return this.currentTask?.type === 'inspection';
+                return ['inspection', 'redo-inspection'].includes(this.currentTask?.type);
             },
             canStartCleaning() {
                 return this.isCleaningTask
@@ -986,10 +1027,29 @@
                         return 'bg-gray-50 text-gray-600 border border-gray-200';
                 }
             },
-            taskStatusLabel(status) {
+            taskStatusLabel(task) {
+                const status = task?.status;
+                const type = task?.type;
+
+                if (status === 'pending' && type === 'inspection') {
+                    return 'Inspection en attente';
+                }
+
+                if (status === 'pending' && type === 'cleaning') {
+                    return 'A Nettoyer';
+                }
+
+                if (type === 'redo-cleaning') {
+                    return 'A refaire';
+                }
+
+                if (type === 'redo-inspection') {
+                    return 'Inspection reprise';
+                }
+
                 switch (status) {
                     case 'pending':
-                        return 'En attente';
+                        return null;
                     case 'in_progress':
                         return 'En cours';
                     case 'done':
@@ -998,7 +1058,26 @@
                         return status;
                 }
             },
-            taskStatusClasses(status) {
+            taskStatusClasses(task) {
+                const status = task?.status;
+                const type = task?.type;
+
+                if (status === 'pending' && type === 'cleaning') {
+                    return 'bg-rose-100 text-rose-700';
+                }
+
+                if (status === 'pending' && type === 'inspection') {
+                    return 'bg-amber-100 text-amber-700';
+                }
+
+                if (type === 'redo-cleaning') {
+                    return 'bg-rose-200 text-rose-900';
+                }
+
+                if (type === 'redo-inspection') {
+                    return 'bg-amber-200 text-amber-900';
+                }
+
                 switch (status) {
                     case 'pending':
                         return 'bg-amber-100 text-amber-700';
@@ -1044,6 +1123,10 @@
                         return 'Ménage';
                     case 'inspection':
                         return 'Inspection';
+                    case 'redo-cleaning':
+                        return 'Reprise ménage';
+                    case 'redo-inspection':
+                        return 'Reprise inspection';
                     default:
                         return type;
                 }

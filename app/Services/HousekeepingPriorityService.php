@@ -59,7 +59,10 @@ class HousekeepingPriorityService
 
         if (
             $task->status === HousekeepingTask::STATUS_IN_PROGRESS
-            && $task->type === HousekeepingTask::TYPE_CLEANING
+            && in_array($task->type, [
+                HousekeepingTask::TYPE_CLEANING,
+                HousekeepingTask::TYPE_REDO_CLEANING,
+            ], true)
         ) {
             return $task->priority;
         }

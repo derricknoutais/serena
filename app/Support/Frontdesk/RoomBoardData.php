@@ -51,7 +51,10 @@ class RoomBoardData
         $inspectionTasks = HousekeepingTask::query()
             ->where('tenant_id', $tenantId)
             ->where('hotel_id', $hotelId)
-            ->where('type', HousekeepingTask::TYPE_INSPECTION)
+            ->whereIn('type', [
+                HousekeepingTask::TYPE_INSPECTION,
+                HousekeepingTask::TYPE_REDO_INSPECTION,
+            ])
             ->where('status', HousekeepingTask::STATUS_DONE)
             ->whereIn('room_id', $rooms->pluck('id'))
             ->orderByDesc('ended_at')
@@ -82,7 +85,7 @@ class RoomBoardData
                 HousekeepingTask::STATUS_IN_PROGRESS,
             ])
             ->orderByRaw("case status when 'in_progress' then 0 else 1 end")
-            ->orderByRaw("case type when 'inspection' then 0 else 1 end")
+            ->orderByRaw("case when type in ('inspection', 'redo-inspection') then 0 else 1 end")
             ->orderByDesc('created_at')
             ->get()
             ->groupBy('room_id')
@@ -104,6 +107,11 @@ class RoomBoardData
         $reservations = Reservation::query()
             ->forTenant($tenantId)
             ->forHotel($hotelId)
+            ->whereNotIn('status', [
+                Reservation::STATUS_CHECKED_OUT,
+                Reservation::STATUS_CANCELLED,
+                Reservation::STATUS_NO_SHOW,
+            ])
             ->where(function ($query) use ($dateString): void {
                 $query->whereDate('check_in_date', '<=', $dateString)
                     ->whereDate('check_out_date', '>=', $dateString)

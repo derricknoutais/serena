@@ -39,14 +39,20 @@ class HousekeepingReportController extends Controller
         $cleaningTasksQuery = HousekeepingTask::query()
             ->where('tenant_id', $tenantId)
             ->where('hotel_id', $hotelId)
-            ->where('type', HousekeepingTask::TYPE_CLEANING)
+            ->whereIn('type', [
+                HousekeepingTask::TYPE_CLEANING,
+                HousekeepingTask::TYPE_REDO_CLEANING,
+            ])
             ->where('status', HousekeepingTask::STATUS_DONE)
             ->whereBetween('ended_at', [$from, $to]);
 
         $inspectionTasksQuery = HousekeepingTask::query()
             ->where('tenant_id', $tenantId)
             ->where('hotel_id', $hotelId)
-            ->where('type', HousekeepingTask::TYPE_INSPECTION)
+            ->whereIn('type', [
+                HousekeepingTask::TYPE_INSPECTION,
+                HousekeepingTask::TYPE_REDO_INSPECTION,
+            ])
             ->where('status', HousekeepingTask::STATUS_DONE)
             ->whereBetween('ended_at', [$from, $to]);
 
@@ -78,7 +84,10 @@ class HousekeepingReportController extends Controller
             ->where('tenant_id', $tenantId)
             ->where('hotel_id', $hotelId)
             ->whereIn('room_id', $roomIds)
-            ->where('type', HousekeepingTask::TYPE_CLEANING)
+            ->whereIn('type', [
+                HousekeepingTask::TYPE_CLEANING,
+                HousekeepingTask::TYPE_REDO_CLEANING,
+            ])
             ->where('status', HousekeepingTask::STATUS_DONE)
             ->whereNotNull('ended_at')
             ->orderByDesc('ended_at')
@@ -90,7 +99,10 @@ class HousekeepingReportController extends Controller
             ->where('tenant_id', $tenantId)
             ->where('hotel_id', $hotelId)
             ->whereIn('room_id', $roomIds)
-            ->where('type', HousekeepingTask::TYPE_INSPECTION)
+            ->whereIn('type', [
+                HousekeepingTask::TYPE_INSPECTION,
+                HousekeepingTask::TYPE_REDO_INSPECTION,
+            ])
             ->where('status', HousekeepingTask::STATUS_DONE)
             ->whereNotNull('ended_at')
             ->orderByDesc('ended_at')
@@ -105,7 +117,10 @@ class HousekeepingReportController extends Controller
             ->where('tenant_id', $tenantId)
             ->where('hotel_id', $hotelId)
             ->whereIn('room_id', $roomIds)
-            ->where('type', HousekeepingTask::TYPE_INSPECTION)
+            ->whereIn('type', [
+                HousekeepingTask::TYPE_INSPECTION,
+                HousekeepingTask::TYPE_REDO_INSPECTION,
+            ])
             ->where('outcome', HousekeepingTask::OUTCOME_FAILED)
             ->whereBetween('ended_at', [$redoSince, Carbon::now($timezone)])
             ->groupBy('room_id')
@@ -183,11 +198,17 @@ class HousekeepingReportController extends Controller
 
                 $entry['tasks_participated'] += 1;
 
-                if ($task->type === HousekeepingTask::TYPE_CLEANING) {
+                if (in_array($task->type, [
+                    HousekeepingTask::TYPE_CLEANING,
+                    HousekeepingTask::TYPE_REDO_CLEANING,
+                ], true)) {
                     $entry['cleaning_seconds'] += (int) ($task->duration_seconds ?? 0);
                 }
 
-                if ($task->type === HousekeepingTask::TYPE_INSPECTION) {
+                if (in_array($task->type, [
+                    HousekeepingTask::TYPE_INSPECTION,
+                    HousekeepingTask::TYPE_REDO_INSPECTION,
+                ], true)) {
                     $entry['inspections_performed'] += 1;
                 }
 

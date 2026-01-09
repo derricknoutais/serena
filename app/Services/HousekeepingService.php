@@ -99,7 +99,10 @@ class HousekeepingService
         $task->started_at = $task->started_at ?? now();
         $task->save();
 
-        if ($task->type === HousekeepingTask::TYPE_CLEANING && $task->room) {
+        if (in_array($task->type, [
+            HousekeepingTask::TYPE_CLEANING,
+            HousekeepingTask::TYPE_REDO_CLEANING,
+        ], true) && $task->room) {
             $this->transitionRoomStatus($task->room, Room::HK_STATUS_CLEANING, $user);
         }
 
@@ -147,7 +150,10 @@ class HousekeepingService
 
     public function finishCleaning(HousekeepingTask $task, User $user): HousekeepingTask
     {
-        if ($task->type !== HousekeepingTask::TYPE_CLEANING) {
+        if (! in_array($task->type, [
+            HousekeepingTask::TYPE_CLEANING,
+            HousekeepingTask::TYPE_REDO_CLEANING,
+        ], true)) {
             throw ValidationException::withMessages([
                 'task' => 'Cette tâche de ménage est invalide.',
             ]);
@@ -169,9 +175,16 @@ class HousekeepingService
 
         $room = $task->room()->first();
         if ($room) {
+            $isRedo = $task->type === HousekeepingTask::TYPE_REDO_CLEANING;
+
             if ($this->isInspectionEnabled($room)) {
                 $this->transitionRoomStatus($room, Room::HK_STATUS_AWAITING_INSPECTION, $user);
-                $this->createInspectionTask($room, $user);
+
+                if ($isRedo) {
+                    $this->createRedoInspectionTask($room, $user);
+                } else {
+                    $this->createInspectionTask($room, $user);
+                }
             } else {
                 $this->transitionRoomStatus($room, Room::HK_STATUS_INSPECTED, $user);
             }
@@ -195,7 +208,10 @@ class HousekeepingService
 
     public function startInspection(HousekeepingTask $task, User $user): HousekeepingTask
     {
-        if ($task->type !== HousekeepingTask::TYPE_INSPECTION) {
+        if (! in_array($task->type, [
+            HousekeepingTask::TYPE_INSPECTION,
+            HousekeepingTask::TYPE_REDO_INSPECTION,
+        ], true)) {
             throw ValidationException::withMessages([
                 'task' => 'Cette inspection est invalide.',
             ]);
@@ -215,7 +231,10 @@ class HousekeepingService
      */
     public function finishInspection(HousekeepingTask $task, User $user, array $payload): HousekeepingTask
     {
-        if ($task->type !== HousekeepingTask::TYPE_INSPECTION) {
+        if (! in_array($task->type, [
+            HousekeepingTask::TYPE_INSPECTION,
+            HousekeepingTask::TYPE_REDO_INSPECTION,
+        ], true)) {
             throw ValidationException::withMessages([
                 'task' => 'Cette inspection est invalide.',
             ]);
@@ -254,7 +273,7 @@ class HousekeepingService
         if ($hasFailure) {
             $remarks = $this->buildInspectionRemarks($responses);
             $this->transitionRoomStatus($room, Room::HK_STATUS_REDO, $user, $remarks);
-            $this->createCleaningTaskFromInspection($room, $user, $remarks);
+            $this->createRedoCleaningTaskFromInspection($room, $user, $remarks);
         } else {
             $this->transitionRoomStatus($room, Room::HK_STATUS_INSPECTED, $user);
         }
@@ -368,11 +387,8 @@ class HousekeepingService
         return $task;
     }
 
-    private function createCleaningTaskFromInspection(
-        Room $room,
-        ?User $user = null,
-        ?string $remarks = null
-    ): ?HousekeepingTask {
+    private function createRedoInspectionTask(Room $room, ?User $user = null): ?HousekeepingTask
+    {
         if ($room->status === Room::STATUS_OUT_OF_ORDER) {
             return null;
         }
@@ -381,7 +397,7 @@ class HousekeepingService
             ->where('tenant_id', $room->tenant_id)
             ->where('hotel_id', $room->hotel_id)
             ->where('room_id', $room->id)
-            ->where('type', HousekeepingTask::TYPE_CLEANING)
+            ->where('type', HousekeepingTask::TYPE_REDO_INSPECTION)
             ->whereIn('status', [
                 HousekeepingTask::STATUS_PENDING,
                 HousekeepingTask::STATUS_IN_PROGRESS,
@@ -399,10 +415,66 @@ class HousekeepingService
             'tenant_id' => $room->tenant_id,
             'hotel_id' => $room->hotel_id,
             'room_id' => $room->id,
-            'type' => HousekeepingTask::TYPE_CLEANING,
+            'type' => HousekeepingTask::TYPE_REDO_INSPECTION,
             'status' => HousekeepingTask::STATUS_PENDING,
             'priority' => $this->priorityService->computePriorityForRoom($room),
-            'created_from' => HousekeepingTask::SOURCE_CHECKOUT,
+            'created_from' => HousekeepingTask::SOURCE_MANUAL,
+        ]);
+
+        $activity = activity('housekeeping')->performedOn($task);
+        if ($user) {
+            $activity->causedBy($user);
+        }
+
+        $activity
+            ->withProperties([
+                'room_id' => $room->id,
+                'task_id' => $task->id,
+                'priority' => $task->priority,
+                'type' => $task->type,
+                'created_from' => $task->created_from,
+            ])
+            ->event('task_created')
+            ->log('task_created');
+
+        return $task;
+    }
+
+    private function createRedoCleaningTaskFromInspection(
+        Room $room,
+        ?User $user = null,
+        ?string $remarks = null
+    ): ?HousekeepingTask {
+        if ($room->status === Room::STATUS_OUT_OF_ORDER) {
+            return null;
+        }
+
+        $existing = HousekeepingTask::query()
+            ->where('tenant_id', $room->tenant_id)
+            ->where('hotel_id', $room->hotel_id)
+            ->where('room_id', $room->id)
+            ->where('type', HousekeepingTask::TYPE_REDO_CLEANING)
+            ->whereIn('status', [
+                HousekeepingTask::STATUS_PENDING,
+                HousekeepingTask::STATUS_IN_PROGRESS,
+            ])
+            ->orderByDesc('created_at')
+            ->first();
+
+        if ($existing) {
+            $this->priorityService->syncTaskPriority($existing, $user);
+
+            return $existing;
+        }
+
+        $task = HousekeepingTask::query()->create([
+            'tenant_id' => $room->tenant_id,
+            'hotel_id' => $room->hotel_id,
+            'room_id' => $room->id,
+            'type' => HousekeepingTask::TYPE_REDO_CLEANING,
+            'status' => HousekeepingTask::STATUS_PENDING,
+            'priority' => $this->priorityService->computePriorityForRoom($room),
+            'created_from' => HousekeepingTask::SOURCE_MANUAL,
         ]);
 
         $activity = activity('housekeeping')->performedOn($task);
