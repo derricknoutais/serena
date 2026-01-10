@@ -73,10 +73,9 @@ const resourcesItems = computed<NavItem[]>(() => [
         title: 'Checklists HK',
         href: '/settings/resources/housekeeping-checklists',
     },
-    {
-        title: 'Clients',
-        href: '/settings/resources/guests',
-    },
+    ...(permissions.value.guests_view
+        ? [{ title: 'Clients', href: '/settings/resources/guests' } satisfies NavItem]
+        : []),
     ...(permissions.value.offers_view
         ? [{ title: 'Offres', href: '/settings/resources/offers' } satisfies NavItem]
         : []),

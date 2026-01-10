@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\Cache;
 
 class NightAuditService
 {
+    public function __construct(private readonly BusinessDayService $businessDayService) {}
+
     /**
      * @return array<string, mixed>
      */
@@ -40,10 +42,7 @@ class NightAuditService
             ->where('tenant_id', $tenantId)
             ->findOrFail($hotelId);
 
-        $timezone = $hotel->timezone ?? config('app.timezone');
-
-        $start = $businessDate->copy()->setTimezone($timezone)->startOfDay();
-        $end = $businessDate->copy()->setTimezone($timezone)->endOfDay();
+        [$windowStart, $windowEnd] = $this->businessWindow($hotel, $businessDate);
 
         $totalRooms = Room::query()
             ->where('tenant_id', $tenantId)
@@ -68,7 +67,7 @@ class NightAuditService
             ->with(['guest:id,first_name,last_name', 'room:id,number'])
             ->where('tenant_id', $tenantId)
             ->where('hotel_id', $hotelId)
-            ->whereBetween('actual_check_in_at', [$start, $end])
+            ->whereBetween('actual_check_in_at', [$windowStart, $windowEnd])
             ->orderBy('actual_check_in_at')
             ->get()
             ->map(fn (Reservation $reservation): array => [
@@ -83,7 +82,7 @@ class NightAuditService
             ->with(['guest:id,first_name,last_name', 'room:id,number'])
             ->where('tenant_id', $tenantId)
             ->where('hotel_id', $hotelId)
-            ->whereBetween('actual_check_out_at', [$start, $end])
+            ->whereBetween('actual_check_out_at', [$windowStart, $windowEnd])
             ->orderBy('actual_check_out_at')
             ->get()
             ->map(fn (Reservation $reservation): array => [
@@ -99,8 +98,8 @@ class NightAuditService
             ->where('tenant_id', $tenantId)
             ->where('hotel_id', $hotelId)
             ->where('status', Reservation::STATUS_IN_HOUSE)
-            ->whereDate('check_in_date', '<=', $start)
-            ->whereDate('check_out_date', '>=', $start)
+            ->whereDate('check_in_date', '<=', $windowStart)
+            ->whereDate('check_out_date', '>=', $windowStart)
             ->limit(20)
             ->orderBy('room_id')
             ->get()
@@ -112,7 +111,7 @@ class NightAuditService
                 'check_out_date' => optional($reservation->check_out_date)?->toDateString(),
             ]);
 
-        $revenueBreakdown = $this->computeRevenue($tenantId, $hotelId, $start, $end);
+        $revenueBreakdown = $this->computeRevenue($tenantId, $hotelId, $businessDate);
         $roomRevenue = $revenueBreakdown['room_revenue'];
         $posRevenue = $revenueBreakdown['pos_revenue'];
         $taxTotal = $revenueBreakdown['tax_total'];
@@ -122,13 +121,7 @@ class NightAuditService
             ->select('payment_method_id', 'amount')
             ->where('tenant_id', $tenantId)
             ->where('hotel_id', $hotelId)
-            ->where(function ($query) use ($start, $end) {
-                $query->whereBetween('paid_at', [$start, $end])
-                    ->orWhere(function ($sub) use ($start, $end) {
-                        $sub->whereNull('paid_at')
-                            ->whereBetween('created_at', [$start, $end]);
-                    });
-            })
+            ->where('business_date', $businessDate->toDateString())
             ->with('paymentMethod:id,name')
             ->get();
 
@@ -144,11 +137,7 @@ class NightAuditService
             ->where('tenant_id', $tenantId)
             ->where('hotel_id', $hotelId)
             ->whereIn('status', ['closed', 'closed_pending_validation', 'open'])
-            ->where(function ($query) use ($start, $end) {
-                $query->whereBetween('ended_at', [$start, $end])
-                    ->orWhereBetween('started_at', [$start, $end])
-                    ->orWhereNull('ended_at');
-            })
+            ->where('business_date', $businessDate->toDateString())
             ->orderBy('ended_at')
             ->get()
             ->map(fn (CashSession $session): array => [
@@ -216,19 +205,25 @@ class NightAuditService
                 'sessions' => $cashSessions,
                 'totals' => $cashTotals,
             ],
+            'window' => [
+                'start' => $windowStart->toDateTimeString(),
+                'end' => $windowEnd->toDateTimeString(),
+            ],
         ];
     }
 
     /**
      * @return array{room_revenue: float, pos_revenue: float, tax_total: float, total_revenue: float}
      */
-    private function computeRevenue(int $tenantId, int $hotelId, Carbon $start, Carbon $end): array
+    private function computeRevenue(int $tenantId, int $hotelId, Carbon $businessDate): array
     {
+        $date = $businessDate->toDateString();
+
         $invoiceItems = InvoiceItem::query()
             ->where('tenant_id', $tenantId)
-            ->whereHas('invoice', function ($query) use ($hotelId, $start, $end) {
+            ->whereHas('invoice', function ($query) use ($hotelId, $date) {
                 $query->where('hotel_id', $hotelId)
-                    ->whereBetween('issue_date', [$start, $end]);
+                    ->where('business_date', $date);
             })
             ->with('folioItem')
             ->get();
@@ -255,7 +250,7 @@ class NightAuditService
         $folioItems = FolioItem::query()
             ->where('tenant_id', $tenantId)
             ->where('hotel_id', $hotelId)
-            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->where('business_date', $date)
             ->get(['is_stay_item', 'total_amount', 'tax_amount']);
 
         $roomRevenue = (float) $folioItems->where('is_stay_item', true)->sum('total_amount');

@@ -43,6 +43,10 @@ class PermissionsCatalog
             'room_types.create',
             'room_types.update',
             'room_types.delete',
+            'guests.view',
+            'guests.create',
+            'guests.update',
+            'guests.delete',
             'offers.view',
             'offers.create',
             'offers.update',
@@ -80,6 +84,8 @@ class PermissionsCatalog
             // Night Audit
             'night_audit.view',
             'night_audit.export',
+            'night_audit.close',
+            'night_audit.reopen',
         ];
     }
 
@@ -121,6 +127,9 @@ class PermissionsCatalog
                 'night_audit.export',
                 'folio_items.edit',
                 'folio_items.delete',
+                'guests.view',
+                'guests.create',
+                'guests.update',
             ],
             'housekeeping' => [
                 'housekeeping.view',

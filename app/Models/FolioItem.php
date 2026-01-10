@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasBusinessDate;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,6 +11,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class FolioItem extends Model
 {
+    use HasBusinessDate;
     use HasFactory;
     use SoftDeletes;
 
@@ -35,6 +37,7 @@ class FolioItem extends Model
         'total_amount',
         'tax_amount',
         'meta',
+        'business_date',
     ];
 
     /**
@@ -44,6 +47,7 @@ class FolioItem extends Model
     {
         return [
             'date' => 'date',
+            'business_date' => 'date',
             'quantity' => 'float',
             'unit_price' => 'float',
             'discount_percent' => 'float',

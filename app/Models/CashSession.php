@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasBusinessDate;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,6 +13,8 @@ use function activity;
 
 class CashSession extends Model
 {
+    use HasBusinessDate;
+
     protected $guarded = [];
 
     protected $casts = [
@@ -21,6 +25,7 @@ class CashSession extends Model
         'closing_amount' => 'decimal:2',
         'expected_closing_amount' => 'decimal:2',
         'difference_amount' => 'decimal:2',
+        'business_date' => 'date',
     ];
 
     public function openedBy(): BelongsTo
@@ -116,5 +121,10 @@ class CashSession extends Model
                     ->log('closed');
             }
         });
+    }
+
+    protected function businessDateReferenceTime(): CarbonInterface
+    {
+        return $this->normalizeBusinessDateTime($this->started_at ?? $this->created_at);
     }
 }

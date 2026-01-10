@@ -28,6 +28,8 @@ class Hotel extends Model
         'check_in_time',
         'check_out_time',
         'stay_settings',
+        'business_day_start_time',
+        'business_day_timezone',
     ];
 
     /**

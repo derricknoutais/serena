@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasBusinessDate;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,6 +13,7 @@ use function activity;
 
 class Payment extends Model
 {
+    use HasBusinessDate;
     use HasFactory;
     use SoftDeletes;
 
@@ -29,6 +32,7 @@ class Payment extends Model
         'notes',
         'created_by_user_id',
         'cash_session_id',
+        'business_date',
     ];
 
     /**
@@ -39,6 +43,7 @@ class Payment extends Model
         return [
             'amount' => 'float',
             'paid_at' => 'datetime',
+            'business_date' => 'date',
         ];
     }
 
@@ -79,5 +84,10 @@ class Payment extends Model
                     ->log('voided');
             }
         });
+    }
+
+    protected function businessDateReferenceTime(): CarbonInterface
+    {
+        return $this->normalizeBusinessDateTime($this->paid_at ?? $this->created_at);
     }
 }

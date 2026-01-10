@@ -207,6 +207,12 @@ Route::middleware([
         Route::get('/night-audit/pdf', [NightAuditController::class, 'pdf'])
             ->middleware('can:night_audit.export')
             ->name('night-audit.pdf');
+        Route::post('/night-audit/{business_date}/close', [NightAuditController::class, 'close'])
+            ->middleware('can:night_audit.close')
+            ->name('night-audit.close');
+        Route::post('/night-audit/{business_date}/reopen', [NightAuditController::class, 'reopen'])
+            ->middleware('can:night_audit.reopen')
+            ->name('night-audit.reopen');
 
         // Cash Management
         Route::group(['prefix' => 'cash', 'as' => 'cash.', 'middleware' => 'can:cash_sessions.view'], function () {

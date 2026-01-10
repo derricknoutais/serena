@@ -4,8 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Folio;
 use App\Models\FolioItem;
+use App\Models\Hotel;
 use App\Models\Payment;
+use App\Services\BusinessDayService;
 use App\Services\FolioPayloadService;
+use App\Services\NightAuditLockService;
+use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,7 +21,11 @@ use Inertia\Response;
 
 class FolioController extends Controller
 {
-    public function __construct(private readonly FolioPayloadService $folioPayloads) {}
+    public function __construct(
+        private readonly FolioPayloadService $folioPayloads,
+        private readonly NightAuditLockService $lockService,
+        private readonly BusinessDayService $businessDayService,
+    ) {}
 
     public function show(Request $request, Folio $folio): Response|JsonResponse
     {
@@ -36,6 +45,21 @@ class FolioController extends Controller
         $this->authorizeFolio($request, $folio);
 
         $data = $request->validate($this->chargeValidationRules());
+
+        $hotel = $this->hotelForFolio($folio);
+        $targetDate = $data['date'] ?? $item->date?->toDateString() ?? now()->toDateString();
+        $businessDate = $this->resolveBusinessDateForCharge($hotel, $targetDate);
+        $this->ensureBusinessDayOpen($hotel, $businessDate, $request);
+
+        $hotel = $this->hotelForFolio($folio);
+        $targetDate = $data['date'] ?? $item->date?->toDateString() ?? now()->toDateString();
+        $businessDate = $this->resolveBusinessDateForCharge($hotel, $targetDate);
+        $this->ensureBusinessDayOpen($hotel, $businessDate, $request);
+
+        $hotel = $this->hotelForFolio($folio);
+        $chargeDate = $data['date'] ?? now()->toDateString();
+        $businessDate = $this->resolveBusinessDateForCharge($hotel, $chargeDate);
+        $this->ensureBusinessDayOpen($hotel, $businessDate, $request);
 
         $quantity = (float) $data['quantity'];
         $unitPrice = (float) $data['unit_price'];
@@ -97,6 +121,10 @@ class FolioController extends Controller
 
         $this->authorizeFolio($request, $folio);
 
+        $hotel = $this->hotelForFolio($folio);
+        $businessDate = Carbon::parse($item->business_date ?? $item->date ?? now()->toDateString());
+        $this->ensureBusinessDayOpen($hotel, $businessDate, $request);
+
         abort_if((int) $item->folio_id !== (int) $folio->id, 404);
 
         $item->delete();
@@ -145,11 +173,16 @@ class FolioController extends Controller
         }
         $cashSessionId = $activeSession->id;
 
+        $hotel = $this->hotelForFolio($folio);
+        $paidAt = Carbon::parse($data['paid_at'] ?? now());
+        $businessDate = $this->resolveBusinessDateForPayment($hotel, $paidAt);
+        $this->ensureBusinessDayOpen($hotel, $businessDate, $request);
+
         $folio->addPayment([
             'amount' => $data['amount'],
             'currency' => $data['currency'] ?? $folio->currency,
             'payment_method_id' => $data['payment_method_id'],
-            'paid_at' => $data['paid_at'] ?? now(),
+            'paid_at' => $paidAt,
             'reference' => $data['reference'] ?? null,
             'notes' => $data['note'] ?? $data['notes'] ?? null,
             'created_by_user_id' => $request->user()->id,
@@ -193,26 +226,31 @@ class FolioController extends Controller
         $paymentMethod = \App\Models\PaymentMethod::where('tenant_id', $folio->tenant_id)->findOrFail($data['payment_method_id']);
         $cashSessionId = null;
 
-            $activeSession = \App\Models\CashSession::query()
-                ->where('tenant_id', $folio->tenant_id)
-                ->where('hotel_id', $folio->hotel_id)
-                ->where('type', 'frontdesk')
-                ->where('status', 'open')
-                ->first();
+        $activeSession = \App\Models\CashSession::query()
+            ->where('tenant_id', $folio->tenant_id)
+            ->where('hotel_id', $folio->hotel_id)
+            ->where('type', 'frontdesk')
+            ->where('status', 'open')
+            ->first();
 
-            if (! $activeSession) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    'payment_method_id' => 'Aucune caisse réception ouverte. Veuillez ouvrir une session de caisse.',
-                ]);
-            }
+        if (! $activeSession) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'payment_method_id' => 'Aucune caisse réception ouverte. Veuillez ouvrir une session de caisse.',
+            ]);
+        }
 
-            $cashSessionId = $activeSession->id;
+        $cashSessionId = $activeSession->id;
+
+        $hotel = $this->hotelForFolio($folio);
+        $paidAt = Carbon::parse($data['paid_at'] ?? $payment->paid_at ?? now());
+        $businessDate = $this->resolveBusinessDateForPayment($hotel, $paidAt);
+        $this->ensureBusinessDayOpen($hotel, $businessDate, $request);
 
         $payment->forceFill([
             'amount' => (float) $data['amount'],
             'currency' => $data['currency'] ?? $folio->currency,
             'payment_method_id' => $data['payment_method_id'],
-            'paid_at' => $data['paid_at'] ?? $payment->paid_at ?? now(),
+            'paid_at' => $paidAt,
             'reference' => $data['reference'] ?? null,
             'notes' => $data['note'] ?? $data['notes'] ?? null,
             'cash_session_id' => $cashSessionId,
@@ -230,6 +268,10 @@ class FolioController extends Controller
             $request->user()->can('payments.delete') || $request->user()->can('folio_items.void'),
             403
         );
+
+        $hotel = $this->hotelForFolio($folio);
+        $businessDate = Carbon::parse($payment->business_date ?? now()->toDateString());
+        $this->ensureBusinessDayOpen($hotel, $businessDate, $request);
 
         $this->authorizeFolio($request, $folio);
 
@@ -303,5 +345,27 @@ class FolioController extends Controller
             'discount_amount' => ['nullable', 'numeric', 'min:0'],
             'date' => ['nullable', 'date'],
         ];
+    }
+
+    private function hotelForFolio(Folio $folio): Hotel
+    {
+        return $folio->hotel ?? Hotel::query()->findOrFail($folio->hotel_id);
+    }
+
+    private function resolveBusinessDateForCharge(Hotel $hotel, string $date): CarbonInterface
+    {
+        return $this->businessDayService->resolveBusinessDate($hotel, Carbon::parse($date));
+    }
+
+    private function resolveBusinessDateForPayment(Hotel $hotel, Carbon $reference): CarbonInterface
+    {
+        return $this->businessDayService->resolveBusinessDate($hotel, $reference);
+    }
+
+    private function ensureBusinessDayOpen(Hotel $hotel, CarbonInterface $businessDate, Request $request): void
+    {
+        $override = $request->boolean('override_business_day');
+
+        $this->lockService->assertBusinessDateOpen($hotel, $businessDate, $request->user(), $override);
     }
 }

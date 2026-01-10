@@ -3,7 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\CashSession;
+use App\Models\Hotel;
+use App\Services\NightAuditLockService;
 use App\Services\Notifier;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -14,6 +17,7 @@ class CashSessionController extends Controller
 {
     public function __construct(
         private readonly Notifier $notifier,
+        private readonly NightAuditLockService $lockService,
     ) {}
 
     /**
@@ -216,6 +220,10 @@ class CashSessionController extends Controller
         if ($cashSession->status !== 'open') {
             abort(403, 'Session déjà fermée.');
         }
+
+        $hotel = $cashSession->hotel ?? Hotel::query()->findOrFail($cashSession->hotel_id);
+        $businessDate = Carbon::parse($cashSession->business_date ?? $cashSession->started_at);
+        $this->lockService->assertBusinessDateOpen($hotel, $businessDate, $request->user(), $request->boolean('override_business_day'));
 
         $data = $request->validate([
             'closing_amount' => ['required', 'numeric', 'min:0'],

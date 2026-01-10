@@ -1,14 +1,50 @@
 <template>
-    <AppLayout>
-        <div class="space-y-4">
-            <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                <div>
+    <SettingsLayout>
+        <div class="space-y-6">
+            <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div class="space-y-1">
                     <p class="text-sm font-semibold uppercase text-serena-primary">Night Audit</p>
                     <h1 class="text-2xl font-bold text-serena-text-main">Rapport de fin de journée</h1>
                     <p class="text-sm text-serena-text-muted">
-                        Résumé quotidien par hôtel et export PDF.
+                        Résumé quotidien par hôtel avec aperçu des revenus, encaissements et ouvertures de caisse.
+                    </p>
+                    <p class="text-sm text-serena-text-muted">
+                        Fenêtre d’affaires :
+                        <span class="font-medium text-serena-text-main">{{ windowLabel }}</span>
+                    </p>
+                    <p v-if="closure?.closed_at" class="text-sm text-serena-text-muted">
+                        Clôturée le {{ formatDateTime(closure.closed_at) }} par {{ closure.closed_by?.name ?? '—' }}
                     </p>
                 </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <span
+                        class="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold"
+                        :class="isClosed ? 'border-red-200 bg-red-100 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'"
+                    >
+                        {{ isClosed ? 'Clôturée' : 'Ouverte' }}
+                    </span>
+                    <PrimaryButton
+                        v-if="canClose"
+                        type="button"
+                        :disabled="isClosed"
+                        class="px-4 py-2"
+                        @click="closeBusinessDay"
+                    >
+                        {{ isClosed ? 'Journée clôturée' : 'Clôturer la journée' }}
+                    </PrimaryButton>
+                    <SecondaryButton
+                        v-if="canReopen"
+                        type="button"
+                        :disabled="!isClosed"
+                        class="px-4 py-2"
+                        @click="reopenBusinessDay"
+                    >
+                        Réouvrir la journée
+                    </SecondaryButton>
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                 <div class="flex flex-col gap-2 md:flex-row md:items-center">
                     <label class="text-sm font-semibold text-serena-text-main">
                         Date d’affaires
@@ -29,14 +65,14 @@
                             </option>
                         </select>
                     </label>
-                    <div class="flex gap-2">
-                        <PrimaryButton type="button" class="px-4 py-2" @click="reloadReport">
-                            Générer
-                        </PrimaryButton>
-                        <SecondaryButton type="button" class="px-4 py-2" @click="exportPdf">
-                            Exporter PDF
-                        </SecondaryButton>
-                    </div>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <PrimaryButton type="button" class="px-4 py-2" @click="reloadReport">
+                        Générer
+                    </PrimaryButton>
+                    <SecondaryButton type="button" class="px-4 py-2" @click="exportPdf">
+                        Exporter PDF
+                    </SecondaryButton>
                 </div>
             </div>
 
@@ -60,10 +96,10 @@
                             <p class="text-xs text-serena-text-muted">Disponibles</p>
                             <p class="text-xl font-bold">{{ report.occupancy.available_rooms ?? 0 }}</p>
                         </div>
-                            <div class="rounded-xl border border-serena-border bg-serena-bg-soft p-3">
-                                <p class="text-xs text-serena-text-muted">Taux d’occupation</p>
-                                <p class="text-xl font-bold">{{ report.occupancy.occupancy_rate ?? 0 }}%</p>
-                            </div>
+                        <div class="rounded-xl border border-serena-border bg-serena-bg-soft p-3">
+                            <p class="text-xs text-serena-text-muted">Taux d’occupation</p>
+                            <p class="text-xl font-bold">{{ report.occupancy.occupancy_rate ?? 0 }}%</p>
+                        </div>
                     </div>
                 </div>
 
@@ -225,19 +261,19 @@
                 </div>
             </div>
         </div>
-    </AppLayout>
+    </SettingsLayout>
 </template>
 
 <script>
 import { router } from '@inertiajs/vue3';
-import Swal from 'sweetalert2';
-import AppLayout from '@/layouts/AppLayout.vue';
+import SettingsLayout from '@/layouts/settings/Layout.vue';
 import PrimaryButton from '@/components/PrimaryButton.vue';
 import SecondaryButton from '@/components/SecondaryButton.vue';
+import Swal from 'sweetalert2';
 
 export default {
     name: 'NightAuditIndex',
-    components: { AppLayout, PrimaryButton, SecondaryButton },
+    components: { SettingsLayout, PrimaryButton, SecondaryButton },
     props: {
         report: {
             type: Object,
@@ -249,6 +285,30 @@ export default {
         },
         hotelId: {
             type: Number,
+            required: true,
+        },
+        window: {
+            type: Object,
+            required: true,
+        },
+        closure: {
+            type: Object,
+            default: null,
+        },
+        canClose: {
+            type: Boolean,
+            default: false,
+        },
+        canReopen: {
+            type: Boolean,
+            default: false,
+        },
+        closeRoute: {
+            type: String,
+            required: true,
+        },
+        reopenRoute: {
+            type: String,
             required: true,
         },
     },
@@ -264,6 +324,16 @@ export default {
         },
         currency() {
             return this.report?.hotel?.currency || 'XAF';
+        },
+        windowLabel() {
+            if (!this.window?.start || !this.window?.end) {
+                return '—';
+            }
+
+            return `${this.formatTime(this.window.start)} → ${this.formatTime(this.window.end)}`;
+        },
+        isClosed() {
+            return this.closure?.status === 'closed';
         },
         canExport() {
             return this.$page?.props?.auth?.can?.night_audit_export ?? false;
@@ -310,6 +380,54 @@ export default {
                 currency: this.currency,
                 minimumFractionDigits: 0,
             }).format(amount);
+        },
+        formatTime(datetime) {
+            if (!datetime) {
+                return '—';
+            }
+
+            return new Date(datetime).toLocaleTimeString('fr-FR', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+            });
+        },
+        formatDateTime(datetime) {
+            if (!datetime) {
+                return '—';
+            }
+
+            return new Date(datetime).toLocaleString('fr-FR', {
+                hour: '2-digit',
+                minute: '2-digit',
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+            });
+        },
+        closeBusinessDay() {
+            if (!this.canClose || this.isClosed) {
+                return;
+            }
+
+            router.post(this.closeRoute, {
+                hotel_id: this.hotelId,
+            }, {
+                preserveScroll: true,
+                preserveState: true,
+            });
+        },
+        reopenBusinessDay() {
+            if (!this.canReopen || !this.isClosed) {
+                return;
+            }
+
+            router.post(this.reopenRoute, {
+                hotel_id: this.hotelId,
+            }, {
+                preserveScroll: true,
+                preserveState: true,
+            });
         },
     },
 };

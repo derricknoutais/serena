@@ -2,12 +2,16 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasBusinessDate;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Invoice extends Model
 {
+    use HasBusinessDate;
+
     public const STATUS_DRAFT = 'draft';
 
     public const STATUS_ISSUED = 'issued';
@@ -38,6 +42,7 @@ class Invoice extends Model
         'created_by_user_id',
         'cancelled_by_user_id',
         'cancelled_at',
+        'business_date',
     ];
 
     /**
@@ -50,6 +55,7 @@ class Invoice extends Model
             'due_date' => 'date',
             'cancelled_at' => 'datetime',
             'meta' => 'array',
+            'business_date' => 'date',
         ];
     }
 
@@ -76,5 +82,14 @@ class Invoice extends Model
     public function cancelledBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cancelled_by_user_id');
+    }
+
+    protected function businessDateReferenceTime(): CarbonInterface
+    {
+        if ($this->issue_date) {
+            return $this->normalizeBusinessDateTime($this->issue_date);
+        }
+
+        return $this->normalizeBusinessDateTime($this->created_at);
     }
 }
