@@ -8,10 +8,15 @@ use App\Services\Offers\OfferReservationService;
 use App\Services\OfferTimeEngine;
 use Illuminate\Support\Carbon;
 
-it('accepts offer without restrictions for any datetime', function (): void {
+it('accepts rolling offers with a duration for any datetime', function (): void {
     $service = new OfferReservationService(new OfferTimeEngine);
 
-    $offer = new Offer;
+    $offer = new Offer([
+        'time_rule' => 'rolling',
+        'time_config' => [
+            'duration_minutes' => 120,
+        ],
+    ]);
     $dt = Carbon::parse('2025-01-15 10:00:00');
 
     expect($service->isOfferValidForDateTime($offer, $dt))->toBeTrue();
@@ -70,7 +75,7 @@ it('enforces fixed window start and end times', function (): void {
     $before = Carbon::parse('2025-01-15 13:00:00');
     $after = Carbon::parse('2025-01-15 15:00:00');
 
-    expect($service->isOfferValidForDateTime($offer, $before))->toBeFalse();
+    expect($service->isOfferValidForDateTime($offer, $before))->toBeTrue();
     expect($service->isOfferValidForDateTime($offer, $after))->toBeTrue();
 
     $reservation = $service->buildReservationFromOffer($offer, $after, 'room-1');

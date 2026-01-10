@@ -36,7 +36,7 @@ class OfferReservationService
             throw new OfferNotValidForDateTimeException($violation);
         }
 
-        [$startAt, $endAt] = $this->resolvePeriod($offer, $dt);
+        ['arrival_at' => $startAt, 'departure_at' => $endAt] = $this->resolvePeriod($offer, $dt);
 
         $checkInDate = $startAt->copy();
         $checkOutDate = $endAt->copy();
@@ -51,6 +51,9 @@ class OfferReservationService
         ]));
     }
 
+    /**
+     * @return array{arrival_at: Carbon, departure_at: Carbon}
+     */
     private function resolvePeriod(Offer $offer, Carbon $dt): array
     {
         return $this->timeEngine->computeStayPeriod($offer, $dt);
@@ -73,7 +76,7 @@ class OfferReservationService
         }
 
         try {
-            [$arrival, $departure] = $this->resolvePeriod($offer, $dt);
+            ['arrival_at' => $arrival, 'departure_at' => $departure] = $this->resolvePeriod($offer, $dt);
         } catch (ValidationException $e) {
             return $returnMessage ? ($e->getMessage() ?: 'Cette offre n’est pas disponible.') : 'invalid';
         }
