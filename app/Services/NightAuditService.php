@@ -53,8 +53,8 @@ class NightAuditService
             ->where('tenant_id', $tenantId)
             ->where('hotel_id', $hotelId)
             ->where('status', Reservation::STATUS_IN_HOUSE)
-            ->whereDate('check_in_date', '<=', $start)
-            ->whereDate('check_out_date', '>=', $start)
+            ->whereDate('check_in_date', '<=', $windowStart)
+            ->whereDate('check_out_date', '>=', $windowStart)
             ->count();
 
         $availableRooms = max($totalRooms - $occupiedRooms, 0);
@@ -263,5 +263,13 @@ class NightAuditService
             'tax_total' => $taxTotal,
             'total_revenue' => $roomRevenue + $posRevenue,
         ];
+    }
+
+    /**
+     * @return array{0: \Carbon\Carbon, 1: \Carbon\Carbon}
+     */
+    private function businessWindow(Hotel $hotel, Carbon $businessDate): array
+    {
+        return $this->businessDayService->businessWindow($hotel, $businessDate);
     }
 }
