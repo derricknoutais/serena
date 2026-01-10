@@ -4,7 +4,9 @@ require_once __DIR__.'/FolioTestHelpers.php';
 
 use App\Models\MaintenanceTicket;
 use App\Models\Reservation;
+use App\Models\Room;
 use App\Services\ReservationAvailabilityService;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 beforeEach(function (): void {
@@ -179,6 +181,54 @@ it('allows rooms with non-blocking maintenance tickets', function (): void {
         'hotel_id' => $hotel->id,
         'room_type_id' => $room->room_type_id,
         'room_id' => $room->id,
+        'status' => Reservation::STATUS_CONFIRMED,
+        'check_in_date' => '2025-02-02',
+        'check_out_date' => '2025-02-04',
+    ];
+
+    expect(fn () => $service->ensureAvailable($data))
+        ->not
+        ->toThrow(ValidationException::class);
+});
+
+it('skips room type capacity when a specific room is selected', function (): void {
+    [
+        'tenant' => $tenant,
+        'hotel' => $hotel,
+        'room' => $reservedRoom,
+        'roomType' => $roomType,
+        'reservation' => $existingReservation,
+    ] = setupReservationEnvironment('capacity-room-id');
+
+    $reservedRoom->update([
+        'hk_status' => Room::HK_STATUS_DIRTY,
+    ]);
+
+    $availableRoom = Room::query()->create([
+        'id' => (string) Str::uuid(),
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'room_type_id' => $roomType->id,
+        'number' => '303',
+        'floor' => '3',
+        'status' => Room::STATUS_AVAILABLE,
+        'hk_status' => Room::HK_STATUS_INSPECTED,
+    ]);
+
+    $existingReservation->update([
+        'room_id' => $reservedRoom->id,
+        'status' => Reservation::STATUS_CONFIRMED,
+        'check_in_date' => '2025-02-02',
+        'check_out_date' => '2025-02-04',
+    ]);
+
+    $service = app(ReservationAvailabilityService::class);
+
+    $data = [
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'room_type_id' => $roomType->id,
+        'room_id' => $availableRoom->id,
         'status' => Reservation::STATUS_CONFIRMED,
         'check_in_date' => '2025-02-02',
         'check_out_date' => '2025-02-04',

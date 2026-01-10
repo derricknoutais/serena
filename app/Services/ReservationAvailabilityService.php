@@ -60,8 +60,13 @@ class ReservationAvailabilityService
     protected function exceedsRoomTypeCapacity(array $data, ?int $ignoreReservationId = null): bool
     {
         $roomTypeId = $data['room_type_id'] ?? null;
+        $roomId = $data['room_id'] ?? null;
         $tenantId = $data['tenant_id'] ?? null;
         $hotelId = $data['hotel_id'] ?? null;
+
+        if ($roomId) {
+            return false;
+        }
 
         if (! $roomTypeId || ! $tenantId || ! $hotelId) {
             return false;
