@@ -38,6 +38,19 @@ it('marks a room occupied on check in', function (): void {
         ->and($fresh->room?->status)->toBe(Room::STATUS_OCCUPIED);
 });
 
+it('sets the room to in_use on check in', function (): void {
+    [
+        'reservation' => $reservation,
+    ] = setupReservationEnvironment('sm-checkin-inuse');
+
+    $reservation->forceFill(['status' => Reservation::STATUS_CONFIRMED])->save();
+
+    $stateMachine = app(ReservationStateMachine::class);
+    $stateMachine->checkIn($reservation->fresh());
+
+    expect($reservation->fresh()->room?->hk_status)->toBe(Room::HK_STATUS_IN_USE);
+});
+
 it('releases the room on check out', function (): void {
     [
         'reservation' => $reservation,

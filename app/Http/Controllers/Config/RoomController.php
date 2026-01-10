@@ -49,7 +49,7 @@ class RoomController extends Controller
             'rooms' => $rooms,
             'roomTypes' => $roomTypes,
             'statuses' => ['active', 'inactive', 'out_of_order'],
-            'housekeepingStatuses' => ['dirty', 'cleaning', 'awaiting_inspection', 'inspected', 'redo'],
+            'housekeepingStatuses' => ['dirty', 'cleaning', 'awaiting_inspection', 'inspected', 'in_use', 'redo'],
         ]);
     }
 
@@ -65,7 +65,7 @@ class RoomController extends Controller
         return Inertia::render('Config/Rooms/RoomsCreate', [
             'roomTypes' => $roomTypes,
             'statuses' => ['active', 'inactive', 'out_of_order'],
-            'housekeepingStatuses' => ['dirty', 'cleaning', 'awaiting_inspection', 'inspected', 'redo'],
+            'housekeepingStatuses' => ['dirty', 'cleaning', 'awaiting_inspection', 'inspected', 'in_use', 'redo'],
         ]);
     }
 
@@ -84,7 +84,7 @@ class RoomController extends Controller
             'number' => ['required', 'string'],
             'floor' => ['nullable', 'string'],
             'status' => ['required', 'string', 'in:active,inactive,out_of_order'],
-            'hk_status' => ['required', 'string', 'in:dirty,cleaning,awaiting_inspection,inspected,redo'],
+            'hk_status' => ['required', 'string', 'in:dirty,cleaning,awaiting_inspection,inspected,in_use,redo'],
         ]);
 
         $hotelId = $this->activeHotelId($request);
@@ -121,7 +121,7 @@ class RoomController extends Controller
             'room' => $room,
             'roomTypes' => $roomTypes,
             'statuses' => ['active', 'inactive', 'out_of_order'],
-            'housekeepingStatuses' => ['dirty', 'cleaning', 'awaiting_inspection', 'inspected', 'redo'],
+            'housekeepingStatuses' => ['dirty', 'cleaning', 'awaiting_inspection', 'inspected', 'in_use', 'redo'],
         ]);
     }
 
@@ -140,7 +140,7 @@ class RoomController extends Controller
             'number' => ['required', 'string'],
             'floor' => ['nullable', 'string'],
             'status' => ['required', 'string'],
-            'hk_status' => ['required', 'string', 'in:dirty,cleaning,awaiting_inspection,inspected,redo'],
+            'hk_status' => ['required', 'string', 'in:dirty,cleaning,awaiting_inspection,inspected,in_use,redo'],
         ]);
 
         $room = Room::query()

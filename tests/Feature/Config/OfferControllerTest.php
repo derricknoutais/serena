@@ -50,7 +50,7 @@ function setupOfferTenant(): array
     return compact('tenant', 'hotel', 'user');
 }
 
-it('stores numeric valid_days_of_week for offers', function (): void {
+it('stores weekend window configuration for offers', function (): void {
     $this->seed([
         RoleSeeder::class,
         PermissionSeeder::class,
@@ -72,13 +72,20 @@ it('stores numeric valid_days_of_week for offers', function (): void {
     ]);
 
     $payload = [
-        'name' => 'Offre semaine',
+        'name' => 'Offre weekend',
         'kind' => 'night',
         'billing_mode' => 'per_night',
-        'fixed_duration_hours' => null,
-        'check_in_from' => null,
-        'check_out_until' => null,
-        'valid_days_of_week' => [1, 2],
+        'time_rule' => 'weekend_window',
+        'time_config' => [
+            'checkin' => [
+                'allowed_weekdays' => [1, 2],
+                'start_time' => '12:00',
+            ],
+            'checkout' => [
+                'time' => '12:00',
+                'max_days_after_checkin' => 2,
+            ],
+        ],
         'valid_from' => now()->toDateString(),
         'valid_to' => now()->addWeek()->toDateString(),
         'description' => 'Offre valide lundi et mardi',
@@ -96,10 +103,70 @@ it('stores numeric valid_days_of_week for offers', function (): void {
     $offer = Offer::query()
         ->where('tenant_id', $tenant->id)
         ->where('hotel_id', $hotel->id)
-        ->where('name', 'Offre semaine')
+        ->where('name', 'Offre weekend')
         ->firstOrFail();
 
-    expect($offer->valid_days_of_week)
+    expect($offer->time_rule)->toBe('weekend_window');
+    expect($offer->time_config['checkin']['allowed_weekdays'] ?? [])
         ->toBeArray()
         ->toEqual([1, 2]);
+    expect($offer->time_config['checkout']['max_days_after_checkin'] ?? null)->toBe(2);
+});
+
+it('updates the rule and configuration when editing an offer', function (): void {
+    $this->seed([
+        RoleSeeder::class,
+        PermissionSeeder::class,
+    ]);
+
+    [
+        'tenant' => $tenant,
+        'hotel' => $hotel,
+        'user' => $user,
+    ] = setupOfferTenant();
+
+    $user->assignRole('owner');
+
+    config([
+        'app.url' => 'http://serena.test',
+        'app.url_host' => 'serena.test',
+        'app.url_scheme' => 'http',
+        'tenancy.central_domains' => ['serena.test'],
+    ]);
+
+    $offer = Offer::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Offre à modifier',
+        'kind' => 'night',
+        'billing_mode' => 'per_night',
+        'time_rule' => 'rolling',
+        'time_config' => ['duration_minutes' => 120],
+        'is_active' => true,
+    ]);
+
+    $payload = [
+        'name' => 'Offre à modifier',
+        'kind' => 'night',
+        'billing_mode' => 'per_night',
+        'time_rule' => 'fixed_window',
+        'time_config' => [
+            'start_time' => '22:00',
+            'end_time' => '08:00',
+            'late_checkout' => null,
+        ],
+        'is_active' => true,
+    ];
+
+    $response = actingAs($user)->put(sprintf(
+        'http://%s/settings/resources/offers/%s',
+        tenantDomain($tenant),
+        $offer->id,
+    ), $payload);
+
+    $response->assertRedirect();
+
+    expect($offer->refresh()->time_rule)->toBe('fixed_window');
+    expect($offer->time_config['start_time'])->toBe('22:00');
+    expect($offer->time_config['end_time'])->toBe('08:00');
 });

@@ -586,6 +586,7 @@ export default {
                 kind: null,
                 billing_mode: null,
                 time_rule: null,
+                description: '',
                 valid_from: '',
                 valid_to: '',
                 is_active: true,
@@ -709,7 +710,7 @@ export default {
 
             this.form = {
                 ...this.form,
-                ...values,
+                name: values.name ?? this.form.name,
                 kind: values.kind ?? this.form.kind,
                 billing_mode: values.billing_mode ?? this.form.billing_mode,
                 valid_from: values.valid_from ?? this.form.valid_from,
@@ -783,6 +784,7 @@ export default {
                 kind: this.kindOptionsNormalized.find((opt) => opt.value === offer.kind) ?? null,
                 billing_mode: this.billingModeOptions.find((opt) => opt.value === offer.billing_mode) ?? null,
                 time_rule: offer.time_rule || null,
+                description: offer.description || '',
                 valid_from: offer.valid_from || '',
                 valid_to: offer.valid_to || '',
                 is_active: !!offer.is_active,
@@ -806,6 +808,7 @@ export default {
                 kind: null,
                 billing_mode: null,
                 time_rule: null,
+                description: '',
                 valid_from: '',
                 valid_to: '',
                 is_active: true,
@@ -1043,13 +1046,13 @@ export default {
             }
             this.submitting = true;
             const payload = {
-                ...values,
-                kind: values.kind?.value ?? values.kind,
-                billing_mode: values.billing_mode?.value ?? values.billing_mode,
+                ...this.form,
+                kind: this.form.kind?.value ?? this.form.kind,
+                billing_mode: this.form.billing_mode?.value ?? this.form.billing_mode,
                 time_rule: this.form.time_rule || null,
-                valid_from: values.valid_from || null,
-                valid_to: values.valid_to || null,
-                is_active: !!values.is_active,
+                valid_from: this.form.valid_from || null,
+                valid_to: this.form.valid_to || null,
+                is_active: !!this.form.is_active,
                 time_config: this.buildTimeConfigPayload(),
                 prices: this.roomTypePrices
                     .filter((p) => p.price !== '' && !Number.isNaN(Number(p.price)))

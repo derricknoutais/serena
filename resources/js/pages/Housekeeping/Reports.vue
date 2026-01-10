@@ -353,20 +353,22 @@ const formatDuration = (seconds?: number | null) => {
 };
 
 const hkStatusLabel = (status?: string | null) => {
-    switch (status) {
-        case 'dirty':
-            return 'Sale';
-        case 'cleaning':
-            return 'En cours';
-        case 'awaiting_inspection':
-            return 'En attente d’inspection';
-        case 'redo':
-            return 'À refaire';
-        case 'inspected':
-            return 'Inspectée';
-        default:
-            return status || '—';
-    }
+        switch (status) {
+            case 'dirty':
+                return 'Sale';
+            case 'cleaning':
+                return 'En cours';
+            case 'awaiting_inspection':
+                return 'En attente d’inspection';
+            case 'redo':
+                return 'À refaire';
+            case 'inspected':
+                return 'Inspectée';
+            case 'in_use':
+                return 'En usage';
+            default:
+                return status || '—';
+        }
 };
 
 const taskTypeLabel = (type: string) => {

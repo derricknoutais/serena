@@ -1408,6 +1408,7 @@ export default {
                 { value: 'cleaning', label: 'En cours' },
                 { value: 'awaiting_inspection', label: 'En attente d’inspection' },
                 { value: 'inspected', label: 'Inspectée' },
+                { value: 'in_use', label: 'En usage' },
                 { value: 'redo', label: 'À refaire' },
             ],
             showReservationModal: false,
@@ -1615,7 +1616,6 @@ export default {
                         kind: offer.kind,
                         time_rule: offer.time_rule,
                         time_config: offer.time_config,
-                        fixed_duration_hours: offer.fixed_duration_hours,
                         price: price.price,
                         currency: price.currency,
                         label: `${offer.name} · ${this.formatAmount(price.price)}`,
@@ -2838,10 +2838,6 @@ export default {
                 }
             }
 
-            if (bundle <= 0 && Number.isFinite(Number(offer.fixed_duration_hours))) {
-                bundle = Math.ceil(Number(offer.fixed_duration_hours) / 24);
-            }
-
             if (!Number.isFinite(bundle) || bundle <= 0) {
                 return resolvedKind === 'weekend' ? 2 : 1;
             }
@@ -3339,6 +3335,14 @@ export default {
                 );
             }
 
+            if (room.hk_status === 'in_use') {
+                return (
+                    base +
+                    urgentHighlight +
+                    ' bg-amber-50 border-amber-200 text-amber-800'
+                );
+            }
+
             if (room.hk_status === 'redo') {
                 return (
                     base +
@@ -3405,6 +3409,8 @@ export default {
                     return 'En attente d’inspection';
                 case 'inspected':
                     return 'Inspectée';
+                case 'in_use':
+                    return 'En usage';
                 case 'redo':
                     return 'À refaire';
                 default:
@@ -3440,6 +3446,13 @@ export default {
                         classes: 'bg-emerald-100 text-emerald-700 border-emerald-300',
                         icon: ShieldCheck,
                         iconClass: 'text-emerald-600',
+                    };
+                case 'in_use':
+                    return {
+                        label: 'En usage',
+                        classes: 'bg-amber-100 text-amber-700 border-amber-300',
+                        icon: ShieldCheck,
+                        iconClass: 'text-amber-600',
                     };
                 case 'dirty':
                     return {

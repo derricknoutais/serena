@@ -42,8 +42,11 @@ it('honors the provided checkout time when updating stay dates', function (): vo
         'hotel_id' => $hotel->id,
         'name' => 'Deluxe Nuitée',
         'kind' => 'night',
-        'check_in_from' => '14:00',
-        'check_out_until' => '11:30',
+        'time_rule' => 'fixed_window',
+        'time_config' => [
+            'start_time' => '14:00',
+            'end_time' => '11:30',
+        ],
         'billing_mode' => 'per_stay',
         'is_active' => true,
     ]);

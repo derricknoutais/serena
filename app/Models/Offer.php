@@ -20,13 +20,9 @@ class Offer extends Model
         'hotel_id',
         'name',
         'kind',
-        'fixed_duration_hours',
         'billing_mode',
         'time_rule',
         'time_config',
-        'check_in_from',
-        'check_out_until',
-        'valid_days_of_week',
         'valid_from',
         'valid_to',
         'is_active',
@@ -39,7 +35,6 @@ class Offer extends Model
     protected function casts(): array
     {
         return [
-            'valid_days_of_week' => 'array',
             'valid_from' => 'date',
             'valid_to' => 'date',
             'time_config' => 'array',

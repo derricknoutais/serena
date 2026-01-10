@@ -263,6 +263,7 @@ export default {
                 cleaning: 'En cours',
                 awaiting_inspection: 'En attente d’inspection',
                 inspected: 'Inspectée',
+                in_use: 'En usage',
                 redo: 'À refaire',
             };
         },

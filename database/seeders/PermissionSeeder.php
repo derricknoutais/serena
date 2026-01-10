@@ -33,7 +33,13 @@ class PermissionSeeder extends Seeder
                 continue;
             }
 
-            $role->syncPermissions($allowed);
+            foreach ($allowed as $permissionName) {
+                $permission = Permission::query()->firstOrCreate([
+                    'name' => $permissionName,
+                    'guard_name' => $guard,
+                ]);
+                $role->givePermissionTo($permission);
+            }
         }
     }
 }

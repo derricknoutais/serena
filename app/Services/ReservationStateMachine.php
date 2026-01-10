@@ -122,6 +122,7 @@ class ReservationStateMachine
         }
 
         $this->roomStateMachine->markOccupied($reservation->room, $reservation);
+        $this->housekeepingService->forceRoomStatus($reservation->room, Room::HK_STATUS_IN_USE, auth()->user());
         $fromStatus = $reservation->status;
         $reservation->actual_check_in_at = $actualCheckInAt;
         $this->billing->ensureMainFolioForReservation($reservation);

@@ -155,10 +155,12 @@ it('allows hourly offers to pass midnight', function (): void {
         'hotel_id' => $hotel->id,
         'name' => 'Détente 3h',
         'kind' => 'hourly',
-        'fixed_duration_hours' => 3,
         'billing_mode' => 'per_stay',
-        'check_in_from' => '14:00',
-        'check_out_until' => '01:00',
+        'time_rule' => 'fixed_window',
+        'time_config' => [
+            'start_time' => '14:00',
+            'end_time' => '01:00',
+        ],
         'is_active' => true,
     ]);
 

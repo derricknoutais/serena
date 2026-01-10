@@ -50,28 +50,7 @@ class HousekeepingController extends Controller
             }
         }
 
-        $tasks = HousekeepingTask::query()
-            ->where('tenant_id', $user->tenant_id)
-            ->where('hotel_id', $hotelId)
-            ->whereIn('type', [
-                HousekeepingTask::TYPE_CLEANING,
-                HousekeepingTask::TYPE_INSPECTION,
-                HousekeepingTask::TYPE_REDO_CLEANING,
-                HousekeepingTask::TYPE_REDO_INSPECTION,
-            ])
-            ->whereIn('status', [
-                HousekeepingTask::STATUS_PENDING,
-                HousekeepingTask::STATUS_IN_PROGRESS,
-            ])
-            ->with([
-                'room.roomType:id,name',
-                'room.hotel:id,timezone',
-                'participants:id,name',
-            ])
-            ->orderByRaw("case priority when 'high' then 0 else 1 end")
-            ->orderByRaw("case status when 'in_progress' then 0 else 1 end")
-            ->orderByDesc('created_at')
-            ->get();
+        $tasks = $this->loadHotelTasks($user->tenant_id, $hotelId);
 
         $arrivalMap = $this->arrivalMapForRooms(
             $tasks->pluck('room_id')->filter()->unique()->all(),
@@ -82,6 +61,32 @@ class HousekeepingController extends Controller
         return Inertia::render('Housekeeping/Index', [
             'room' => $room,
             'canManageHousekeeping' => $this->canManage($request),
+            'tasks' => $this->tasksPayload($tasks, $arrivalMap),
+        ]);
+    }
+
+    public function tasks(Request $request): JsonResponse
+    {
+        $this->authorizeAccess($request);
+
+        /** @var \App\Models\User $user */
+        $user = $request->user();
+        $hotelId = $this->resolveHotelId($user);
+
+        if ($hotelId === 0) {
+            return response()->json([
+                'tasks' => [],
+            ]);
+        }
+
+        $tasks = $this->loadHotelTasks($user->tenant_id, $hotelId);
+        $arrivalMap = $this->arrivalMapForRooms(
+            $tasks->pluck('room_id')->filter()->unique()->all(),
+            $user->tenant_id,
+            $hotelId,
+        );
+
+        return response()->json([
             'tasks' => $this->tasksPayload($tasks, $arrivalMap),
         ]);
     }
@@ -102,12 +107,12 @@ class HousekeepingController extends Controller
         $this->authorizeRoomAccess($request, $room);
 
         $data = $request->validate([
-            'hk_status' => ['required', 'in:dirty,cleaning,awaiting_inspection,inspected,redo'],
+            'hk_status' => ['required', 'in:dirty,cleaning,awaiting_inspection,inspected,redo,in_use'],
             'note' => ['nullable', 'string', 'max:255'],
         ]);
 
         match ($data['hk_status']) {
-            'inspected' => Gate::authorize('housekeeping.mark_inspected'),
+            'inspected', 'in_use' => Gate::authorize('housekeeping.mark_inspected'),
             'dirty', 'redo' => Gate::authorize('housekeeping.mark_dirty'),
             default => Gate::authorize('housekeeping.mark_clean'),
         };
@@ -303,6 +308,7 @@ class HousekeepingController extends Controller
             'room_type' => $room->roomType?->name,
             'hk_status' => $room->hk_status,
             'hk_status_label' => $this->hkStatusLabel($room->hk_status),
+            'is_occupied' => $room->isOccupiedNow(),
             'hk_priority' => $hkPriority,
             'arrival_today' => (bool) $arrivalToday,
             'housekeeping_task' => $this->taskPayload($currentTask, $room, $arrivalToday),
@@ -332,6 +338,7 @@ class HousekeepingController extends Controller
             'awaiting_inspection' => 'En attente d’inspection',
             'redo' => 'À refaire',
             'inspected' => 'Inspectée',
+            'in_use' => 'En usage',
             default => 'Propre',
         };
     }

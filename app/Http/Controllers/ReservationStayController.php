@@ -514,10 +514,6 @@ class ReservationStayController extends Controller
             }
         }
 
-        if ($bundle <= 0 && $offer->fixed_duration_hours !== null) {
-            $bundle = (int) ceil(((int) $offer->fixed_duration_hours) / 24);
-        }
-
         if ($bundle <= 0) {
             return $resolvedKind === 'weekend' ? 2 : 1;
         }

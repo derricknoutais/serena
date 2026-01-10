@@ -22,7 +22,7 @@ class RoomHousekeepingController extends Controller
     public function updateStatus(Request $request, Room $room): JsonResponse
     {
         $data = $request->validate([
-            'hk_status' => ['required', 'string', 'in:dirty,cleaning,awaiting_inspection,inspected,redo'],
+            'hk_status' => ['required', 'string', 'in:dirty,cleaning,awaiting_inspection,inspected,redo,in_use'],
             'note' => ['nullable', 'string', 'max:255'],
         ]);
 
@@ -36,7 +36,7 @@ class RoomHousekeepingController extends Controller
         }
 
         match ($data['hk_status']) {
-            'inspected' => Gate::authorize('housekeeping.mark_inspected'),
+            'inspected', 'in_use' => Gate::authorize('housekeeping.mark_inspected'),
             'dirty', 'redo' => Gate::authorize('housekeeping.mark_dirty'),
             default => Gate::authorize('housekeeping.mark_clean'),
         };

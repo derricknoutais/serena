@@ -270,15 +270,19 @@ class HousekeepingService
             : HousekeepingTask::OUTCOME_PASSED;
         $task->save();
 
+        $occupied = $room->isOccupiedNow();
+        $inspectionProperties = ['occupied_at_validation' => $occupied];
+
         if ($hasFailure) {
             $remarks = $this->buildInspectionRemarks($responses);
-            $this->transitionRoomStatus($room, Room::HK_STATUS_REDO, $user, $remarks);
+            $this->transitionRoomStatus($room, Room::HK_STATUS_REDO, $user, $remarks, false, $inspectionProperties);
             $this->createRedoCleaningTaskFromInspection($room, $user, $remarks);
         } else {
-            $this->transitionRoomStatus($room, Room::HK_STATUS_INSPECTED, $user);
+            $targetStatus = $occupied ? Room::HK_STATUS_IN_USE : Room::HK_STATUS_INSPECTED;
+            $this->transitionRoomStatus($room, $targetStatus, $user, null, false, $inspectionProperties);
         }
 
-        $this->sendInspectionOutcomePush($room, $user, ! $hasFailure);
+        $this->sendInspectionOutcomePush($room, $user, ! $hasFailure, $occupied);
 
         $this->closeParticipants($task);
 
@@ -621,6 +625,7 @@ class HousekeepingService
         ?User $user = null,
         ?string $remarks = null,
         bool $force = false,
+        array $extraProperties = [],
     ): void {
         $fromStatus = $room->hk_status;
 
@@ -642,11 +647,11 @@ class HousekeepingService
             $activity->causedBy($user);
         }
 
-        $properties = [
+        $properties = array_merge([
             'from_hk_status' => $fromStatus,
             'to_hk_status' => $toStatus,
             'room_number' => $room->number,
-        ];
+        ], $extraProperties);
 
         if ($remarks) {
             $properties['remarks'] = $remarks;
@@ -695,7 +700,7 @@ class HousekeepingService
         );
     }
 
-    private function sendInspectionOutcomePush(Room $room, User $user, bool $approved): void
+    private function sendInspectionOutcomePush(Room $room, User $user, bool $approved, bool $occupied): void
     {
         $userIds = $this->resolvePushRecipientIds($room);
 
@@ -703,7 +708,9 @@ class HousekeepingService
             return;
         }
 
-        $status = $approved ? Room::HK_STATUS_INSPECTED : Room::HK_STATUS_REDO;
+        $status = $approved
+            ? ($occupied ? Room::HK_STATUS_IN_USE : Room::HK_STATUS_INSPECTED)
+            : Room::HK_STATUS_REDO;
         $title = $approved ? 'Inspection approuvée' : 'Inspection refusée';
         $body = $this->buildRoomStatusBody($room, $status, $user);
         $url = sprintf('/housekeeping?room=%s', $room->id);
@@ -760,6 +767,7 @@ class HousekeepingService
             Room::HK_STATUS_AWAITING_INSPECTION => 'En attente d’inspection',
             Room::HK_STATUS_REDO => 'À refaire',
             Room::HK_STATUS_INSPECTED => 'Inspectée',
+            Room::HK_STATUS_IN_USE => 'En usage',
             default => 'Propre',
         };
     }
@@ -780,11 +788,17 @@ class HousekeepingService
             Room::HK_STATUS_AWAITING_INSPECTION => [
                 Room::HK_STATUS_INSPECTED,
                 Room::HK_STATUS_REDO,
+                Room::HK_STATUS_IN_USE,
             ],
             Room::HK_STATUS_REDO => [
                 Room::HK_STATUS_CLEANING,
             ],
-            Room::HK_STATUS_INSPECTED => [],
+            Room::HK_STATUS_INSPECTED => [
+                Room::HK_STATUS_IN_USE,
+            ],
+            Room::HK_STATUS_IN_USE => [
+                Room::HK_STATUS_DIRTY,
+            ],
         ];
 
         return in_array($toStatus, $map[$fromStatus] ?? [], true);

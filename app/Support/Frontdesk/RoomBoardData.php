@@ -425,7 +425,8 @@ class RoomBoardData
             Room::HK_STATUS_AWAITING_INSPECTION => $arrivalToday ? 2 : 5,
             Room::HK_STATUS_DIRTY => $arrivalToday ? 3 : 4,
             Room::HK_STATUS_CLEANING => 6,
-            Room::HK_STATUS_INSPECTED => 7,
+            Room::HK_STATUS_IN_USE => 7,
+            Room::HK_STATUS_INSPECTED => 8,
             default => 99,
         };
     }

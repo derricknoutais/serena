@@ -283,6 +283,9 @@
                             À refaire
                         </SecondaryButton>
                     </div>
+                    <p v-if="inspectionHint" class="mt-3 text-xs text-gray-500">
+                        {{ inspectionHint }}
+                    </p>
                 </div>
 
                 <div
@@ -578,6 +581,7 @@
                     description: '',
                 },
                 taskFilter: 'all',
+                taskList: this.initializeTaskList(this.tasks),
                 inspectionItems: [],
             };
         },
@@ -619,28 +623,32 @@
             canReportIssue() {
                 return this.permissionFlags.maintenance_tickets_create ?? false;
             },
+            sortedTasks() {
+                return this.sortTasks(this.taskList);
+            },
             filteredTasks() {
+                const base = this.sortedTasks;
                 if (this.taskFilter === 'all') {
-                    return this.tasks;
+                    return base;
                 }
 
                 if (this.taskFilter === 'pending_cleaning') {
-                    return this.tasks.filter((task) => task.type === 'cleaning' && task.status === 'pending');
+                    return base.filter((task) => task.type === 'cleaning' && task.status === 'pending');
                 }
 
                 if (this.taskFilter === 'pending_inspection') {
-                    return this.tasks.filter((task) => task.type === 'inspection' && task.status === 'pending');
+                    return base.filter((task) => task.type === 'inspection' && task.status === 'pending');
                 }
 
                 if (this.taskFilter === 'redo_cleaning') {
-                    return this.tasks.filter((task) => task.type === 'redo-cleaning');
+                    return base.filter((task) => task.type === 'redo-cleaning');
                 }
 
                 if (this.taskFilter === 'redo_inspection') {
-                    return this.tasks.filter((task) => task.type === 'redo-inspection');
+                    return base.filter((task) => task.type === 'redo-inspection');
                 }
 
-                return this.tasks.filter((task) => task.status === this.taskFilter);
+                return base.filter((task) => task.status === this.taskFilter);
             },
             isCleaningTask() {
                 return ['cleaning', 'redo-cleaning'].includes(this.currentTask?.type);
@@ -685,6 +693,15 @@
 
                 return this.currentRoom.last_inspection.remarks;
             },
+            inspectionHint() {
+                if (!this.currentRoom) {
+                    return null;
+                }
+
+                return this.currentRoom.is_occupied
+                    ? 'Chambre occupée → retour à "En usage"'
+                    : 'Chambre libre → statut "Inspectée"';
+            },
             taskElapsedSeconds() {
                 if (!this.currentTask?.started_at || this.currentTask?.status !== 'in_progress') {
                     return null;
@@ -706,6 +723,12 @@
             },
         },
         watch: {
+            tasks: {
+                immediate: true,
+                handler(newTasks) {
+                    this.taskList = this.initializeTaskList(newTasks);
+                },
+            },
             currentTask: {
                 immediate: true,
                 handler(newTask) {
@@ -780,6 +803,7 @@
                     cleaning: this.canMarkClean,
                     awaiting_inspection: this.canMarkClean,
                     inspected: this.canMarkInspected,
+                    in_use: this.canMarkInspected,
                 };
 
                 if (permissionMap[status] === false) {
@@ -800,6 +824,7 @@
                     });
 
                     this.currentRoom = response.data.room;
+                    await this.reloadTasks();
                     this.notifySuccess('Statut mis à jour.');
                 } catch (error) {
                     if (error?.response?.status === 403) {
@@ -821,6 +846,7 @@
                 try {
                     const response = await axios.post(`/hk/rooms/${this.currentRoom.id}/tasks/start`);
                     this.currentRoom = response.data.room;
+                    await this.reloadTasks();
                     this.notifySuccess('Ménage démarré.');
                 } catch (error) {
                     const message = error?.response?.data?.message || 'Impossible de démarrer le ménage.';
@@ -839,6 +865,7 @@
                 try {
                     const response = await axios.post(`/hk/rooms/${this.currentRoom.id}/tasks/join`);
                     this.currentRoom = response.data.room;
+                    await this.reloadTasks();
                     this.notifySuccess('Ménage rejoint.');
                 } catch (error) {
                     const message = error?.response?.data?.message || 'Impossible de rejoindre le ménage.';
@@ -857,6 +884,7 @@
                 try {
                     const response = await axios.post(`/hk/rooms/${this.currentRoom.id}/tasks/finish`);
                     this.currentRoom = response.data.room;
+                    await this.reloadTasks();
                     this.notifySuccess('Ménage terminé.');
                 } catch (error) {
                     const message = error?.response?.data?.message || 'Impossible de terminer le ménage.';
@@ -875,6 +903,7 @@
                 try {
                     const response = await axios.post(`/hk/rooms/${this.currentRoom.id}/inspections/start`);
                     this.currentRoom = response.data.room;
+                    await this.reloadTasks();
                     this.notifySuccess('Inspection démarrée.');
                 } catch (error) {
                     const message = error?.response?.data?.message || "Impossible de démarrer l'inspection.";
@@ -940,6 +969,7 @@
 
                     const response = await axios.post(`/hk/rooms/${this.currentRoom.id}/inspections/finish`, payload);
                     this.currentRoom = response.data.room;
+                    await this.reloadTasks();
                     this.notifySuccess(isRejected ? 'Inspection rejetée.' : 'Inspection validée.');
                 } catch (error) {
                     const message = error?.response?.data?.message || "Impossible de terminer l'inspection.";
@@ -1011,6 +1041,31 @@
                     item.note = '';
                 }
             },
+            initializeTaskList(tasks) {
+                if (!Array.isArray(tasks)) {
+                    return [];
+                }
+
+                return tasks.slice();
+            },
+            sortTasks(tasks) {
+                const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+                return [...(tasks ?? [])].sort((a, b) => {
+                    const roomA = a?.room?.number ?? '';
+                    const roomB = b?.room?.number ?? '';
+
+                    return collator.compare(roomA, roomB);
+                });
+            },
+            async reloadTasks() {
+                try {
+                    const response = await axios.get('/hk/tasks');
+                    this.taskList = response.data?.tasks ?? [];
+                } catch (error) {
+                    console.error(error);
+                }
+            },
             statusBadgeClasses(status) {
                 switch (status) {
                     case 'dirty':
@@ -1019,6 +1074,8 @@
                         return 'bg-blue-50 text-blue-700 border border-blue-200';
                     case 'awaiting_inspection':
                         return 'bg-teal-50 text-teal-700 border border-teal-200';
+                    case 'in_use':
+                        return 'bg-amber-50 text-amber-700 border border-amber-200';
                     case 'redo':
                         return 'bg-rose-50 text-rose-700 border border-rose-200';
                     case 'inspected':

@@ -6,6 +6,7 @@ use App\Models\HousekeepingChecklist;
 use App\Models\HousekeepingChecklistItem;
 use App\Models\HousekeepingTask;
 use App\Models\HousekeepingTaskChecklistItem;
+use App\Models\Reservation;
 use App\Models\Room;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
@@ -121,6 +122,73 @@ it('creates an inspection task after cleaning and completes inspection', functio
         ->firstOrFail();
 
     expect($responseItem->is_ok)->toBeTrue();
+});
+
+it('returns the room to in_use when inspection passes during a stay', function (): void {
+    $this->seed([
+        RoleSeeder::class,
+        PermissionSeeder::class,
+    ]);
+
+    [
+        'tenant' => $tenant,
+        'hotel' => $hotel,
+        'room' => $room,
+        'reservation' => $reservation,
+        'user' => $user,
+    ] = setupInspectionEnvironment();
+
+    $room->update([
+        'status' => Room::STATUS_OCCUPIED,
+        'hk_status' => Room::HK_STATUS_AWAITING_INSPECTION,
+    ]);
+
+    $reservation->forceFill([
+        'status' => Reservation::STATUS_IN_HOUSE,
+        'actual_check_in_at' => now()->subDay(),
+    ])->save();
+
+    $checklist = HousekeepingChecklist::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Checklist passe',
+        'scope' => HousekeepingChecklist::SCOPE_GLOBAL,
+        'room_type_id' => null,
+        'is_active' => true,
+    ]);
+
+    $item = HousekeepingChecklistItem::query()->create([
+        'checklist_id' => $checklist->id,
+        'label' => 'Ventilation',
+        'sort_order' => 0,
+        'is_required' => true,
+        'is_active' => true,
+    ]);
+
+    $inspection = HousekeepingTask::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'room_id' => $room->id,
+        'type' => HousekeepingTask::TYPE_INSPECTION,
+        'status' => HousekeepingTask::STATUS_IN_PROGRESS,
+        'priority' => HousekeepingTask::PRIORITY_NORMAL,
+        'created_from' => HousekeepingTask::SOURCE_CHECKOUT,
+        'started_at' => now(),
+    ]);
+
+    $domain = tenantDomain($tenant);
+
+    actingAs($user)->post(sprintf(
+        'http://%s/hk/rooms/%s/inspections/finish',
+        $domain,
+        $room->id,
+    ), [
+        'items' => [
+            ['checklist_item_id' => $item->id, 'is_ok' => true, 'note' => null],
+        ],
+    ])->assertOk();
+
+    expect($room->fresh()->hk_status)->toBe(Room::HK_STATUS_IN_USE);
 });
 
 it('creates a redo cleaning task when inspection fails', function (): void {

@@ -25,17 +25,19 @@ beforeEach(function () {
     ]);
 });
 
-function createTenantWithDomain(string $id = 'orchid'): Tenant
-{
-    $tenant = Tenant::create([
-        'id' => $id,
-        'slug' => $id,
-        'data' => ['name' => ucfirst($id)],
-    ]);
+if (! function_exists('createTenantWithDomain')) {
+    function createTenantWithDomain(string $id = 'orchid'): Tenant
+    {
+        $tenant = Tenant::create([
+            'id' => $id,
+            'slug' => $id,
+            'data' => ['name' => ucfirst($id)],
+        ]);
 
-    $tenant->createDomain(['domain' => "{$id}.saas-template.test"]);
+        $tenant->createDomain(['domain' => "{$id}.saas-template.test"]);
 
-    return $tenant;
+        return $tenant;
+    }
 }
 
 test('tenant admin can send an invitation email', function () {

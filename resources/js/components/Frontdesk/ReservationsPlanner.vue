@@ -1594,10 +1594,6 @@
                     }
                 }
 
-                if (bundle <= 0 && Number.isFinite(Number(offer.fixed_duration_hours))) {
-                    bundle = Math.ceil(Number(offer.fixed_duration_hours) / 24);
-                }
-
                 if (!Number.isFinite(bundle) || bundle <= 0) {
                     return resolvedKind === 'weekend' ? 2 : 1;
                 }
@@ -1678,7 +1674,7 @@
                     return '';
                 }
 
-                const checkoutTime = this.currentEventOffer?.check_out_until;
+                const checkoutTime = this.resolveOfferCheckoutTime(this.currentEventOffer);
 
                 if (typeof checkoutTime === 'string') {
                     const [hStr, mStr] = checkoutTime.split(':');
@@ -1689,6 +1685,27 @@
                 }
 
                 return this.toDateTimeLocal(date);
+            },
+            resolveOfferCheckoutTime(offer) {
+                if (!offer) {
+                    return null;
+                }
+
+                const config = offer.time_config ?? {};
+
+                if (offer.time_rule === 'fixed_checkout') {
+                    return config.checkout_time ?? null;
+                }
+
+                if (offer.time_rule === 'weekend_window') {
+                    return config.checkout?.time ?? null;
+                }
+
+                if (offer.time_rule === 'fixed_window') {
+                    return config.end_time ?? null;
+                }
+
+                return null;
             },
             valueToDate(value) {
                 if (!value) {
@@ -2583,15 +2600,9 @@
                     start = new Date();
                 }
 
-                if (offer.check_in_from) {
-                    const [hStr, mStr] = offer.check_in_from.split(':');
-                    const h = Number(hStr) || 0;
-                    const m = Number(mStr) || 0;
-                    start.setHours(h, m, 0, 0);
-                } else if (!this.form.check_in_date) {
+                if (!this.form.check_in_date) {
                     start.setHours(now.getHours(), now.getMinutes(), 0, 0);
                 }
-
                 try {
                     const http = window.axios ?? axios;
                     const response = await http.post(`/api/offers/${offer.id}/time-preview`, {

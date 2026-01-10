@@ -30,6 +30,8 @@ class Room extends Model
 
     public const HK_STATUS_REDO = 'redo';
 
+    public const HK_STATUS_IN_USE = 'in_use';
+
     /**
      * @var list<string>
      */
@@ -114,6 +116,11 @@ class Room extends Model
                     MaintenanceTicket::STATUS_OPEN,
                     MaintenanceTicket::STATUS_IN_PROGRESS,
                 ])->where('blocks_sale', true);
+            })
+            ->whereDoesntHave('reservations', function (Builder $reservationQuery): void {
+                $reservationQuery
+                    ->where('status', Reservation::STATUS_IN_HOUSE)
+                    ->whereNull('actual_check_out_at');
             });
     }
 
@@ -128,6 +135,10 @@ class Room extends Model
         }
 
         if ($this->hk_status !== self::HK_STATUS_INSPECTED) {
+            return false;
+        }
+
+        if ($this->isOccupiedNow()) {
             return false;
         }
 
@@ -151,6 +162,14 @@ class Room extends Model
     public function isBlockedByMaintenance(): bool
     {
         return ! $this->isSellable();
+    }
+
+    public function isOccupiedNow(): bool
+    {
+        return $this->reservations()
+            ->where('status', Reservation::STATUS_IN_HOUSE)
+            ->whereNull('actual_check_out_at')
+            ->exists();
     }
 
     public function isBlockedAfterCheckout(): bool
