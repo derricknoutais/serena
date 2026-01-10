@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\MaintenanceTicket;
 use App\Models\Reservation;
 use App\Models\Room;
 use Illuminate\Validation\ValidationException;
@@ -102,11 +103,18 @@ class ReservationAvailabilityService
             return false;
         }
 
-        return ! Room::query()
+        return Room::query()
             ->where('tenant_id', $tenantId)
             ->where('hotel_id', $hotelId)
             ->where('id', $roomId)
-            ->sellable()
+            ->whereHas('maintenanceTickets', function ($ticketQuery): void {
+                $ticketQuery
+                    ->whereIn('status', [
+                        MaintenanceTicket::STATUS_OPEN,
+                        MaintenanceTicket::STATUS_IN_PROGRESS,
+                    ])
+                    ->where('blocks_sale', true);
+            })
             ->exists();
     }
 

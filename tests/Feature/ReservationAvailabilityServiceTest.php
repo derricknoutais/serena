@@ -151,3 +151,40 @@ it('blocks rooms with open maintenance tickets that stop sales', function (): vo
     expect(fn () => $service->ensureAvailable($data))
         ->toThrow(ValidationException::class);
 });
+
+it('allows rooms with non-blocking maintenance tickets', function (): void {
+    [
+        'tenant' => $tenant,
+        'hotel' => $hotel,
+        'room' => $room,
+        'user' => $user,
+    ] = setupReservationEnvironment('maintenance-non-blocking');
+
+    MaintenanceTicket::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'room_id' => $room->id,
+        'reported_by_user_id' => $user->id,
+        'status' => MaintenanceTicket::STATUS_OPEN,
+        'severity' => MaintenanceTicket::SEVERITY_MEDIUM,
+        'blocks_sale' => false,
+        'title' => 'Bruit climatisation',
+        'opened_at' => now(),
+    ]);
+
+    $service = app(ReservationAvailabilityService::class);
+
+    $data = [
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'room_type_id' => $room->room_type_id,
+        'room_id' => $room->id,
+        'status' => Reservation::STATUS_CONFIRMED,
+        'check_in_date' => '2025-02-02',
+        'check_out_date' => '2025-02-04',
+    ];
+
+    expect(fn () => $service->ensureAvailable($data))
+        ->not
+        ->toThrow(ValidationException::class);
+});
