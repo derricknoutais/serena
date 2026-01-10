@@ -250,6 +250,28 @@ class HousekeepingController extends Controller
         ]);
     }
 
+    /**
+     * @return \Illuminate\Support\Collection<int, HousekeepingTask>
+     */
+    private function loadHotelTasks(string $tenantId, int $hotelId)
+    {
+        return HousekeepingTask::query()
+            ->where('tenant_id', $tenantId)
+            ->where('hotel_id', $hotelId)
+            ->whereIn('status', [
+                HousekeepingTask::STATUS_PENDING,
+                HousekeepingTask::STATUS_IN_PROGRESS,
+            ])
+            ->with([
+                'room.hotel:id,timezone',
+                'room.roomType:id,name',
+                'participants:id,name',
+            ])
+            ->orderByRaw("case status when 'in_progress' then 0 else 1 end")
+            ->orderByDesc('created_at')
+            ->get();
+    }
+
     private function roomPayload(Room $room): array
     {
         $room->loadMissing('roomType', 'hotel');
