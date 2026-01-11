@@ -73,7 +73,7 @@ it('lists pending and in-progress housekeeping tasks on the housekeeping index',
         'type' => HousekeepingTask::TYPE_INSPECTION,
         'status' => HousekeepingTask::STATUS_PENDING,
         'priority' => HousekeepingTask::PRIORITY_NORMAL,
-        'created_from' => HousekeepingTask::SOURCE_MANUAL,
+        'created_from' => HousekeepingTask::SOURCE_RECEPTION,
     ]);
 
     HousekeepingTask::query()->create([

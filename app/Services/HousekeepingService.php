@@ -24,57 +24,12 @@ class HousekeepingService
 
     public function createTaskAfterCheckout(Room $room, ?User $user = null): ?HousekeepingTask
     {
-        if ($room->status === Room::STATUS_OUT_OF_ORDER) {
-            return null;
-        }
+        return $this->createCleaningTask($room, HousekeepingTask::SOURCE_CHECKOUT, $user);
+    }
 
-        $existing = HousekeepingTask::query()
-            ->where('tenant_id', $room->tenant_id)
-            ->where('hotel_id', $room->hotel_id)
-            ->where('room_id', $room->id)
-            ->where('type', HousekeepingTask::TYPE_CLEANING)
-            ->whereIn('status', [
-                HousekeepingTask::STATUS_PENDING,
-                HousekeepingTask::STATUS_IN_PROGRESS,
-            ])
-            ->orderByDesc('created_at')
-            ->first();
-
-        if ($existing) {
-            $this->priorityService->syncTaskPriority($existing, $user);
-
-            return $existing;
-        }
-
-        $priority = $this->priorityService->computePriorityForRoom($room);
-
-        $task = HousekeepingTask::query()->create([
-            'tenant_id' => $room->tenant_id,
-            'hotel_id' => $room->hotel_id,
-            'room_id' => $room->id,
-            'type' => HousekeepingTask::TYPE_CLEANING,
-            'status' => HousekeepingTask::STATUS_PENDING,
-            'priority' => $priority,
-            'created_from' => HousekeepingTask::SOURCE_CHECKOUT,
-        ]);
-
-        $activity = activity('housekeeping')->performedOn($task);
-        if ($user) {
-            $activity->causedBy($user);
-        }
-
-        $activity
-            ->withProperties([
-                'room_id' => $room->id,
-                'task_id' => $task->id,
-                'priority' => $task->priority,
-                'type' => $task->type,
-                'created_from' => $task->created_from,
-            ])
-            ->event('task_created')
-            ->log('task_created');
-
-        return $task;
+    public function createManualCleaningTask(Room $room, ?User $user = null): ?HousekeepingTask
+    {
+        return $this->createCleaningTask($room, HousekeepingTask::SOURCE_RECEPTION, $user);
     }
 
     public function startTask(HousekeepingTask $task, User $user): HousekeepingTask
@@ -422,7 +377,7 @@ class HousekeepingService
             'type' => HousekeepingTask::TYPE_REDO_INSPECTION,
             'status' => HousekeepingTask::STATUS_PENDING,
             'priority' => $this->priorityService->computePriorityForRoom($room),
-            'created_from' => HousekeepingTask::SOURCE_MANUAL,
+            'created_from' => HousekeepingTask::SOURCE_RECEPTION,
         ]);
 
         $activity = activity('housekeeping')->performedOn($task);
@@ -478,7 +433,7 @@ class HousekeepingService
             'type' => HousekeepingTask::TYPE_REDO_CLEANING,
             'status' => HousekeepingTask::STATUS_PENDING,
             'priority' => $this->priorityService->computePriorityForRoom($room),
-            'created_from' => HousekeepingTask::SOURCE_MANUAL,
+            'created_from' => HousekeepingTask::SOURCE_RECEPTION,
         ]);
 
         $activity = activity('housekeeping')->performedOn($task);
@@ -667,6 +622,61 @@ class HousekeepingService
         }
 
         $this->priorityService->syncRoomTasks($room, $user);
+    }
+
+    private function createCleaningTask(Room $room, string $createdFrom, ?User $user = null): ?HousekeepingTask
+    {
+        if ($room->status === Room::STATUS_OUT_OF_ORDER) {
+            return null;
+        }
+
+        $existing = HousekeepingTask::query()
+            ->where('tenant_id', $room->tenant_id)
+            ->where('hotel_id', $room->hotel_id)
+            ->where('room_id', $room->id)
+            ->where('type', HousekeepingTask::TYPE_CLEANING)
+            ->whereIn('status', [
+                HousekeepingTask::STATUS_PENDING,
+                HousekeepingTask::STATUS_IN_PROGRESS,
+            ])
+            ->orderByDesc('created_at')
+            ->first();
+
+        if ($existing) {
+            $this->priorityService->syncTaskPriority($existing, $user);
+
+            return $existing;
+        }
+
+        $priority = $this->priorityService->computePriorityForRoom($room);
+
+        $task = HousekeepingTask::query()->create([
+            'tenant_id' => $room->tenant_id,
+            'hotel_id' => $room->hotel_id,
+            'room_id' => $room->id,
+            'type' => HousekeepingTask::TYPE_CLEANING,
+            'status' => HousekeepingTask::STATUS_PENDING,
+            'priority' => $priority,
+            'created_from' => $createdFrom,
+        ]);
+
+        $activity = activity('housekeeping')->performedOn($task);
+        if ($user) {
+            $activity->causedBy($user);
+        }
+
+        $activity
+            ->withProperties([
+                'room_id' => $room->id,
+                'task_id' => $task->id,
+                'priority' => $task->priority,
+                'type' => $task->type,
+                'created_from' => $task->created_from,
+            ])
+            ->event('task_created')
+            ->log('task_created');
+
+        return $task;
     }
 
     private function sendRoomDirtyPush(Room $room, ?User $user): void

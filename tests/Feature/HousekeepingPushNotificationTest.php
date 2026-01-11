@@ -81,7 +81,7 @@ it('sends a push notification when inspection is approved or refused', function 
         'type' => HousekeepingTask::TYPE_INSPECTION,
         'status' => HousekeepingTask::STATUS_IN_PROGRESS,
         'priority' => HousekeepingTask::PRIORITY_NORMAL,
-        'created_from' => HousekeepingTask::SOURCE_MANUAL,
+        'created_from' => HousekeepingTask::SOURCE_RECEPTION,
     ]);
 
     $payload = $approved

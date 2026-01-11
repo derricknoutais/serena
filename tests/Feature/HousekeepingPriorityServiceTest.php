@@ -72,7 +72,7 @@ it('keeps priority for redo cleaning in progress', function (): void {
         'type' => HousekeepingTask::TYPE_REDO_CLEANING,
         'status' => HousekeepingTask::STATUS_IN_PROGRESS,
         'priority' => HousekeepingTask::PRIORITY_HIGH,
-        'created_from' => HousekeepingTask::SOURCE_MANUAL,
+        'created_from' => HousekeepingTask::SOURCE_RECEPTION,
         'started_at' => now(),
     ]);
 

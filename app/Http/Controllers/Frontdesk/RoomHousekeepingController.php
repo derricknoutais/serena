@@ -50,6 +50,10 @@ class RoomHousekeepingController extends Controller
             $data['note'] ?? null,
         );
 
+        if ($fromStatus !== Room::HK_STATUS_DIRTY && $room->hk_status === Room::HK_STATUS_DIRTY) {
+            $this->housekeepingService->createManualCleaningTask($room, $user);
+        }
+
         $this->notifier->notify('room.hk_status_updated', $room->hotel_id, [
             'tenant_id' => $room->tenant_id,
             'room_id' => $room->id,

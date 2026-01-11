@@ -39,7 +39,7 @@ class HousekeepingTask extends Model
 
     public const SOURCE_CHECKOUT = 'checkout';
 
-    public const SOURCE_MANUAL = 'manual';
+    public const SOURCE_RECEPTION = 'reception';
 
     public const OUTCOME_PASSED = 'passed';
 

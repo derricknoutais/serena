@@ -26,7 +26,7 @@ class HousekeepingTaskSeeder extends Seeder
                     ],
                     [
                         'priority' => HousekeepingTask::PRIORITY_NORMAL,
-                        'created_from' => HousekeepingTask::SOURCE_MANUAL,
+                        'created_from' => HousekeepingTask::SOURCE_RECEPTION,
                     ],
                 );
             });

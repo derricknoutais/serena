@@ -31,7 +31,7 @@ class HousekeepingTaskFactory extends Factory
             'type' => HousekeepingTask::TYPE_CLEANING,
             'status' => HousekeepingTask::STATUS_PENDING,
             'priority' => HousekeepingTask::PRIORITY_NORMAL,
-            'created_from' => HousekeepingTask::SOURCE_MANUAL,
+            'created_from' => HousekeepingTask::SOURCE_RECEPTION,
             'started_at' => null,
             'ended_at' => null,
         ];
