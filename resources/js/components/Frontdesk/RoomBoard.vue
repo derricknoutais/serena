@@ -419,130 +419,49 @@
                                         {{ selectedRoomMaintenanceTickets.length }} ticket(s) ouvert(s)
                                     </p>
                                 </div>
-                                <button
-                                    v-if="canReportMaintenance"
-                                    type="button"
-                                    class="rounded-lg border border-amber-300 bg-white px-3 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-50"
-                                    @click="openMaintenanceModal(selectedRoom)"
-                                >
-                                    Déclarer un problème
-                                </button>
-                            </div>
-
-                            <div
-                                v-if="selectedRoomMaintenanceTickets.length"
-                                class="space-y-3 text-xs text-amber-900"
-                            >
-                                <div
-                                    v-for="ticket in selectedRoomMaintenanceTickets"
-                                    :key="ticket.id"
-                                    class="rounded-lg border border-amber-200 bg-white/80 p-3"
-                                >
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <span class="font-semibold">Statut :</span>
-                                        <span class="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-amber-900">
-                                            {{ maintenanceStatusLabel(ticket.status) }}
-                                        </span>
-                                        <span class="font-semibold">Sévérité :</span>
-                                        <span
-                                            class="rounded-full px-2 py-0.5 text-[11px] font-semibold"
-                                            :class="maintenanceBadge(ticket).classes"
-                                        >
-                                            {{ maintenanceSeverityLabel(ticket.severity) }}
-                                        </span>
-                                        <span
-                                            v-if="ticket.blocks_sale"
-                                            class="rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700"
-                                        >
-                                            Bloque vente
-                                        </span>
-                                    </div>
-                                    <div class="text-[11px]">
-                                        <span class="font-semibold">Titre :</span>
-                                        <span class="ml-1">{{ ticket.title }}</span>
-                                    </div>
-                                    <div
-                                        v-if="ticket.description"
-                                        class="text-[11px]"
+                                <div class="flex items-center gap-2">
+                                    <button
+                                        v-if="canReportMaintenance"
+                                        type="button"
+                                        class="rounded-lg border border-amber-300 bg-white px-3 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-50"
+                                        @click="openMaintenanceModal(selectedRoom)"
                                     >
-                                        <span class="font-semibold">Description :</span>
-                                        <span class="ml-1">{{ ticket.description }}</span>
-                                    </div>
-                                    <div class="text-[11px]">
-                                        <span class="font-semibold">Déclaré par :</span>
-                                        <span class="ml-1">{{ ticket.reported_by?.name || 'N/A' }}</span>
-                                    </div>
-                                    <div class="text-[11px]">
-                                        <span class="font-semibold">Assigné à :</span>
-                                        <span class="ml-1">
-                                            {{ ticket.assigned_to?.name || 'Non assigné' }}
-                                        </span>
-                                    </div>
-
-                                    <div
-                                        v-if="canOverrideMaintenanceBlocks"
-                                        class="pt-2"
+                                        Déclarer un problème
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="rounded-lg border border-amber-300 bg-white px-3 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-50"
+                                        @click="goToMaintenance(selectedRoom)"
                                     >
-                                        <button
-                                            type="button"
-                                            class="rounded-lg border px-3 py-1 text-[11px] font-semibold"
-                                            :class="ticket.blocks_sale ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-slate-300 bg-white text-slate-700'"
-                                            :disabled="maintenanceStatusSubmitting"
-                                            @click="toggleMaintenanceBlocksSale(ticket)"
-                                        >
-                                            {{ ticket.blocks_sale ? 'Ne bloque pas la vente' : 'Marquer bloquant' }}
-                                        </button>
-                                    </div>
-
-                                    <div
-                                        v-if="canProgressMaintenance || canHandleMaintenance"
-                                        class="flex flex-wrap gap-2 pt-2"
-                                    >
-                                        <button
-                                            v-if="canHandleMaintenance && (!ticket.assigned_to || ticket.assigned_to.id !== currentUserId)"
-                                            type="button"
-                                            class="rounded-lg border border-amber-300 bg-white px-3 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-60"
-                                            :disabled="maintenanceStatusSubmitting"
-                                            @click="assignMaintenanceToSelf(ticket)"
-                                        >
-                                            Me l'assigner
-                                        </button>
-                                        <button
-                                            v-if="canProgressMaintenance && ticket.status === 'open'"
-                                            type="button"
-                                            class="rounded-lg border border-amber-300 bg-white px-3 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-60"
-                                            :disabled="maintenanceStatusSubmitting"
-                                            @click="updateMaintenanceStatus(ticket, 'in_progress')"
-                                        >
-                                            Mettre en cours
-                                        </button>
-                                        <button
-                                            v-if="canHandleMaintenance && ['open', 'in_progress'].includes(ticket.status)"
-                                            type="button"
-                                            class="rounded-lg border border-green-300 bg-green-50 px-3 py-1 text-[11px] font-semibold text-green-700 hover:bg-green-100 disabled:opacity-60"
-                                            :disabled="maintenanceStatusSubmitting"
-                                            @click="updateMaintenanceStatus(ticket, 'resolved')"
-                                        >
-                                            Résoudre
-                                        </button>
-                                        <button
-                                            v-if="canHandleMaintenance && ticket.status !== 'closed'"
-                                            type="button"
-                                            class="rounded-lg border border-gray-300 bg-gray-50 px-3 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
-                                            :disabled="maintenanceStatusSubmitting"
-                                            @click="updateMaintenanceStatus(ticket, 'closed')"
-                                        >
-                                            Clôturer
-                                        </button>
-                                    </div>
+                                        Voir dans Maintenance
+                                    </button>
                                 </div>
                             </div>
 
-                            <div
-                                v-else
-                                class="text-xs text-amber-900"
-                            >
-                                Aucun ticket de maintenance actif pour cette chambre.
+                            <div class="rounded-lg border border-amber-200 bg-white/80 p-3 text-xs text-amber-900">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="font-semibold">Tickets ouverts :</span>
+                                    <span>{{ selectedRoomMaintenanceTickets.length }}</span>
+                                    <span
+                                        v-if="selectedRoom.maintenance_blocking_count > 0"
+                                        class="rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700"
+                                    >
+                                        Bloque vente
+                                    </span>
+                                </div>
+                                <ul v-if="selectedRoomMaintenanceTickets.length" class="mt-2 space-y-1 text-[11px]">
+                                    <li
+                                        v-for="ticket in selectedRoomMaintenanceTickets.slice(0, 2)"
+                                        :key="ticket.id"
+                                        class="flex items-center gap-2"
+                                    >
+                                        <span class="font-semibold">•</span>
+                                        <span class="truncate">{{ ticket.title }}</span>
+                                    </li>
+                                </ul>
+                                <p v-else class="mt-2 text-[11px] text-amber-800">
+                                    Aucun ticket de maintenance actif pour cette chambre.
+                                </p>
                             </div>
                         </div>
 
@@ -1210,6 +1129,23 @@
                     </p>
                 </div>
                 <div>
+                    <label class="text-xs font-semibold text-gray-500">Type</label>
+                    <Multiselect
+                        v-model="maintenanceForm.maintenance_type"
+                        :options="maintenanceTypeOptions"
+                        track-by="id"
+                        label="name"
+                        placeholder="Sélectionner un type"
+                        class="mt-1"
+                    />
+                    <p
+                        v-if="maintenanceFormErrors.maintenance_type_id"
+                        class="mt-1 text-xs text-red-500"
+                    >
+                        {{ maintenanceFormErrors.maintenance_type_id }}
+                    </p>
+                </div>
+                <div>
                     <label class="text-xs font-semibold text-gray-500">Sévérité</label>
                     <select
                         v-model="maintenanceForm.severity"
@@ -1382,6 +1318,10 @@ export default {
                 name: null,
             }),
         },
+        maintenanceTypes: {
+            type: Array,
+            default: () => [],
+        },
     },
     data() {
         return {
@@ -1424,6 +1364,7 @@ export default {
             showMaintenanceModal: false,
             maintenanceForm: {
                 title: '',
+                maintenance_type: null,
                 severity: 'medium',
                 blocks_sale: false,
                 description: '',
@@ -1436,7 +1377,6 @@ export default {
                 { value: 'critical', label: 'Gravité critique' },
             ],
             maintenanceSubmitting: false,
-            maintenanceStatusSubmitting: false,
             roomActivityLoading: false,
             roomActivity: [],
             statusSubmitting: false,
@@ -1660,12 +1600,6 @@ export default {
         canReportMaintenance() {
             return this.permissionFlags.maintenance_tickets_create ?? this.maintenancePermissions?.canReport ?? false;
         },
-        canHandleMaintenance() {
-            return this.permissionFlags.maintenance_tickets_close ?? this.maintenancePermissions?.canHandle ?? false;
-        },
-        canProgressMaintenance() {
-            return this.permissionFlags.maintenance_tickets_update ?? this.maintenancePermissions?.canProgress ?? false;
-        },
         changeRoomOptions() {
             if (!this.selectedRoom?.current_reservation) {
                 return [];
@@ -1706,11 +1640,11 @@ export default {
 
             return this.selectedRoom.maintenance_ticket ? [this.selectedRoom.maintenance_ticket] : [];
         },
-        selectedRoomMaintenance() {
-            return this.selectedRoomMaintenanceTickets[0] ?? null;
-        },
         currentUserId() {
             return this.currentUser?.id ?? null;
+        },
+        maintenanceTypeOptions() {
+            return Array.isArray(this.maintenanceTypes) ? this.maintenanceTypes : [];
         },
     },
     watch: {
@@ -1824,7 +1758,13 @@ export default {
             }
 
             this.refreshTimer = window.setInterval(() => {
-                if (navigator.onLine && !this.isWalkInOpen && !this.showStayModal && !this.showChangeRoomModal && !this.showMaintenanceModal) {
+                if (
+                    navigator.onLine
+                    && !this.isWalkInOpen
+                    && !this.showStayModal
+                    && !this.showChangeRoomModal
+                    && !this.showMaintenanceModal
+                ) {
                     this.reloadRoomBoard();
                 }
             }, 60000);
@@ -2496,11 +2436,27 @@ export default {
 
             this.maintenanceForm = {
                 title: '',
+                maintenance_type: this.defaultMaintenanceType(),
                 severity: defaultSeverity,
                 blocks_sale: defaultBlocksSale,
                 description: '',
             };
             this.maintenanceFormErrors = {};
+        },
+        defaultMaintenanceType() {
+            const types = this.maintenanceTypeOptions;
+
+            if (!types.length) {
+                return null;
+            }
+
+            return types.find((type) => type.name === 'Autre') ?? types[0] ?? null;
+        },
+        goToMaintenance(room) {
+            const roomId = room?.id ?? null;
+            const params = roomId ? { room_id: roomId, tab: 'tickets' } : { tab: 'tickets' };
+
+            router.get('/maintenance', params);
         },
         async submitMaintenanceTicket() {
             if (!this.selectedRoom) {
@@ -2513,7 +2469,11 @@ export default {
             try {
                 const payload = {
                     room_id: this.selectedRoom.id,
-                    ...this.maintenanceForm,
+                    title: this.maintenanceForm.title,
+                    severity: this.maintenanceForm.severity,
+                    description: this.maintenanceForm.description,
+                    maintenance_type_id: this.maintenanceForm.maintenance_type?.id ?? null,
+                    blocks_sale: this.maintenanceForm.blocks_sale,
                 };
 
                 if (!this.canOverrideMaintenanceBlocks) {
@@ -2574,149 +2534,6 @@ export default {
                 }
             } finally {
                 this.maintenanceSubmitting = false;
-            }
-        },
-        async assignMaintenanceToSelf(ticket) {
-            if (!ticket || !this.currentUserId) {
-                return;
-            }
-
-            await this.updateMaintenanceStatus(ticket, ticket.status, {
-                assigned_to_user_id: this.currentUserId,
-            });
-        },
-        async updateMaintenanceStatus(ticket, status, extra = {}) {
-            if (!ticket) {
-                return;
-            }
-
-            if (!this.canProgressMaintenance && ['open', 'in_progress'].includes(status)) {
-                this.showUnauthorizedAlert();
-
-                return;
-            }
-
-            if (['resolved', 'closed'].includes(status) && !this.canHandleMaintenance) {
-                this.showUnauthorizedAlert();
-
-                return;
-            }
-
-            const payload = {
-                status,
-                ...extra,
-            };
-
-            if (['resolved', 'closed'].includes(status) && this.shouldOfferRoomRestore()) {
-                const result = await Swal.fire({
-                    icon: 'question',
-                    title: 'Remettre la chambre en service ?',
-                    text: 'Souhaitez-vous la marquer comme disponible immédiatement ?',
-                    showCancelButton: true,
-                    confirmButtonText: 'Oui',
-                    cancelButtonText: 'Non',
-                });
-
-                payload.restore_room_status = result.isConfirmed;
-            }
-
-            this.maintenanceStatusSubmitting = true;
-
-            try {
-                const response = await axios.patch(
-                    `/maintenance-tickets/${ticket.id}`,
-                    payload,
-                );
-
-                const updatedTicket = response.data?.ticket ?? null;
-
-                if (updatedTicket) {
-                    const tickets = this.selectedRoomMaintenanceTickets
-                        .filter((item) => item.id !== updatedTicket.id)
-                        .concat(['open', 'in_progress'].includes(updatedTicket.status) ? updatedTicket : []);
-                    const blockingCount = tickets.filter((item) => item.blocks_sale).length;
-
-                    const primaryTicket = tickets[0] ?? null;
-
-                    this.applyRoomPatch(this.selectedRoom.id, {
-                        maintenance_ticket: primaryTicket,
-                        maintenance_tickets: tickets,
-                        maintenance_open_count: tickets.length,
-                        maintenance_blocking_count: blockingCount,
-                        is_sellable: blockingCount === 0,
-                    });
-                }
-
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Ticket mis à jour',
-                    timer: 1600,
-                    showConfirmButton: false,
-                });
-
-                this.reloadRoomBoard();
-            } catch (error) {
-                if (error?.response?.status === 403) {
-                    this.showUnauthorizedAlert();
-
-                    return;
-                }
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Erreur',
-                    text: error.response?.data?.message ?? 'Impossible de mettre à jour le ticket.',
-                });
-            } finally {
-                this.maintenanceStatusSubmitting = false;
-            }
-        },
-        async toggleMaintenanceBlocksSale(ticket) {
-            if (!ticket || !this.canOverrideMaintenanceBlocks) {
-                return;
-            }
-
-            this.maintenanceStatusSubmitting = true;
-
-            try {
-                const response = await axios.patch(
-                    `/maintenance-tickets/${ticket.id}`,
-                    {
-                        blocks_sale: !ticket.blocks_sale,
-                    },
-                );
-
-                const updatedTicket = response.data?.ticket ?? null;
-
-                if (updatedTicket) {
-                    const tickets = this.selectedRoomMaintenanceTickets.map((item) => (
-                        item.id === updatedTicket.id ? updatedTicket : item
-                    ));
-                    const blockingCount = tickets.filter((item) => item.blocks_sale).length;
-
-                    this.applyRoomPatch(this.selectedRoom.id, {
-                        maintenance_ticket: updatedTicket,
-                        maintenance_tickets: tickets,
-                        maintenance_open_count: tickets.length,
-                        maintenance_blocking_count: blockingCount,
-                        is_sellable: blockingCount === 0,
-                    });
-                }
-
-                this.reloadRoomBoard();
-            } catch (error) {
-                if (error?.response?.status === 403) {
-                    this.showUnauthorizedAlert();
-
-                    return;
-                }
-
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Erreur',
-                    text: error.response?.data?.message ?? 'Impossible de modifier le blocage.',
-                });
-            } finally {
-                this.maintenanceStatusSubmitting = false;
             }
         },
         shouldOfferRoomRestore() {

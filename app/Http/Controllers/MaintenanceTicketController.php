@@ -2,15 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\CloseMaintenanceTicketRequest;
 use App\Http\Requests\StoreMaintenanceTicketRequest;
 use App\Http\Requests\UpdateMaintenanceTicketRequest;
+use App\Models\MaintenanceIntervention;
 use App\Models\MaintenanceTicket;
+use App\Models\MaintenanceType;
 use App\Models\Room;
 use App\Models\User;
 use App\Services\HousekeepingService;
 use App\Services\RoomStateMachine;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -43,6 +47,11 @@ class MaintenanceTicketController extends Controller
 
         $statusFilter = $request->string('status')->toString();
         $hasExplicitFilter = $request->has('status');
+        $roomFilter = $request->string('room_id')->toString();
+        $typeFilter = $request->integer('maintenance_type_id');
+        $severityFilter = $request->string('severity')->toString();
+        $blocksSaleFilter = $request->has('blocks_sale') ? $request->boolean('blocks_sale') : null;
+        $tab = $request->string('tab')->toString();
 
         if ($statusFilter !== null && ! in_array($statusFilter, $statusOptions, true)) {
             $statusFilter = null;
@@ -55,6 +64,7 @@ class MaintenanceTicketController extends Controller
                 'room.roomType:id,name',
                 'reportedBy:id,name',
                 'assignedTo:id,name',
+                'type:id,name',
             ])
             ->orderByDesc('opened_at')
             ->orderByDesc('id');
@@ -70,6 +80,27 @@ class MaintenanceTicketController extends Controller
             }
         }
 
+        if ($roomFilter !== '') {
+            $ticketsQuery->where('room_id', $roomFilter);
+        }
+
+        if ($typeFilter) {
+            $ticketsQuery->where('maintenance_type_id', $typeFilter);
+        }
+
+        if ($severityFilter !== null && in_array($severityFilter, [
+            MaintenanceTicket::SEVERITY_LOW,
+            MaintenanceTicket::SEVERITY_MEDIUM,
+            MaintenanceTicket::SEVERITY_HIGH,
+            MaintenanceTicket::SEVERITY_CRITICAL,
+        ], true)) {
+            $ticketsQuery->where('severity', $severityFilter);
+        }
+
+        if ($blocksSaleFilter !== null) {
+            $ticketsQuery->where('blocks_sale', $blocksSaleFilter);
+        }
+
         $tickets = $ticketsQuery
             ->paginate(15)
             ->withQueryString()
@@ -79,8 +110,10 @@ class MaintenanceTicketController extends Controller
                 'status' => $ticket->status,
                 'severity' => $ticket->severity,
                 'description' => $ticket->description,
+                'blocks_sale' => (bool) $ticket->blocks_sale,
                 'opened_at' => optional($ticket->opened_at)?->toDateTimeString(),
                 'closed_at' => optional($ticket->closed_at)?->toDateTimeString(),
+                'maintenance_type' => $ticket->type?->only(['id', 'name']),
                 'room' => $ticket->room ? [
                     'id' => $ticket->room->id,
                     'number' => $ticket->room->number,
@@ -109,11 +142,111 @@ class MaintenanceTicketController extends Controller
         $canUpdate = $user->can('maintenance_tickets.update');
         $canClose = $user->can('maintenance_tickets.close');
 
+        $interventionStatusOptions = [
+            MaintenanceIntervention::STATUS_DRAFT,
+            MaintenanceIntervention::STATUS_SUBMITTED,
+            MaintenanceIntervention::STATUS_APPROVED,
+            MaintenanceIntervention::STATUS_REJECTED,
+            MaintenanceIntervention::STATUS_PAID,
+            'all',
+        ];
+
+        $interventionStatus = $request->string('intervention_status')->toString();
+        $technicianFilter = $request->integer('technician_id');
+        $interventionFrom = $request->string('intervention_from')->toString();
+        $interventionTo = $request->string('intervention_to')->toString();
+
+        $interventionsQuery = MaintenanceIntervention::query()
+            ->where('tenant_id', $user->tenant_id)
+            ->where('hotel_id', $hotelId)
+            ->with(['technician:id,name', 'tickets.room:id,number'])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
+
+        if ($interventionStatus !== '' && $interventionStatus !== 'all' && in_array($interventionStatus, $interventionStatusOptions, true)) {
+            $interventionsQuery->where('accounting_status', $interventionStatus);
+        }
+
+        if ($technicianFilter) {
+            $interventionsQuery->where('technician_id', $technicianFilter);
+        }
+
+        if ($interventionFrom !== '') {
+            $interventionsQuery->whereDate('created_at', '>=', $interventionFrom);
+        }
+
+        if ($interventionTo !== '') {
+            $interventionsQuery->whereDate('created_at', '<=', $interventionTo);
+        }
+
+        if ($roomFilter !== '') {
+            $interventionsQuery->whereHas('tickets', function ($query) use ($roomFilter): void {
+                $query->where('room_id', $roomFilter);
+            });
+        }
+
+        $interventions = $interventionsQuery
+            ->paginate(10, ['*'], 'interventions_page')
+            ->withQueryString()
+            ->through(fn (MaintenanceIntervention $intervention): array => [
+                'id' => $intervention->id,
+                'technician' => $intervention->technician?->only(['id', 'name']),
+                'accounting_status' => $intervention->accounting_status,
+                'started_at' => $intervention->started_at?->toDateTimeString(),
+                'ended_at' => $intervention->ended_at?->toDateTimeString(),
+                'total_cost' => (float) $intervention->total_cost,
+                'currency' => $intervention->currency,
+                'rooms' => $intervention->tickets->map(fn ($ticket) => $ticket->room?->number)->filter()->unique()->values(),
+            ]);
+
+        $rooms = Room::query()
+            ->where('tenant_id', $user->tenant_id)
+            ->where('hotel_id', $hotelId)
+            ->orderBy('number')
+            ->get(['id', 'number', 'floor']);
+
+        $openTickets = MaintenanceTicket::query()
+            ->where('tenant_id', $user->tenant_id)
+            ->where('hotel_id', $hotelId)
+            ->whereIn('status', [
+                MaintenanceTicket::STATUS_OPEN,
+                MaintenanceTicket::STATUS_IN_PROGRESS,
+            ])
+            ->with(['room:id,number', 'type:id,name'])
+            ->orderByDesc('opened_at')
+            ->get()
+            ->map(fn (MaintenanceTicket $ticket): array => [
+                'id' => $ticket->id,
+                'title' => $ticket->title,
+                'status' => $ticket->status,
+                'room_number' => $ticket->room?->number,
+                'maintenance_type' => $ticket->type?->only(['id', 'name']),
+            ]);
+
+        if (! in_array($tab, ['tickets', 'interventions'], true)) {
+            $tab = 'tickets';
+        }
+
+        $types = MaintenanceType::query()
+            ->where('tenant_id', $user->tenant_id)
+            ->where('hotel_id', $hotelId)
+            ->orderBy('name')
+            ->get(['id', 'name', 'is_active']);
+
         return Inertia::render('Maintenance/Index', [
             'tickets' => $tickets,
             'filters' => [
                 'status' => $statusFilter ?? 'open',
+                'room_id' => $roomFilter,
+                'maintenance_type_id' => $typeFilter,
+                'severity' => $severityFilter,
+                'blocks_sale' => $blocksSaleFilter,
+                'intervention_status' => $interventionStatus,
+                'technician_id' => $technicianFilter,
+                'intervention_from' => $interventionFrom,
+                'intervention_to' => $interventionTo,
             ],
+            'activeTab' => $tab,
             'statusOptions' => [
                 MaintenanceTicket::STATUS_OPEN,
                 MaintenanceTicket::STATUS_IN_PROGRESS,
@@ -121,13 +254,31 @@ class MaintenanceTicketController extends Controller
                 MaintenanceTicket::STATUS_CLOSED,
                 'all',
             ],
+            'interventionStatusOptions' => $interventionStatusOptions,
             'assignableUsers' => $assignableUsers,
+            'maintenanceTypes' => $types,
+            'rooms' => $rooms,
+            'technicians' => $this->techniciansList($user->tenant_id, $hotelId),
+            'openTickets' => $openTickets,
+            'interventions' => $interventions,
             'permissions' => [
                 'canUpdateStatus' => $canUpdate,
                 'canAssign' => $canHandle,
                 'canClose' => $canClose,
             ],
         ]);
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, array{id:int,name:string}>
+     */
+    private function techniciansList(string $tenantId, int $hotelId)
+    {
+        return \App\Models\Technician::query()
+            ->where('tenant_id', $tenantId)
+            ->where('hotel_id', $hotelId)
+            ->orderBy('name')
+            ->get(['id', 'name']);
     }
 
     public function store(StoreMaintenanceTicketRequest $request): JsonResponse
@@ -153,6 +304,11 @@ class MaintenanceTicketController extends Controller
             'tenant_id' => $user->tenant_id,
             'hotel_id' => $hotelId,
             'room_id' => $room->id,
+            'maintenance_type_id' => $this->resolveMaintenanceTypeId(
+                $user->tenant_id,
+                $hotelId,
+                $data['maintenance_type_id'] ?? null,
+            ),
             'reported_by_user_id' => $user->id,
             'assigned_to_user_id' => $data['assigned_to_user_id'] ?? null,
             'status' => MaintenanceTicket::STATUS_OPEN,
@@ -168,6 +324,7 @@ class MaintenanceTicketController extends Controller
             ->causedBy($user)
             ->withProperties([
                 'room_id' => $room->id,
+                'maintenance_type_id' => $ticket->maintenance_type_id,
                 'severity' => $ticket->severity,
                 'blocks_sale' => (bool) $ticket->blocks_sale,
                 'status' => $ticket->status,
@@ -207,6 +364,10 @@ class MaintenanceTicketController extends Controller
             $ticket->assigned_to_user_id = $data['assigned_to_user_id'];
         }
 
+        if (array_key_exists('maintenance_type_id', $data)) {
+            $ticket->maintenance_type_id = $data['maintenance_type_id'];
+        }
+
         if (array_key_exists('description', $data)) {
             $ticket->description = $data['description'];
         }
@@ -222,10 +383,20 @@ class MaintenanceTicketController extends Controller
         if (isset($data['status'])) {
             $ticket->status = $data['status'];
 
+            if ($data['status'] === MaintenanceTicket::STATUS_RESOLVED) {
+                $ticket->resolved_at = $ticket->resolved_at ?? now();
+            }
+
+            if ($data['status'] === MaintenanceTicket::STATUS_CLOSED) {
+                $ticket->closed_by_user_id = $user->id;
+            }
+
             if (in_array($data['status'], [MaintenanceTicket::STATUS_RESOLVED, MaintenanceTicket::STATUS_CLOSED], true)) {
                 $ticket->closed_at = now();
             } else {
                 $ticket->closed_at = null;
+                $ticket->closed_by_user_id = null;
+                $ticket->resolved_at = null;
             }
         }
 
@@ -237,6 +408,9 @@ class MaintenanceTicketController extends Controller
             'severity',
             'blocks_sale',
             'assigned_to_user_id',
+            'maintenance_type_id',
+            'resolved_at',
+            'closed_by_user_id',
         ]));
 
         if ($changes !== []) {
@@ -277,6 +451,63 @@ class MaintenanceTicketController extends Controller
         ]);
     }
 
+    public function close(CloseMaintenanceTicketRequest $request, MaintenanceTicket $maintenanceTicket): JsonResponse
+    {
+        $this->authorize('close', $maintenanceTicket);
+
+        /** @var User $user */
+        $user = $request->user();
+
+        $data = $request->validated();
+
+        $maintenanceTicket->status = MaintenanceTicket::STATUS_CLOSED;
+        $maintenanceTicket->closed_at = isset($data['closed_at'])
+            ? Carbon::parse($data['closed_at'])
+            : now();
+        $maintenanceTicket->closed_by_user_id = $user->id;
+        $maintenanceTicket->save();
+
+        $room = $maintenanceTicket->room()->firstOrFail();
+        $hasBlockingOpenTickets = $room->maintenanceTickets()
+            ->whereIn('status', [
+                MaintenanceTicket::STATUS_OPEN,
+                MaintenanceTicket::STATUS_IN_PROGRESS,
+            ])
+            ->where('blocks_sale', true)
+            ->exists();
+
+        if ($room->status === Room::STATUS_OCCUPIED && $hasBlockingOpenTickets) {
+            $room->block_sale_after_checkout = true;
+            $room->save();
+        }
+
+        if (! $hasBlockingOpenTickets) {
+            $room->block_sale_after_checkout = false;
+
+            if ($room->status === Room::STATUS_OUT_OF_ORDER && $request->boolean('restore_room_status')) {
+                $this->roomStateMachine->markAvailable($room);
+                $this->housekeepingService->forceRoomStatus($room, Room::HK_STATUS_DIRTY, $user);
+            }
+
+            $room->save();
+        }
+
+        activity('maintenance')
+            ->performedOn($maintenanceTicket)
+            ->causedBy($user)
+            ->withProperties([
+                'status' => $maintenanceTicket->status,
+                'closed_at' => $maintenanceTicket->closed_at?->toDateTimeString(),
+                'closed_by_user_id' => $user->id,
+            ])
+            ->event('closed')
+            ->log('closed');
+
+        return response()->json([
+            'ticket' => $this->ticketPayload($maintenanceTicket->fresh(['assignedTo:id,name', 'reportedBy:id,name'])),
+        ]);
+    }
+
     private function ensureStatusPermission(User $user, string $status): void
     {
         $isClosing = in_array($status, [MaintenanceTicket::STATUS_RESOLVED, MaintenanceTicket::STATUS_CLOSED], true);
@@ -301,6 +532,8 @@ class MaintenanceTicketController extends Controller
      */
     private function ticketPayload(MaintenanceTicket $ticket): array
     {
+        $ticket->loadMissing('type:id,name');
+
         return [
             'id' => $ticket->id,
             'room_id' => $ticket->room_id,
@@ -311,8 +544,28 @@ class MaintenanceTicketController extends Controller
             'description' => $ticket->description,
             'opened_at' => optional($ticket->opened_at)?->toDateTimeString(),
             'closed_at' => optional($ticket->closed_at)?->toDateTimeString(),
+            'resolved_at' => optional($ticket->resolved_at)?->toDateTimeString(),
+            'maintenance_type' => $ticket->type?->only(['id', 'name']),
             'reported_by' => $ticket->reportedBy?->only(['id', 'name']),
             'assigned_to' => $ticket->assignedTo?->only(['id', 'name']),
+            'closed_by' => $ticket->closer?->only(['id', 'name']),
         ];
+    }
+
+    private function resolveMaintenanceTypeId(string $tenantId, int $hotelId, ?int $typeId): ?int
+    {
+        if ($typeId) {
+            return $typeId;
+        }
+
+        $type = MaintenanceType::query()->firstOrCreate([
+            'tenant_id' => $tenantId,
+            'hotel_id' => $hotelId,
+            'name' => 'Autre',
+        ], [
+            'is_active' => true,
+        ]);
+
+        return $type->id;
     }
 }

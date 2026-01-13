@@ -8,6 +8,7 @@ use App\Models\Guest;
 use App\Models\HousekeepingTask;
 use App\Models\HousekeepingTaskChecklistItem;
 use App\Models\MaintenanceTicket;
+use App\Models\MaintenanceType;
 use App\Models\Offer;
 use App\Models\OfferRoomTypePrice;
 use App\Models\PaymentMethod;
@@ -100,7 +101,7 @@ class RoomBoardData
                 MaintenanceTicket::STATUS_OPEN,
                 MaintenanceTicket::STATUS_IN_PROGRESS,
             ])
-            ->with(['assignedTo:id,name', 'reportedBy:id,name'])
+            ->with(['assignedTo:id,name', 'reportedBy:id,name', 'type:id,name'])
             ->get()
             ->groupBy('room_id');
 
@@ -271,6 +272,7 @@ class RoomBoardData
                         'title' => $ticket->title,
                         'description' => $ticket->description,
                         'opened_at' => optional($ticket->opened_at)?->toDateTimeString(),
+                        'maintenance_type' => $ticket->type?->only(['id', 'name']),
                         'assigned_to' => $ticket->assignedTo?->only(['id', 'name']),
                         'reported_by' => $ticket->reportedBy?->only(['id', 'name']),
                     ];
@@ -283,6 +285,7 @@ class RoomBoardData
                     'title' => $activeTicket->title,
                     'description' => $activeTicket->description,
                     'opened_at' => optional($activeTicket->opened_at)?->toDateTimeString(),
+                    'maintenance_type' => $activeTicket->type?->only(['id', 'name']),
                     'assigned_to' => $activeTicket->assignedTo?->only(['id', 'name']),
                     'reported_by' => $activeTicket->reportedBy?->only(['id', 'name']),
                 ] : null,
@@ -393,6 +396,13 @@ class RoomBoardData
             ->orderBy('name')
             ->get(['id', 'name', 'type', 'is_default']);
 
+        $maintenanceTypes = MaintenanceType::query()
+            ->where('tenant_id', $tenantId)
+            ->where('hotel_id', $hotelId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
         return [
             'date' => $dateString,
             'roomsByFloor' => $roomsByFloor,
@@ -405,9 +415,9 @@ class RoomBoardData
             'offerRoomTypePrices' => $offerRoomTypePrices,
             'canManageHousekeeping' => $canManageHousekeeping,
             'maintenancePermissions' => [
-                'canReport' => $user->can('maintenance_tickets.create'),
-                'canHandle' => $user->can('maintenance_tickets.close'),
-                'canProgress' => $user->can('maintenance_tickets.update'),
+                'canReport' => $user->can('maintenance_tickets.create') || $user->can('maintenance.tickets.create'),
+                'canHandle' => $user->can('maintenance_tickets.close') || $user->can('maintenance.tickets.close'),
+                'canProgress' => $user->can('maintenance_tickets.update') || $user->can('maintenance.tickets.update'),
             ],
             'currentUser' => [
                 'id' => $user->id,
@@ -415,6 +425,7 @@ class RoomBoardData
             ],
             'guests' => $guests,
             'paymentMethods' => $paymentMethods,
+            'maintenanceTypes' => $maintenanceTypes,
         ];
     }
 

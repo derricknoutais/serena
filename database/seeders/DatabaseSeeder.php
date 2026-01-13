@@ -26,6 +26,7 @@ class DatabaseSeeder extends Seeder
             OfferSeeder::class,
             OfferRoomTypePriceSeeder::class,
             GuestSeeder::class,
+            MaintenanceTypeSeeder::class,
             SuperAdminSeeder::class,
         ]);
     }

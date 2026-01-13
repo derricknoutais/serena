@@ -43,9 +43,44 @@
                 type: String,
                 default: 'walk_in',
             },
+            offers: {
+                type: Array,
+                default: () => [],
+            },
+            offerRoomTypePrices: {
+                type: Array,
+                default: () => [],
+            },
+            paymentMethods: {
+                type: Array,
+                default: () => [],
+            },
+            guests: {
+                type: Array,
+                default: () => [],
+            },
             canManageHousekeeping: {
                 type: Boolean,
                 default: false,
+            },
+            maintenancePermissions: {
+                type: Object,
+                default: () => ({
+                    canReport: false,
+                    canHandle: false,
+                    canProgress: false,
+                }),
+            },
+            currentUser: {
+                type: Object,
+                default: () => ({
+                    id: null,
+                    name: null,
+                }),
+            },
+            maintenanceTypes: {
+                type: Array,
+                default: () => [],
             },
         },
     };

@@ -52,6 +52,13 @@ class UpdateMaintenanceTicketRequest extends FormRequest
                 'integer',
                 Rule::exists('users', 'id')->where('tenant_id', $tenantId),
             ],
+            'maintenance_type_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('maintenance_types', 'id')
+                    ->where('tenant_id', $tenantId)
+                    ->where('hotel_id', $user?->active_hotel_id ?? $user?->hotel_id ?? 0),
+            ],
             'description' => ['nullable', 'string'],
             'blocks_sale' => ['nullable', 'boolean'],
             'restore_room_status' => ['sometimes', 'boolean'],

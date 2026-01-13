@@ -6,7 +6,6 @@ use App\Models\Hotel;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
 
 class HotelUserSeeder extends Seeder
 {
@@ -25,7 +24,6 @@ class HotelUserSeeder extends Seeder
                     Hotel::create([
                         'tenant_id' => $tenant->getKey(),
                         'name' => "{$tenant->name} One",
-                        'code' => Str::upper(Str::slug($tenant->slug)).'1',
                         'currency' => 'XAF',
                         'timezone' => 'Africa/Libreville',
                         'check_in_time' => '14:00:00',
@@ -34,7 +32,6 @@ class HotelUserSeeder extends Seeder
                     Hotel::create([
                         'tenant_id' => $tenant->getKey(),
                         'name' => "{$tenant->name} Two",
-                        'code' => Str::upper(Str::slug($tenant->slug)).'2',
                         'currency' => 'XAF',
                         'timezone' => 'Africa/Libreville',
                         'check_in_time' => '14:00:00',

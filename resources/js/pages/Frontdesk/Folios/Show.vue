@@ -230,6 +230,24 @@
                             <p v-if="payment.notes" class="mt-2 text-xs text-serena-text-muted">
                                 {{ payment.notes }}
                             </p>
+                            <div class="mt-3 flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    class="rounded-full border border-rose-300 bg-white px-3 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                                    @click="confirmVoidPayment(payment)"
+                                    v-if="canVoidPayments && !payment.voided_at && !payment.deleted_at && payment.entry_type !== 'refund'"
+                                >
+                                    Annuler
+                                </button>
+                                <button
+                                    type="button"
+                                    class="rounded-full border border-serena-border bg-white px-3 py-1 text-xs font-semibold text-serena-text-main hover:bg-serena-bg-soft"
+                                    @click="promptRefundPayment(payment)"
+                                    v-if="canRefundPayments && !payment.voided_at && !payment.deleted_at && payment.entry_type !== 'refund'"
+                                >
+                                    Rembourser
+                                </button>
+                            </div>
                         </li>
                     </ul>
                 </section>
@@ -402,6 +420,8 @@
 import { useForm } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
 import PrimaryButton from '@/components/PrimaryButton.vue';
+import axios from 'axios';
+import Swal from 'sweetalert2';
 
 export default {
     name: 'FrontdeskFolioShow',
@@ -433,6 +453,13 @@ export default {
         paymentMethods: {
             type: Array,
             default: () => [],
+        },
+        permissions: {
+            type: Object,
+            default: () => ({
+                can_void_payments: false,
+                can_refund_payments: false,
+            }),
         },
         errors: {
             type: Object,
@@ -466,6 +493,12 @@ export default {
         };
     },
     computed: {
+        canVoidPayments() {
+            return Boolean(this.permissions?.can_void_payments ?? false);
+        },
+        canRefundPayments() {
+            return Boolean(this.permissions?.can_refund_payments ?? false);
+        },
         canCreatePayments() {
             const permissions = this.$page?.props?.auth?.can ?? {};
 
@@ -509,6 +542,166 @@ export default {
                 onSuccess: () => {
                     this.invoiceForm.reset('notes', 'close_folio');
                 },
+            });
+        },
+        reloadFolio() {
+            this.$inertia.reload({
+                preserveScroll: true,
+                only: ['folio', 'reservation', 'items', 'payments', 'invoices', 'paymentMethods', 'permissions'],
+            });
+        },
+        showUnauthorizedAlert() {
+            Swal.fire({
+                icon: 'error',
+                title: 'Action non autorisée',
+                text: 'Vous ne disposez pas des droits nécessaires.',
+            });
+        },
+        async confirmVoidPayment(payment) {
+            if (!this.canVoidPayments) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
+
+            const result = await Swal.fire({
+                icon: 'warning',
+                title: 'Annuler le paiement',
+                html: `
+                    <textarea id="swal-void-reason" class="swal2-textarea" placeholder="Raison (facultatif)" rows="3"></textarea>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Annuler',
+                cancelButtonText: 'Retour',
+                focusConfirm: false,
+                preConfirm: () => document.getElementById('swal-void-reason')?.value?.trim() ?? null,
+            });
+
+            if (!result.isConfirmed) {
+                return;
+            }
+
+            try {
+                await axios.post(`/payments/${payment.id}/void`, {
+                    reason: result.value,
+                });
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Paiement annulé',
+                    timer: 1400,
+                    showConfirmButton: false,
+                });
+
+                this.reloadFolio();
+            } catch (error) {
+                this.handleAdjustmentError(error, 'Impossible d’annuler ce paiement.');
+            }
+        },
+        async promptRefundPayment(payment) {
+            if (!this.canRefundPayments) {
+                this.showUnauthorizedAlert();
+
+                return;
+            }
+
+            if (!this.paymentMethods.length) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Pas de moyens définis',
+                    text: 'Ajoutez au moins une méthode de paiement pour effectuer un remboursement.',
+                });
+
+                return;
+            }
+
+            const amount = Math.abs(payment.amount ?? 0) || 0;
+            const methodOptions = this.paymentMethods.map((method) => `<option value="${method.id}">${method.name} (${method.code})</option>`).join('');
+            const html = `
+                <div class="space-y-3 text-left">
+                    <label class="text-xs font-semibold text-serena-text-muted">Montant</label>
+                    <input id="swal-refund-amount" class="swal2-input" type="number" min="0.01" step="0.01" value="${amount.toFixed(2)}">
+                    <label class="text-xs font-semibold text-serena-text-muted">Méthode</label>
+                    <select id="swal-refund-method" class="swal2-select">
+                        ${methodOptions}
+                    </select>
+                    <label class="text-xs font-semibold text-serena-text-muted">Référence</label>
+                    <input id="swal-refund-reference" class="swal2-input" type="text">
+                    <label class="text-xs font-semibold text-serena-text-muted">Motif</label>
+                    <textarea id="swal-refund-reason" class="swal2-textarea" rows="3" placeholder="Raison (facultatif)"></textarea>
+                </div>
+            `;
+
+            const result = await Swal.fire({
+                icon: 'info',
+                title: 'Rembourser le paiement',
+                html,
+                showCancelButton: true,
+                confirmButtonText: 'Rembourser',
+                cancelButtonText: 'Annuler',
+                focusConfirm: false,
+                preConfirm: () => {
+                    const amountInput = Number(document.getElementById('swal-refund-amount')?.value || 0);
+                    const methodId = document.getElementById('swal-refund-method')?.value;
+                    const reference = document.getElementById('swal-refund-reference')?.value?.trim() || null;
+                    const reason = document.getElementById('swal-refund-reason')?.value?.trim() || null;
+
+                    if (!amountInput || amountInput <= 0) {
+                        Swal.showValidationMessage('Le montant doit être supérieur à 0.');
+
+                        return null;
+                    }
+
+                    if (amountInput > amount) {
+                        Swal.showValidationMessage('Le montant ne peut dépasser le paiement original.');
+
+                        return null;
+                    }
+
+                    if (!methodId) {
+                        Swal.showValidationMessage('Sélectionnez une méthode de remboursement.');
+
+                        return null;
+                    }
+
+                    return {
+                        amount: amountInput,
+                        payment_method_id: Number(methodId),
+                        reference,
+                        reason,
+                    };
+                },
+            });
+
+            if (!result.value) {
+                return;
+            }
+
+            try {
+                await axios.post(`/payments/${payment.id}/refund`, {
+                    amount: result.value.amount,
+                    payment_method_id: result.value.payment_method_id,
+                    reference: result.value.reference,
+                    reason: result.value.reason,
+                });
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Remboursement enregistré',
+                    timer: 1500,
+                    showConfirmButton: false,
+                });
+
+                this.reloadFolio();
+            } catch (error) {
+                this.handleAdjustmentError(error, 'Impossible de rembourser ce paiement.');
+            }
+        },
+        handleAdjustmentError(error, fallback) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erreur',
+                text: error.response?.data?.message ?? fallback,
             });
         },
     },

@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Support\Facades\Event;
@@ -28,7 +29,7 @@ test('email can be verified', function () {
 
     Event::assertDispatched(Verified::class);
     expect($user->fresh()->hasVerifiedEmail())->toBeTrue();
-    $response->assertRedirect(route('dashboard', absolute: false).'?verified=1');
+    $response->assertRedirect(tenantDashboardUrl($user));
 });
 
 test('email is not verified with invalid hash', function () {
@@ -88,8 +89,23 @@ test('already verified user visiting verification link is redirected without fir
     );
 
     $this->actingAs($user)->get($verificationUrl)
-        ->assertRedirect(route('dashboard', absolute: false).'?verified=1');
+        ->assertRedirect(tenantDashboardUrl($user));
 
     Event::assertNotDispatched(Verified::class);
     expect($user->fresh()->hasVerifiedEmail())->toBeTrue();
 });
+
+function tenantDashboardUrl(User $user): string
+{
+    $domain = Tenant::query()
+        ->whereKey($user->tenant_id)
+        ->first()
+        ?->domains()
+        ->value('domain');
+
+    if ($domain === null) {
+        $domain = sprintf('%s.%s', $user->tenant_id, config('app.url_host'));
+    }
+
+    return sprintf('%s://%s/dashboard', config('app.url_scheme', 'http'), $domain);
+}

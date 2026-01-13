@@ -85,6 +85,12 @@ const resourcesItems = computed<NavItem[]>(() => [
     ...(permissions.value.payment_methods_view
         ? [{ title: 'Méthodes de paiement', href: '/settings/resources/payment-methods' } satisfies NavItem]
         : []),
+    ...(permissions.value.maintenance_types_manage
+        ? [{ title: 'Types de maintenance', href: '/settings/resources/maintenance-types' } satisfies NavItem]
+        : []),
+    ...(permissions.value.maintenance_technicians_manage
+        ? [{ title: 'Techniciens', href: '/settings/resources/technicians' } satisfies NavItem]
+        : []),
     ...(permissions.value.product_categories_view
         ? [{ title: 'Catégories de produits', href: '/settings/resources/product-categories' } satisfies NavItem]
         : []),

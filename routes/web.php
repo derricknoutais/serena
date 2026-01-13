@@ -11,6 +11,7 @@ use App\Http\Controllers\Config\ActiveHotelController;
 use App\Http\Controllers\Config\HotelConfigController;
 use App\Http\Controllers\Config\HousekeepingChecklistController;
 use App\Http\Controllers\Config\HousekeepingChecklistItemController;
+use App\Http\Controllers\Config\MaintenanceTypeController;
 use App\Http\Controllers\Config\OfferController;
 use App\Http\Controllers\Config\PaymentMethodController;
 use App\Http\Controllers\Config\ProductCategoryController;
@@ -18,6 +19,7 @@ use App\Http\Controllers\Config\ProductController;
 use App\Http\Controllers\Config\RoomController;
 use App\Http\Controllers\Config\RoomTypeController;
 use App\Http\Controllers\Config\TaxController;
+use App\Http\Controllers\Config\TechnicianController;
 use App\Http\Controllers\Config\UserConfigController;
 use App\Http\Controllers\FolioController;
 use App\Http\Controllers\Frontdesk\FrontdeskController;
@@ -33,6 +35,8 @@ use App\Http\Controllers\HousekeepingReportController;
 use App\Http\Controllers\Invitations\AcceptInvitationController;
 use App\Http\Controllers\Invitations\InvitationController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\MaintenanceInterventionController;
+use App\Http\Controllers\MaintenanceInterventionCostController;
 use App\Http\Controllers\MaintenanceTicketController;
 use App\Http\Controllers\NightAuditController;
 use App\Http\Controllers\PaymentAdjustmentController;
@@ -323,6 +327,50 @@ Route::middleware([
             ->name('maintenance-tickets.store');
         Route::patch('/maintenance-tickets/{maintenanceTicket}', [MaintenanceTicketController::class, 'update'])
             ->name('maintenance-tickets.update');
+        Route::patch('/maintenance-tickets/{maintenanceTicket}/close', [MaintenanceTicketController::class, 'close'])
+            ->name('maintenance-tickets.close');
+        Route::post('/maintenance/interventions', [MaintenanceInterventionController::class, 'store'])
+            ->name('maintenance-interventions.store');
+        Route::put('/maintenance/interventions/{maintenanceIntervention}', [MaintenanceInterventionController::class, 'update'])
+            ->name('maintenance-interventions.update');
+        Route::get('/maintenance/interventions/{maintenanceIntervention}', [MaintenanceInterventionController::class, 'show'])
+            ->name('maintenance-interventions.show');
+        Route::post(
+            '/maintenance/interventions/{maintenanceIntervention}/attach-ticket',
+            [MaintenanceInterventionController::class, 'attachTicket'],
+        )->name('maintenance-interventions.attach-ticket');
+        Route::post(
+            '/maintenance/interventions/{maintenanceIntervention}/detach-ticket',
+            [MaintenanceInterventionController::class, 'detachTicket'],
+        )->name('maintenance-interventions.detach-ticket');
+        Route::post(
+            '/maintenance/interventions/{maintenanceIntervention}/submit',
+            [MaintenanceInterventionController::class, 'submit'],
+        )->name('maintenance-interventions.submit');
+        Route::post(
+            '/maintenance/interventions/{maintenanceIntervention}/approve',
+            [MaintenanceInterventionController::class, 'approve'],
+        )->name('maintenance-interventions.approve');
+        Route::post(
+            '/maintenance/interventions/{maintenanceIntervention}/reject',
+            [MaintenanceInterventionController::class, 'reject'],
+        )->name('maintenance-interventions.reject');
+        Route::post(
+            '/maintenance/interventions/{maintenanceIntervention}/mark-paid',
+            [MaintenanceInterventionController::class, 'markPaid'],
+        )->name('maintenance-interventions.mark-paid');
+        Route::post(
+            '/maintenance/interventions/{maintenanceIntervention}/cost-lines',
+            [MaintenanceInterventionCostController::class, 'store'],
+        )->name('maintenance-interventions.cost-lines.store');
+        Route::put(
+            '/maintenance/interventions/{maintenanceIntervention}/cost-lines/{maintenanceInterventionCost}',
+            [MaintenanceInterventionCostController::class, 'update'],
+        )->name('maintenance-interventions.cost-lines.update');
+        Route::delete(
+            '/maintenance/interventions/{maintenanceIntervention}/cost-lines/{maintenanceInterventionCost}',
+            [MaintenanceInterventionCostController::class, 'destroy'],
+        )->name('maintenance-interventions.cost-lines.destroy');
 
         Route::middleware('can:analytics.view')->group(function () {
             Route::get('/analytics', [\App\Http\Controllers\AnalyticsController::class, 'index'])->name('analytics.index');
@@ -358,6 +406,18 @@ Route::middleware([
             Route::resource('offers', OfferController::class)->except(['show']);
             Route::resource('taxes', TaxController::class)->except(['show']);
             Route::resource('payment-methods', PaymentMethodController::class)->except(['show']);
+            Route::get('maintenance-types', [MaintenanceTypeController::class, 'index'])
+                ->name('maintenance-types.index');
+            Route::post('maintenance-types', [MaintenanceTypeController::class, 'store'])
+                ->name('maintenance-types.store');
+            Route::put('maintenance-types/{maintenanceType}', [MaintenanceTypeController::class, 'update'])
+                ->name('maintenance-types.update');
+            Route::get('technicians', [TechnicianController::class, 'index'])
+                ->name('technicians.index');
+            Route::post('technicians', [TechnicianController::class, 'store'])
+                ->name('technicians.store');
+            Route::put('technicians/{technician}', [TechnicianController::class, 'update'])
+                ->name('technicians.update');
             Route::resource('products', ProductController::class)->except(['show']);
             Route::resource('product-categories', ProductCategoryController::class)->only(['index', 'store', 'update', 'destroy']);
             Route::resource('users', UserConfigController::class)->except(['show']);

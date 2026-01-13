@@ -30,6 +30,13 @@ class StoreMaintenanceTicketRequest extends FormRequest
                     ->where('tenant_id', $tenantId)
                     ->where('hotel_id', $hotelId),
             ],
+            'maintenance_type_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('maintenance_types', 'id')
+                    ->where('tenant_id', $tenantId)
+                    ->where('hotel_id', $hotelId),
+            ],
             'title' => ['required', 'string', 'max:160'],
             'severity' => [
                 'required',

@@ -7,22 +7,6 @@ use App\Models\User;
 
 class MaintenanceTicketPolicy
 {
-    private const REPORT_ROLES = [
-        'owner',
-        'manager',
-        'receptionist',
-        'housekeeping',
-        'maintenance',
-        'superadmin',
-    ];
-
-    private const MANAGE_ROLES = [
-        'owner',
-        'manager',
-        'maintenance',
-        'superadmin',
-    ];
-
     public function viewAny(User $user): bool
     {
         return $this->hasActiveHotel($user) && $user->hasPermissionTo('maintenance_tickets.view');
@@ -37,7 +21,7 @@ class MaintenanceTicketPolicy
     public function create(User $user): bool
     {
         return $this->hasActiveHotel($user)
-            && $user->hasPermissionTo('maintenance_tickets.create');
+            && $user->hasAnyPermission(['maintenance_tickets.create', 'maintenance.tickets.create']);
     }
 
     public function update(User $user, MaintenanceTicket $maintenanceTicket): bool
@@ -46,7 +30,16 @@ class MaintenanceTicketPolicy
             return false;
         }
 
-        return $user->hasPermissionTo('maintenance_tickets.update');
+        return $user->hasAnyPermission(['maintenance_tickets.update', 'maintenance.tickets.update']);
+    }
+
+    public function close(User $user, MaintenanceTicket $maintenanceTicket): bool
+    {
+        if (! $this->belongsToUserContext($user, $maintenanceTicket)) {
+            return false;
+        }
+
+        return $user->hasAnyPermission(['maintenance_tickets.close', 'maintenance.tickets.close']);
     }
 
     public function delete(User $user, MaintenanceTicket $maintenanceTicket): bool

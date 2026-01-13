@@ -16,6 +16,8 @@ function portalTenant(string $id): Tenant
 {
     $tenant = Tenant::create([
         'id' => $id,
+        'slug' => $id,
+        'name' => ucfirst($id),
         'data' => ['name' => ucfirst($id)],
     ]);
 

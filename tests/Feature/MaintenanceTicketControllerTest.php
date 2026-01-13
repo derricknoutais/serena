@@ -3,6 +3,7 @@
 require_once __DIR__.'/FolioTestHelpers.php';
 
 use App\Models\MaintenanceTicket;
+use App\Models\MaintenanceType;
 use App\Models\Room;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
@@ -80,4 +81,50 @@ it('flags occupied rooms to block sale after checkout when needed', function ():
     $room->refresh();
     expect($room->status)->toBe(Room::STATUS_OCCUPIED);
     expect($room->block_sale_after_checkout)->toBeTrue();
+});
+
+it('closes maintenance tickets via the close endpoint', function (): void {
+    [
+        'tenant' => $tenant,
+        'user' => $user,
+        'room' => $room,
+        'hotel' => $hotel,
+    ] = setupReservationEnvironment('maintenance-close');
+
+    $user->assignRole('manager');
+
+    $type = MaintenanceType::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Autre',
+        'is_active' => true,
+    ]);
+
+    $ticket = MaintenanceTicket::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'room_id' => $room->id,
+        'maintenance_type_id' => $type->id,
+        'reported_by_user_id' => $user->id,
+        'status' => MaintenanceTicket::STATUS_OPEN,
+        'severity' => MaintenanceTicket::SEVERITY_MEDIUM,
+        'blocks_sale' => false,
+        'title' => 'Fuite mineure',
+        'opened_at' => now(),
+    ]);
+
+    $response = actingAs($user)->patchJson(sprintf(
+        'http://%s/maintenance-tickets/%s/close',
+        tenantDomain($tenant),
+        $ticket->id,
+    ), [
+        'closed_at' => now()->subHour()->toDateTimeString(),
+    ]);
+
+    $response->assertSuccessful();
+
+    $ticket->refresh();
+    expect($ticket->status)->toBe(MaintenanceTicket::STATUS_CLOSED);
+    expect($ticket->closed_by_user_id)->toBe($user->id);
+    expect($ticket->closed_at)->not->toBeNull();
 });

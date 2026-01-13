@@ -11,19 +11,19 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('hotels', function (Blueprint $table) {
+        Schema::create('technicians', function (Blueprint $table) {
             $table->id();
             $table->foreignUuid('tenant_id')->index();
-            $table->string('name');
-            $table->string('currency', 3)->default('XAF');
-            $table->string('timezone')->default('Africa/Libreville');
-            $table->string('address')->nullable();
-            $table->string('city')->nullable();
-            $table->string('country')->nullable();
-            $table->time('check_in_time')->default('14:00:00');
-            $table->time('check_out_time')->default('12:00:00');
+            $table->foreignId('hotel_id')->constrained('hotels')->cascadeOnDelete();
+            $table->string('name', 160);
+            $table->string('phone', 40)->nullable();
+            $table->string('email', 120)->nullable();
+            $table->string('company_name', 160)->nullable();
+            $table->boolean('is_internal')->default(false);
+            $table->text('notes')->nullable();
             $table->timestamps();
 
+            $table->index(['tenant_id', 'hotel_id']);
             $table->foreign('tenant_id')
                 ->references('id')
                 ->on('tenants')
@@ -36,6 +36,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('hotels');
+        Schema::dropIfExists('technicians');
     }
 };

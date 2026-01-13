@@ -23,17 +23,19 @@ beforeEach(function (): void {
     ]);
 });
 
-function createTenantWithDomain(string $slug): Tenant
-{
-    $tenant = Tenant::query()->create([
-        'id' => $slug,
-        'slug' => $slug,
-        'data' => ['name' => ucfirst($slug)],
-    ]);
+if (! function_exists('createTenantWithDomain')) {
+    function createTenantWithDomain(string $slug): Tenant
+    {
+        $tenant = Tenant::query()->create([
+            'id' => $slug,
+            'slug' => $slug,
+            'data' => ['name' => ucfirst($slug)],
+        ]);
 
-    $tenant->createDomain(['domain' => "{$slug}.serena.test"]);
+        $tenant->createDomain(['domain' => "{$slug}.serena.test"]);
 
-    return $tenant;
+        return $tenant;
+    }
 }
 
 test('stores a push subscription for guests', function (): void {

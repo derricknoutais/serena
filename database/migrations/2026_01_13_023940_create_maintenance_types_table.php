@@ -11,19 +11,16 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('hotels', function (Blueprint $table) {
+        Schema::create('maintenance_types', function (Blueprint $table) {
             $table->id();
             $table->foreignUuid('tenant_id')->index();
-            $table->string('name');
-            $table->string('currency', 3)->default('XAF');
-            $table->string('timezone')->default('Africa/Libreville');
-            $table->string('address')->nullable();
-            $table->string('city')->nullable();
-            $table->string('country')->nullable();
-            $table->time('check_in_time')->default('14:00:00');
-            $table->time('check_out_time')->default('12:00:00');
+            $table->foreignId('hotel_id')->constrained('hotels')->cascadeOnDelete();
+            $table->string('name', 120);
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
 
+            $table->unique(['tenant_id', 'hotel_id', 'name']);
+            $table->index(['tenant_id', 'hotel_id']);
             $table->foreign('tenant_id')
                 ->references('id')
                 ->on('tenants')
@@ -36,6 +33,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('hotels');
+        Schema::dropIfExists('maintenance_types');
     }
 };
