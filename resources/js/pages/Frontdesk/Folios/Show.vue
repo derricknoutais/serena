@@ -208,6 +208,20 @@
                                     <p class="text-xs text-serena-text-muted">
                                         {{ payment.paid_at }} — Réf. {{ payment.reference || 'N/A' }}
                                     </p>
+                                    <div class="mt-1 flex flex-wrap gap-2 text-[11px]">
+                                        <span
+                                            v-if="payment.voided_at || payment.deleted_at"
+                                            class="rounded-full bg-gray-200 px-2 py-0.5 font-semibold text-gray-600"
+                                        >
+                                            Annulé
+                                        </span>
+                                        <span
+                                            v-else-if="payment.entry_type === 'refund'"
+                                            class="rounded-full bg-rose-100 px-2 py-0.5 font-semibold text-rose-700"
+                                        >
+                                            Remboursement
+                                        </span>
+                                    </div>
                                 </div>
                                 <p class="text-base font-semibold text-serena-text-main">
                                     {{ formatAmount(payment.amount) }} {{ payment.currency }}

@@ -3,9 +3,11 @@
 namespace App\Providers;
 
 use App\Models\HousekeepingChecklist;
+use App\Models\Payment;
 use App\Models\Tenant;
 use App\Notifications\Channels\TenantDatabaseChannel;
 use App\Policies\HousekeepingChecklistPolicy;
+use App\Policies\PaymentPolicy;
 use App\Support\PermissionsCatalog;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Auth\Notifications\VerifyEmail;
@@ -68,6 +70,7 @@ class AppServiceProvider extends ServiceProvider
         });
 
         Gate::policy(HousekeepingChecklist::class, HousekeepingChecklistPolicy::class);
+        Gate::policy(Payment::class, PaymentPolicy::class);
 
         PermissionsCatalog::ensureExists();
         $this->registerPermissionGates();

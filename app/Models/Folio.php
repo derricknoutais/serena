@@ -122,7 +122,9 @@ class Folio extends Model
     public function getTotalPaymentsAttribute(): float
     {
         if ($this->relationLoaded('payments')) {
-            return (float) $this->payments->sum('amount');
+            return (float) $this->payments
+                ->whereNull('deleted_at')
+                ->sum('amount');
         }
 
         return (float) $this->payments()->sum('amount');

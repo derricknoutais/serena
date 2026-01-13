@@ -331,41 +331,115 @@
                                         <th class="px-3 py-2 text-left">Méthode</th>
                                         <th class="px-3 py-2 text-right">Montant</th>
                                     <th class="px-3 py-2 text-left">Note</th>
-                                    <th class="px-3 py-2 text-right" v-if="canEditPayments || canDeletePayments">Actions</th>
+                                    <th class="px-3 py-2 text-right" v-if="canPaymentActions">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr
                                         v-for="payment in payments"
                                         :key="payment.id"
-                                        class="border-t text-gray-700"
+                                        :class="['border-t', isVoided(payment) ? 'bg-gray-50 text-gray-400' : 'text-gray-700']"
                                     >
-                                        <td class="px-3 py-1.5">{{ formatDateTime(payment.paid_at) }}</td>
-                                        <td class="px-3 py-1.5">{{ payment.payment_method?.name || payment.method?.name || '—' }}</td>
-                                        <td class="px-3 py-1.5 text-right font-semibold">
+                                        <td class="px-3 py-1.5">
+                                            <span :class="isVoided(payment) ? 'line-through' : ''">
+                                                {{ formatDateTime(payment.paid_at) }}
+                                            </span>
+                                        </td>
+                                        <td class="px-3 py-1.5">
+                                            <div class="flex flex-col">
+                                                <span :class="isVoided(payment) ? 'line-through' : ''">
+                                                    {{ payment.payment_method?.name || payment.method?.name || '—' }}
+                                                </span>
+                                                <div
+                                                    v-if="isVoided(payment) || isRefund(payment) || refundStatusLabel(payment)"
+                                                    class="mt-1 flex flex-wrap gap-1 text-[10px]"
+                                                >
+                                                    <span
+                                                        v-if="isVoided(payment)"
+                                                        class="rounded-full bg-gray-200 px-2 py-0.5 font-semibold text-gray-600"
+                                                    >
+                                                        Annulé
+                                                    </span>
+                                                    <span
+                                                        v-else-if="isRefund(payment)"
+                                                        class="rounded-full bg-rose-100 px-2 py-0.5 font-semibold text-rose-700"
+                                                    >
+                                                        Remboursement
+                                                    </span>
+                                                    <span
+                                                        v-else-if="refundStatusLabel(payment)"
+                                                        class="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-700"
+                                                    >
+                                                        {{ refundStatusLabel(payment) }}
+                                                    </span>
+                                                </div>
+                                                <span
+                                                    v-if="isRefund(payment) && payment.parent_payment_id"
+                                                    class="text-[10px] text-gray-400"
+                                                >
+                                                    Paiement #{{ payment.parent_payment_id }}
+                                                </span>
+                                                <span
+                                                    v-else-if="refundTotalFor(payment) > 0"
+                                                    class="text-[10px] text-gray-400"
+                                                >
+                                                    Reste remboursable : {{ formatMoney(remainingRefundable(payment), payment.currency) }}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td
+                                            class="px-3 py-1.5 text-right font-semibold"
+                                            :class="[
+                                                isRefund(payment) ? 'text-rose-600' : '',
+                                                isVoided(payment) ? 'line-through text-gray-400' : '',
+                                            ]"
+                                        >
                                             {{ formatMoney(payment.amount, payment.currency) }}
                                         </td>
-                                        <td class="px-3 py-1.5">{{ payment.notes || '—' }}</td>
-                                        <td
-                                            v-if="canEditPayments || canDeletePayments"
-                                            class="px-3 py-1.5 text-right"
-                                        >
-                                            <button
-                                                v-if="canEditPayments"
-                                                type="button"
-                                                class="text-xs text-indigo-500 hover:text-indigo-700 hover:cursor-pointer"
-                                                @click="startEditingPayment(payment)"
-                                            >
-                                                Éditer
-                                            </button>
-                                            <button
-                                                v-if="canDeletePayments"
-                                                type="button"
-                                                class="ml-2 text-xs text-red-500 hover:text-red-600 hover:cursor-pointer"
-                                                @click="deletePayment(payment.id)"
-                                            >
-                                                Supprimer
-                                            </button>
+                                        <td class="px-3 py-1.5">
+                                            <span :class="isVoided(payment) ? 'line-through' : ''">
+                                                {{ payment.notes || '—' }}
+                                            </span>
+                                        </td>
+                                        <td v-if="canPaymentActions" class="px-3 py-1.5 text-right">
+                                            <div class="flex flex-wrap justify-end gap-2">
+                                                <button
+                                                    v-if="canEditPayments"
+                                                    type="button"
+                                                    class="text-xs text-indigo-500 hover:text-indigo-700 hover:cursor-pointer"
+                                                    @click="startEditingPayment(payment)"
+                                                >
+                                                    Éditer
+                                                </button>
+                                                <button
+                                                    v-if="canDeletePayments"
+                                                    type="button"
+                                                    class="text-xs text-red-500 hover:text-red-600 hover:cursor-pointer"
+                                                    @click="deletePayment(payment.id)"
+                                                >
+                                                    Supprimer
+                                                </button>
+                                                <button
+                                                    v-if="canVoidPayments"
+                                                    type="button"
+                                                    class="text-xs"
+                                                    :class="canVoidPayment(payment) ? 'text-rose-600 hover:text-rose-700' : 'cursor-not-allowed text-gray-300'"
+                                                    :disabled="!canVoidPayment(payment)"
+                                                    @click="voidPayment(payment)"
+                                                >
+                                                    Annuler
+                                                </button>
+                                                <button
+                                                    v-if="canRefundPayments"
+                                                    type="button"
+                                                    class="text-xs"
+                                                    :class="canRefundPayment(payment) ? 'text-amber-600 hover:text-amber-700' : 'cursor-not-allowed text-gray-300'"
+                                                    :disabled="!canRefundPayment(payment)"
+                                                    @click="refundPayment(payment)"
+                                                >
+                                                    Rembourser
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 </tbody>
@@ -552,8 +626,12 @@ export default {
             return this.$page?.props?.auth?.can ?? {};
         },
         canVoidPayments() {
-            return this.permissionFlags.folio_items_void
-                ?? (this.permissions?.can_manage_payments ?? false);
+            return this.permissionFlags.payments_void
+                ?? (this.permissions?.can_void_payments ?? false);
+        },
+        canRefundPayments() {
+            return this.permissionFlags.payments_refund
+                ?? (this.permissions?.can_refund_payments ?? false);
         },
         canCreatePayments() {
             return this.permissionFlags.payments_create
@@ -566,6 +644,24 @@ export default {
         canDeletePayments() {
             return this.permissionFlags.payments_delete
                 ?? (this.permissions?.can_delete_payments ?? false);
+        },
+        canPaymentActions() {
+            return this.canEditPayments || this.canDeletePayments || this.canVoidPayments || this.canRefundPayments;
+        },
+        refundsByParent() {
+            const summary = {};
+
+            this.payments.forEach((payment) => {
+                if (payment.entry_type !== 'refund' || !payment.parent_payment_id) {
+                    return;
+                }
+
+                const amount = Math.abs(Number(payment.amount || 0));
+
+                summary[payment.parent_payment_id] = (summary[payment.parent_payment_id] || 0) + amount;
+            });
+
+            return summary;
         },
         canManageInvoices() {
             return this.permissionFlags.invoices_create
@@ -618,6 +714,82 @@ export default {
 
             return value;
         },
+        extractFirstError(errors, fallback = null) {
+            if (!errors) {
+                return fallback;
+            }
+
+            if (typeof errors === 'string') {
+                return errors;
+            }
+
+            if (Array.isArray(errors)) {
+                return errors[0] ?? fallback;
+            }
+
+            const firstKey = Object.keys(errors)[0] ?? null;
+
+            if (!firstKey) {
+                return fallback;
+            }
+
+            const value = errors[firstKey];
+
+            if (Array.isArray(value)) {
+                return value[0] ?? fallback;
+            }
+
+            if (typeof value === 'string') {
+                return value;
+            }
+
+            return fallback;
+        },
+        isVoided(payment) {
+            return Boolean(payment?.voided_at || payment?.deleted_at);
+        },
+        isRefund(payment) {
+            return payment?.entry_type === 'refund';
+        },
+        refundTotalFor(payment) {
+            if (!payment?.id) {
+                return 0;
+            }
+
+            return this.refundsByParent[payment.id] || 0;
+        },
+        remainingRefundable(payment) {
+            const baseAmount = Math.abs(Number(payment?.amount || 0));
+            const refunded = this.refundTotalFor(payment);
+
+            return Math.max(0, baseAmount - refunded);
+        },
+        canVoidPayment(payment) {
+            return this.canVoidPayments
+                && !this.isRefund(payment)
+                && !this.isVoided(payment)
+                && this.refundTotalFor(payment) === 0;
+        },
+        canRefundPayment(payment) {
+            return this.canRefundPayments
+                && !this.isRefund(payment)
+                && !this.isVoided(payment)
+                && this.remainingRefundable(payment) > 0;
+        },
+        refundStatusLabel(payment) {
+            const refunded = this.refundTotalFor(payment);
+            const baseAmount = Math.abs(Number(payment?.amount || 0));
+
+            if (refunded <= 0 || baseAmount === 0) {
+                return null;
+            }
+
+            if (refunded >= baseAmount) {
+                return 'Remboursé';
+            }
+
+            return 'Remboursé partiellement';
+        },
         defaultChargeForm() {
             return {
                 description: '',
@@ -641,6 +813,10 @@ export default {
         },
         startEditingPayment(payment) {
             if (!this.canEditPayments || !this.canCreatePayments) {
+                return;
+            }
+
+            if (this.isRefund(payment) || this.isVoided(payment)) {
                 return;
             }
 
@@ -827,6 +1003,187 @@ export default {
                         text: 'Impossible de supprimer ce paiement.',
                     });
                 }
+            }
+        },
+        async voidPayment(payment) {
+            if (!this.folio || !this.canVoidPayments) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Action non autorisée',
+                    text: 'Vous ne disposez pas des droits suffisants.',
+                });
+
+                return;
+            }
+
+            const result = await Swal.fire({
+                title: 'Annuler le paiement',
+                html: `
+                    <div class="text-left text-sm text-gray-600">
+                        <p><strong>Montant :</strong> ${this.formatMoney(payment.amount, payment.currency)}</p>
+                        <p><strong>Méthode :</strong> ${payment.payment_method?.name || payment.method?.name || '—'}</p>
+                        <p><strong>Date :</strong> ${payment.paid_at || '—'}</p>
+                    </div>
+                `,
+                input: 'text',
+                inputLabel: 'Motif (optionnel)',
+                showCancelButton: true,
+                confirmButtonText: 'Annuler le paiement',
+                cancelButtonText: 'Retour',
+            });
+
+            if (!result.isConfirmed) {
+                return;
+            }
+
+            const http = window.axios ?? axios;
+            const payload = result.value ? { reason: result.value } : {};
+
+            try {
+                await http.post(`/payments/${payment.id}/void`, payload);
+                this.$emit('updated');
+                window.dispatchEvent(new CustomEvent('cash-session-updated', {
+                    detail: { type: 'frontdesk' },
+                }));
+            } catch (error) {
+                if (error?.response?.status === 403) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Action non autorisée',
+                        text: 'Vous ne disposez pas des droits suffisants.',
+                    });
+
+                    return;
+                }
+
+                const message = this.extractFirstError(
+                    error?.response?.data?.errors,
+                    error?.response?.data?.message ?? 'Impossible d’annuler ce paiement.',
+                );
+
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erreur',
+                    text: message,
+                });
+            }
+        },
+        async refundPayment(payment) {
+            if (!this.folio || !this.canRefundPayments) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Action non autorisée',
+                    text: 'Vous ne disposez pas des droits suffisants.',
+                });
+
+                return;
+            }
+
+            const remaining = this.remainingRefundable(payment);
+
+            if (remaining <= 0) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Aucun montant remboursable',
+                    text: 'Ce paiement a déjà été remboursé en totalité.',
+                });
+
+                return;
+            }
+
+            if (!this.paymentMethods.length) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Méthode manquante',
+                    text: 'Aucune méthode de paiement disponible pour ce remboursement.',
+                });
+
+                return;
+            }
+
+            const methodOptions = this.paymentMethods
+                .map((method) => `<option value="${method.id}">${method.name}</option>`)
+                .join('');
+
+            const result = await Swal.fire({
+                title: 'Rembourser le paiement',
+                html: `
+                    <div class="text-left text-sm">
+                        <p class="mb-2 text-xs text-gray-500">Reste remboursable : ${this.formatMoney(remaining, payment.currency)}</p>
+                        <label class="text-xs font-medium text-gray-700">Montant</label>
+                        <input id="refund-amount" class="swal2-input" type="number" min="0.01" step="0.01" value="${remaining.toFixed(2)}">
+                        <label class="text-xs font-medium text-gray-700">Méthode</label>
+                        <select id="refund-method" class="swal2-select">${methodOptions}</select>
+                        <label class="text-xs font-medium text-gray-700">Référence (optionnel)</label>
+                        <input id="refund-reference" class="swal2-input" type="text" placeholder="Référence">
+                        <label class="text-xs font-medium text-gray-700">Motif (optionnel)</label>
+                        <input id="refund-reason" class="swal2-input" type="text" placeholder="Motif">
+                        <p class="mt-2 text-[11px] text-gray-500">Une caisse ouverte est requise pour les paiements cash.</p>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Rembourser',
+                cancelButtonText: 'Annuler',
+                focusConfirm: false,
+                preConfirm: () => {
+                    const amountValue = document.getElementById('refund-amount')?.value;
+                    const methodValue = document.getElementById('refund-method')?.value;
+                    const reasonValue = document.getElementById('refund-reason')?.value ?? '';
+                    const referenceValue = document.getElementById('refund-reference')?.value ?? '';
+                    const parsedAmount = Number(amountValue);
+
+                    if (!methodValue) {
+                        Swal.showValidationMessage('Sélectionnez une méthode de paiement.');
+                        return null;
+                    }
+
+                    if (!parsedAmount || parsedAmount <= 0) {
+                        Swal.showValidationMessage('Le montant du remboursement est invalide.');
+                        return null;
+                    }
+
+                    return {
+                        amount: parsedAmount,
+                        payment_method_id: Number(methodValue),
+                        reason: reasonValue || null,
+                        refund_reference: referenceValue || null,
+                    };
+                },
+            });
+
+            if (!result.isConfirmed || !result.value) {
+                return;
+            }
+
+            const http = window.axios ?? axios;
+
+            try {
+                await http.post(`/payments/${payment.id}/refund`, result.value);
+                this.$emit('updated');
+                window.dispatchEvent(new CustomEvent('cash-session-updated', {
+                    detail: { type: 'frontdesk' },
+                }));
+            } catch (error) {
+                if (error?.response?.status === 403) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Action non autorisée',
+                        text: 'Vous ne disposez pas des droits suffisants.',
+                    });
+
+                    return;
+                }
+
+                const message = this.extractFirstError(
+                    error?.response?.data?.errors,
+                    error?.response?.data?.message ?? 'Impossible de rembourser ce paiement.',
+                );
+
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erreur',
+                    text: message,
+                });
             }
         },
         async confirmGenerateInvoice() {

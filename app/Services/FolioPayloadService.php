@@ -17,7 +17,7 @@ class FolioPayloadService
         $folio->loadMissing([
             'items',
             'itemsWithTrashed',
-            'payments.paymentMethod',
+            'payments' => fn ($query) => $query->withTrashed()->with('paymentMethod'),
             'invoices',
             'reservation.guest',
         ]);
@@ -88,6 +88,13 @@ class FolioPayloadService
                     'paid_at' => $payment->paid_at?->toDateTimeString(),
                     'reference' => $payment->reference,
                     'notes' => $payment->notes,
+                    'entry_type' => $payment->entry_type,
+                    'parent_payment_id' => $payment->parent_payment_id,
+                    'voided_at' => $payment->voided_at?->toDateTimeString(),
+                    'void_reason' => $payment->void_reason,
+                    'refund_reason' => $payment->refund_reason,
+                    'refund_reference' => $payment->refund_reference,
+                    'deleted_at' => $payment->deleted_at?->toDateTimeString(),
                     'method' => $method,
                     'payment_method' => $method,
                 ];
@@ -108,6 +115,9 @@ class FolioPayloadService
                 'can_collect_payments' => $user?->can('payments.create') ?? false,
                 'can_edit_payments' => $user?->can('payments.edit') ?? false,
                 'can_delete_payments' => $user?->can('payments.delete') ?? false,
+                'can_void_payments' => $user?->can('payments.void') ?? false,
+                'can_refund_payments' => $user?->can('payments.refund') ?? false,
+                'can_override_payment_day_lock' => $user?->can('payments.override_closed_day') ?? false,
                 'can_manage_invoices' => $user?->can('invoices.create') ?? false,
             ],
         ];

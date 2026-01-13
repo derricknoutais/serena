@@ -7,6 +7,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 use function activity;
@@ -16,6 +17,10 @@ class Payment extends Model
     use HasBusinessDate;
     use HasFactory;
     use SoftDeletes;
+
+    public const ENTRY_TYPE_PAYMENT = 'payment';
+
+    public const ENTRY_TYPE_REFUND = 'refund';
 
     /**
      * @var list<string>
@@ -33,6 +38,13 @@ class Payment extends Model
         'created_by_user_id',
         'cash_session_id',
         'business_date',
+        'parent_payment_id',
+        'entry_type',
+        'voided_at',
+        'voided_by_user_id',
+        'void_reason',
+        'refund_reason',
+        'refund_reference',
     ];
 
     /**
@@ -44,7 +56,13 @@ class Payment extends Model
             'amount' => 'float',
             'paid_at' => 'datetime',
             'business_date' => 'date',
+            'voided_at' => 'datetime',
         ];
+    }
+
+    public function hotel(): BelongsTo
+    {
+        return $this->belongsTo(Hotel::class);
     }
 
     public function folio(): BelongsTo
@@ -62,9 +80,24 @@ class Payment extends Model
         return $this->belongsTo(User::class, 'created_by_user_id');
     }
 
+    public function voidedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'voided_by_user_id');
+    }
+
     public function cashSession(): BelongsTo
     {
         return $this->belongsTo(CashSession::class);
+    }
+
+    public function parentPayment(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_payment_id');
+    }
+
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_payment_id');
     }
 
     protected static function booted(): void

@@ -25,6 +25,10 @@ class PermissionsCatalog
             'payments.create',
             'payments.edit',
             'payments.delete',
+            'payments.void',
+            'payments.refund',
+            'payments.override_closed_day',
+            'payments.override_refund_limit',
             'folio_items.void',
             'folio_items.edit',
             'folio_items.delete',
@@ -95,11 +99,16 @@ class PermissionsCatalog
     public static function roleMap(): array
     {
         $allPermissions = self::all();
+        $overridePermissions = [
+            'payments.override_closed_day',
+            'payments.override_refund_limit',
+        ];
+        $defaultPermissions = array_values(array_diff($allPermissions, $overridePermissions));
 
         return [
-            'owner' => $allPermissions,
-            'manager' => $allPermissions,
-            'superadmin' => $allPermissions,
+            'owner' => $defaultPermissions,
+            'manager' => $defaultPermissions,
+            'superadmin' => $defaultPermissions,
             'receptionist' => [
                 'frontdesk.view',
                 'rooms.view',
@@ -148,7 +157,7 @@ class PermissionsCatalog
                 'maintenance_tickets.view',
                 'maintenance_tickets.create',
             ],
-            'maintenance' => $allPermissions,
+            'maintenance' => $defaultPermissions,
         ];
     }
 

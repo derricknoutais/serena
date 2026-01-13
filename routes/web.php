@@ -35,6 +35,7 @@ use App\Http\Controllers\Invitations\InvitationController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\MaintenanceTicketController;
 use App\Http\Controllers\NightAuditController;
+use App\Http\Controllers\PaymentAdjustmentController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\ReservationFolioController;
@@ -309,6 +310,8 @@ Route::middleware([
             Route::post('/folios/{folio}/payments', [FolioController::class, 'storePayment'])->name('folios.payments.store');
             Route::patch('/folios/{folio}/payments/{payment}', [FolioController::class, 'updatePayment'])->name('folios.payments.update');
             Route::delete('/folios/{folio}/payments/{payment}', [FolioController::class, 'destroyPayment'])->name('folios.payments.destroy');
+            Route::post('/payments/{payment}/void', [PaymentAdjustmentController::class, 'void'])->name('payments.void');
+            Route::post('/payments/{payment}/refund', [PaymentAdjustmentController::class, 'refund'])->name('payments.refund');
             Route::post('/folios/{folio}/invoices', [InvoiceController::class, 'storeFromFolio'])->name('folios.invoices.store');
             Route::get('/invoices/{invoice}/print', [InvoiceController::class, 'pdf'])->name('invoices.pdf');
         });
