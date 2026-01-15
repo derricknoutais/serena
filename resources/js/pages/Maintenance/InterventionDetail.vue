@@ -270,6 +270,212 @@
                 </div>
             </div>
         </section>
+        <section class="rounded-2xl border border-serena-border bg-white p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-semibold text-serena-text-main">
+                    Pièces / Équipements utilisés
+                </h2>
+                <div class="text-sm text-right">
+                    <p class="font-semibold">
+                        Coût pièces :
+                        <span class="text-serena-text-main">
+                            {{ formatAmount(intervention.stock_consumption_total, intervention.currency) }}
+                        </span>
+                    </p>
+                    <p class="text-xs text-serena-text-muted">
+                        Quantité :
+                        {{ formatQuantity(stockItemsTotalQuantity) }}
+                        articles
+                    </p>
+                </div>
+            </div>
+            <div class="mt-4 space-y-3">
+                <div v-if="!intervention.items.length" class="text-sm text-serena-text-muted">
+                    Aucune pièce consommée pour cette intervention.
+                </div>
+                <ul v-else class="space-y-3">
+                    <li
+                        v-for="item in intervention.items"
+                        :key="item.id"
+                        class="rounded-xl border border-serena-border bg-serena-bg-soft/40 p-3 space-y-2"
+                    >
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="font-semibold text-serena-text-main">
+                                    {{ item.stock_item?.name ?? 'Pièce supprimée' }}
+                                </p>
+                                <p class="text-xs text-serena-text-muted">
+                                    {{ item.stock_item?.sku ? `SKU ${item.stock_item.sku}` : item.stock_item?.unit }}
+                                </p>
+                            </div>
+                            <p class="text-sm font-semibold text-serena-text-main">
+                                {{ formatAmount(item.total_cost, intervention.currency) }}
+                            </p>
+                        </div>
+                        <div class="text-xs text-serena-text-muted">
+                            <p>Quantité : {{ formatQuantity(item.quantity) }} {{ item.stock_item?.unit ?? '' }}</p>
+                            <p>Emplacement : {{ item.storage_location?.name ?? '—' }}</p>
+                            <p v-if="item.notes">Notes : {{ item.notes }}</p>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+            <div class="mt-6 space-y-3">
+                <h3 class="text-sm font-semibold text-serena-text-main">Consommer une pièce</h3>
+                <div class="grid gap-3 md:grid-cols-4">
+                        <select
+                            v-model="stockForm.storage_location_id"
+                            :disabled="!stockEditorEnabled"
+                            class="rounded-xl border border-serena-border bg-white px-3 py-2 text-sm focus:border-serena-primary focus:outline-none focus:ring-2 focus:ring-serena-primary-soft"
+                        >
+                        <option value="">Choisir un emplacement</option>
+                        <option
+                            v-for="location in availableStorageLocations"
+                            :key="location.id"
+                            :value="location.id"
+                        >
+                            {{ location.name }}
+                        </option>
+                    </select>
+                        <select
+                            v-model="stockForm.stock_item_id"
+                            :disabled="!stockEditorEnabled"
+                            class="rounded-xl border border-serena-border bg-white px-3 py-2 text-sm focus:border-serena-primary focus:outline-none focus:ring-2 focus:ring-serena-primary-soft"
+                        >
+                        <option value="">Choisir un article</option>
+                        <option
+                            v-for="item in availableStockItems"
+                            :key="item.id"
+                            :value="item.id"
+                        >
+                            {{ item.name }} <span v-if="item.sku">({{ item.sku }})</span>
+                        </option>
+                    </select>
+                        <input
+                            v-model.number="stockForm.quantity"
+                            :disabled="!stockEditorEnabled"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="Quantité"
+                            class="rounded-xl border border-serena-border bg-white px-3 py-2 text-sm focus:border-serena-primary focus:outline-none focus:ring-2 focus:ring-serena-primary-soft"
+                        />
+                        <input
+                            v-model.number="stockForm.unit_cost"
+                            :disabled="!stockEditorEnabled || !permissions.can_override_unit_cost"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="Prix unitaire (facultatif)"
+                            class="rounded-xl border border-serena-border bg-white px-3 py-2 text-sm focus:border-serena-primary focus:outline-none focus:ring-2 focus:ring-serena-primary-soft"
+                        />
+                </div>
+                    <div class="flex items-center justify-between">
+                        <p class="text-xs text-serena-text-muted">
+                            Total estimé : {{ formatAmount(stockFormTotal, intervention.currency) }}
+                        </p>
+                        <button
+                            type="button"
+                            class="rounded-xl bg-serena-primary px-4 py-2 text-xs font-semibold text-white transition hover:bg-serena-primary-dark"
+                            @click="addStockItem"
+                            :disabled="!stockEditorEnabled || processingStockItem || !stockForm.stock_item_id || !stockForm.storage_location_id"
+                        >
+                            {{ processingStockItem ? 'Enregistrement…' : 'Ajouter' }}
+                        </button>
+                    </div>
+                <div v-if="permissions.can_override_negative_stock" class="text-xs text-serena-text-muted">
+                    <label class="flex items-center gap-2">
+                        <input
+                            v-model="stockForm.allow_negative_stock"
+                            type="checkbox"
+                            :disabled="!stockEditorEnabled"
+                            class="h-4 w-4 rounded border-serena-border text-serena-primary focus:ring-serena-primary"
+                        />
+                        Autoriser le stock négatif (responsables)
+                    </label>
+                </div>
+                <div v-if="!stockEditorEnabled" class="text-xs text-rose-600">
+                    {{ intervention.accounting_status === 'submitted'
+                        ? 'Seuls les responsables peuvent modifier les pièces après soumission.'
+                        : 'Cette intervention est verrouillée, impossible d’ajouter des pièces.' }}
+                </div>
+            </div>
+        </section>
+        <section class="rounded-2xl border border-serena-border bg-white p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-serena-text-main">Historique du stock</h2>
+                    <p class="text-sm text-serena-text-muted">
+                        {{ stockMovements.length }} mouvement(s)
+                    </p>
+                </div>
+                <div v-if="stockMovements.length" class="text-xs text-serena-text-muted">
+                    {{ stockMovements[0].occurred_at ? formatDateTime(stockMovements[0].occurred_at) : '' }}
+                </div>
+            </div>
+            <div v-if="!stockMovements.length" class="mt-3 text-sm text-serena-text-muted">
+                Aucun mouvement enregistré pour cette intervention.
+            </div>
+            <ul v-else class="mt-4 space-y-3">
+                <li
+                    v-for="movement in stockMovements"
+                    :key="movement.id"
+                    class="rounded-xl border border-serena-border bg-serena-bg-soft/40 p-3 space-y-2"
+                >
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-[11px] font-semibold uppercase tracking-wide text-serena-text-muted">
+                                {{ movement.movement_type }}
+                            </p>
+                            <p class="text-sm text-serena-text-main">
+                                {{ formatDateTime(movement.occurred_at) }}
+                            </p>
+                        </div>
+                        <Link
+                            v-if="movement.movement_url"
+                            :href="movement.movement_url"
+                            class="text-xs font-semibold text-serena-primary hover:underline"
+                        >
+                            Voir le mouvement
+                        </Link>
+                    </div>
+                    <div class="text-xs text-serena-text-muted space-y-1">
+                        <p v-if="movement.reference?.label">
+                            Référence :
+                            <span class="font-semibold text-serena-text-main">
+                                {{ movement.reference.label }}
+                            </span>
+                            <Link
+                                v-if="movement.reference?.url"
+                                :href="movement.reference.url"
+                                class="ml-1 font-semibold text-serena-primary hover:underline"
+                            >
+                                Voir
+                            </Link>
+                        </p>
+                        <p v-if="movement.from_location">De : {{ movement.from_location.name }}</p>
+                        <p v-if="movement.to_location">Vers : {{ movement.to_location.name }}</p>
+                        <p v-if="movement.created_by">Enregistré par : {{ movement.created_by.name }}</p>
+                    </div>
+                    <ul class="space-y-1 text-xs font-semibold text-serena-text-main">
+                        <li
+                            v-for="line in movement.lines"
+                            :key="line.id"
+                            class="flex items-center justify-between"
+                        >
+                            <span>
+                                {{ line.stock_item?.name ?? 'Article supprimé' }}
+                                · {{ formatQuantity(line.quantity) }}
+                                {{ line.stock_item?.unit ?? '' }}
+                            </span>
+                            <span>
+                                {{ formatAmount(line.total_cost, line.currency) }}
+                            </span>
+                        </li>
+                    </ul>
+                </li>
+            </ul>
+        </section>
     </div>
 </AppLayout>
 </template>
@@ -277,6 +483,7 @@
 <script>
 import axios from 'axios';
 import Swal from 'sweetalert2';
+import { Link } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
 import PrimaryButton from '@/components/PrimaryButton.vue';
 
@@ -285,6 +492,7 @@ export default {
     components: {
         AppLayout,
         PrimaryButton,
+        Link,
     },
     props: {
         intervention: {
@@ -298,9 +506,25 @@ export default {
                 can_approve: false,
                 can_reject: false,
                 can_mark_paid: false,
+                can_add_stock_items: false,
+                can_override_negative_stock: false,
+                can_modify_submitted_stock_items: false,
+                can_override_unit_cost: false,
             }),
         },
         availableTickets: {
+            type: Array,
+            default: () => [],
+        },
+        availableStorageLocations: {
+            type: Array,
+            default: () => [],
+        },
+        availableStockItems: {
+            type: Array,
+            default: () => [],
+        },
+        stockMovements: {
             type: Array,
             default: () => [],
         },
@@ -321,11 +545,21 @@ export default {
             },
             editingCostLineId: null,
             processingCostLine: false,
+        stockForm: {
+            storage_location_id: '',
+            stock_item_id: '',
+            quantity: 1,
+            unit_cost: 0,
+            allow_negative_stock: false,
+        },
+            processingStockItem: false,
         };
     },
     mounted() {
         this.resetTicketDetails();
         this.resetCostForm();
+        this.resetStockForm();
+        this.applyStockItemDefaults();
     },
     computed: {
         canSubmitIntervention() {
@@ -361,6 +595,44 @@ export default {
             const price = Number(this.costForm.unit_price || 0);
 
             return quantity * price;
+        },
+        canAddStockItems() {
+            return Boolean(this.permissions.can_add_stock_items);
+        },
+        stockFormTotal() {
+            const quantity = Number(this.stockForm.quantity || 0);
+            const price = Number(this.stockForm.unit_cost || 0);
+
+            return quantity * price;
+        },
+        selectedStockItem() {
+            const id = this.stockForm.stock_item_id;
+
+            if (!id) {
+                return null;
+            }
+
+            return this.availableStockItems.find((item) => Number(item.id) === Number(id)) ?? null;
+        },
+        stockEditorEnabled() {
+            if (!this.permissions.can_add_stock_items) {
+                return false;
+            }
+
+            const status = this.intervention.accounting_status;
+
+            if (status === 'approved' || status === 'paid') {
+                return false;
+            }
+
+            if (status === 'submitted' && !this.permissions.can_modify_submitted_stock_items) {
+                return false;
+            }
+
+            return true;
+        },
+        stockItemsTotalQuantity() {
+            return (this.intervention.items ?? []).reduce((sum, item) => sum + (item?.quantity ?? 0), 0);
         },
     },
     methods: {
@@ -688,6 +960,75 @@ export default {
                 notes: '',
             };
         },
+        applyStockItemDefaults() {
+            const item = this.selectedStockItem;
+
+            if (!item) {
+                if (!this.permissions.can_override_unit_cost) {
+                    this.stockForm.unit_cost = 0;
+                }
+
+                return;
+            }
+
+            const defaultPrice = Number(item.default_purchase_price ?? 0);
+
+            if (!this.permissions.can_override_unit_cost) {
+                this.stockForm.unit_cost = defaultPrice;
+            } else if (!this.stockForm.unit_cost) {
+                this.stockForm.unit_cost = defaultPrice;
+            }
+        },
+        resetStockForm() {
+            const defaultLocationId =
+                this.intervention.stock_location?.id
+                ?? this.availableStorageLocations[0]?.id
+                ?? '';
+
+            this.stockForm = {
+                storage_location_id: defaultLocationId,
+                stock_item_id: '',
+                quantity: 1,
+                unit_cost: 0,
+                allow_negative_stock: false,
+            };
+        },
+        async addStockItem() {
+            if (!this.canAddStockItems || this.processingStockItem) {
+                return;
+            }
+
+            if (!this.stockForm.storage_location_id || !this.stockForm.stock_item_id) {
+                return;
+            }
+
+            this.processingStockItem = true;
+
+            try {
+                await axios.post(`/maintenance/interventions/${this.intervention.id}/items`, this.stockForm);
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Pièce enregistrée',
+                    timer: 1400,
+                    showConfirmButton: false,
+                });
+
+                this.resetStockForm();
+                this.$inertia.reload({ preserveState: true });
+            } catch (error) {
+                this.showStockItemError(error);
+            } finally {
+                this.processingStockItem = false;
+            }
+        },
+        showStockItemError(error) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erreur',
+                text: error.response?.data?.message ?? 'Impossible d’ajouter la pièce.',
+            });
+        },
         showCostLineError(error) {
             Swal.fire({
                 icon: 'error',
@@ -723,6 +1064,27 @@ export default {
             },
             deep: true,
         },
-    },
+        'intervention.items': {
+            handler() {
+                this.resetStockForm();
+            },
+            deep: true,
+        },
+            availableStorageLocations() {
+                this.resetStockForm();
+            },
+            'intervention.stock_location'() {
+                this.resetStockForm();
+            },
+            'stockForm.stock_item_id'() {
+                this.applyStockItemDefaults();
+            },
+            availableStockItems() {
+                this.applyStockItemDefaults();
+            },
+            'permissions.can_override_unit_cost'() {
+                this.applyStockItemDefaults();
+            },
+        },
 };
 </script>

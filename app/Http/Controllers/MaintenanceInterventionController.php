@@ -7,19 +7,35 @@ use App\Http\Requests\AttachMaintenanceInterventionTicketRequest;
 use App\Http\Requests\DetachMaintenanceInterventionTicketRequest;
 use App\Http\Requests\MarkPaidMaintenanceInterventionRequest;
 use App\Http\Requests\RejectMaintenanceInterventionRequest;
+use App\Http\Requests\StoreMaintenanceInterventionItemRequest;
 use App\Http\Requests\StoreMaintenanceInterventionRequest;
 use App\Http\Requests\SubmitMaintenanceInterventionRequest;
 use App\Http\Requests\UpdateMaintenanceInterventionRequest;
 use App\Models\Hotel;
 use App\Models\MaintenanceIntervention;
+use App\Models\MaintenanceInterventionItem;
 use App\Models\MaintenanceTicket;
+use App\Models\StockInventory;
+use App\Models\StockItem;
+use App\Models\StockMovement;
+use App\Models\StockPurchase;
+use App\Models\StockTransfer;
+use App\Models\StorageLocation;
 use App\Models\User;
+use App\Services\InventoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class MaintenanceInterventionController extends Controller
 {
+    private InventoryService $inventoryService;
+
+    public function __construct(InventoryService $inventoryService)
+    {
+        $this->inventoryService = $inventoryService;
+    }
+
     public function show(Request $request, MaintenanceIntervention $maintenanceIntervention): JsonResponse|\Inertia\Response
     {
         $this->authorize('maintenance.interventions.update');
@@ -48,10 +64,38 @@ class MaintenanceInterventionController extends Controller
             })
             ->values();
 
+        $availableStorageLocations = StorageLocation::query()
+            ->where('tenant_id', $maintenanceIntervention->tenant_id)
+            ->where('hotel_id', $maintenanceIntervention->hotel_id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $availableStockItems = StockItem::query()
+            ->where('tenant_id', $maintenanceIntervention->tenant_id)
+            ->where('hotel_id', $maintenanceIntervention->hotel_id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'sku', 'unit']);
+
+        $stockMovements = StockMovement::query()
+            ->where('tenant_id', $maintenanceIntervention->tenant_id)
+            ->where('hotel_id', $maintenanceIntervention->hotel_id)
+            ->where('reference_type', MaintenanceIntervention::class)
+            ->where('reference_id', $maintenanceIntervention->id)
+            ->with(['lines.stockItem', 'fromLocation', 'toLocation', 'createdBy'])
+            ->orderByDesc('occurred_at')
+            ->get()
+            ->map(fn (StockMovement $movement): array => $this->movementPayload($movement))
+            ->values();
+
         if ($request->wantsJson()) {
             return response()->json([
                 'intervention' => $payload,
                 'available_tickets' => $availableTickets,
+                'available_storage_locations' => $availableStorageLocations,
+                'available_stock_items' => $availableStockItems,
+                'stock_movements' => $stockMovements->all(),
             ]);
         }
 
@@ -60,6 +104,9 @@ class MaintenanceInterventionController extends Controller
         return Inertia::render('Maintenance/InterventionDetail', [
             'intervention' => $payload,
             'availableTickets' => $availableTickets,
+            'availableStorageLocations' => $availableStorageLocations,
+            'availableStockItems' => $availableStockItems,
+            'stockMovements' => $stockMovements,
             'permissions' => [
                 'can_update' => $user?->can('maintenance.interventions.update') ?? false,
                 'can_submit' => $user?->can('maintenance.interventions.submit') ?? false,
@@ -67,6 +114,10 @@ class MaintenanceInterventionController extends Controller
                 'can_reject' => $user?->can('maintenance.interventions.reject') ?? false,
                 'can_mark_paid' => $user?->can('maintenance.interventions.mark_paid') ?? false,
                 'can_manage_costs' => $user?->can('maintenance.interventions.costs.manage') ?? false,
+                'can_add_stock_items' => $user?->can('maintenance.interventions.add_stock_items') ?? false,
+                'can_override_negative_stock' => $user?->can('stock.override_negative') ?? false,
+                'can_modify_submitted_stock_items' => $this->isManagerOrOwner($user),
+                'can_override_unit_cost' => $this->isManagerOrOwner($user),
             ],
         ]);
     }
@@ -233,6 +284,60 @@ class MaintenanceInterventionController extends Controller
         ]);
     }
 
+    public function storeItem(
+        StoreMaintenanceInterventionItemRequest $request,
+        MaintenanceIntervention $maintenanceIntervention,
+    ): JsonResponse {
+        $this->authorize('maintenance.interventions.add_stock_items');
+        $this->assertTenantHotel($request->user(), $maintenanceIntervention);
+        $this->ensureMutable($maintenanceIntervention);
+
+        if (
+            $maintenanceIntervention->accounting_status === MaintenanceIntervention::STATUS_SUBMITTED
+            && ! $this->isManagerOrOwner($request->user())
+        ) {
+            abort(403, 'Seule une personne responsable peut modifier les pièces après la soumission.');
+        }
+
+        $data = $request->validated();
+
+        $location = StorageLocation::query()
+            ->where('tenant_id', $maintenanceIntervention->tenant_id)
+            ->where('hotel_id', $maintenanceIntervention->hotel_id)
+            ->findOrFail($data['storage_location_id']);
+
+        $item = StockItem::query()
+            ->where('tenant_id', $maintenanceIntervention->tenant_id)
+            ->where('hotel_id', $maintenanceIntervention->hotel_id)
+            ->findOrFail($data['stock_item_id']);
+
+        $entry = $this->inventoryService->consumeForIntervention(
+            $maintenanceIntervention,
+            $item,
+            $location,
+            (float) $data['quantity'],
+            $this->determineUnitCost($data, $request->user(), $item),
+            $request->user(),
+            $request->boolean('allow_negative_stock')
+                && $request->user()?->can('stock.override_negative'),
+        );
+
+        activity('maintenance')
+            ->performedOn($maintenanceIntervention)
+            ->causedBy($request->user())
+            ->withProperties([
+                'intervention_id' => $maintenanceIntervention->id,
+                'item_id' => $entry->stock_item_id,
+                'quantity' => $entry->quantity,
+            ])
+            ->event('maintenance.intervention_item_consumed')
+            ->log('maintenance.intervention_item_consumed');
+
+        return response()->json([
+            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh()),
+        ]);
+    }
+
     public function submit(
         SubmitMaintenanceInterventionRequest $request,
         MaintenanceIntervention $maintenanceIntervention,
@@ -393,6 +498,8 @@ class MaintenanceInterventionController extends Controller
             'tickets.room:id,number',
             'tickets.type:id,name',
             'costs',
+            'items.stockItem:id,name,sku,unit',
+            'items.storageLocation:id,name',
         ]);
 
         return [
@@ -406,6 +513,7 @@ class MaintenanceInterventionController extends Controller
             'parts_cost' => (float) $intervention->parts_cost,
             'total_cost' => (float) $intervention->total_cost,
             'currency' => $intervention->currency,
+            'stock_location' => $intervention->stockLocation?->only(['id', 'name']),
             'accounting_status' => $intervention->accounting_status,
             'submitted_to_accounting_at' => $intervention->submitted_to_accounting_at?->toDateTimeString(),
             'submitted_at' => $intervention->submitted_at?->toDateTimeString(),
@@ -437,6 +545,18 @@ class MaintenanceInterventionController extends Controller
                     'parts_cost' => (float) ($ticket->pivot?->parts_cost ?? 0),
                 ];
             })->values(),
+            'items' => $intervention->items->map(function (MaintenanceInterventionItem $item): array {
+                return [
+                    'id' => $item->id,
+                    'stock_item' => $item->stockItem?->only(['id', 'name', 'sku', 'unit']),
+                    'storage_location' => $item->storageLocation?->only(['id', 'name']),
+                    'quantity' => (float) $item->quantity,
+                    'unit_cost' => (float) $item->unit_cost,
+                    'total_cost' => (float) $item->total_cost,
+                    'notes' => $item->notes,
+                ];
+            })->values(),
+            'stock_consumption_total' => (float) $intervention->items->sum('total_cost'),
         ];
     }
 
@@ -599,5 +719,81 @@ class MaintenanceInterventionController extends Controller
             $intervention->costs()->createMany($lines);
             $intervention->recalcTotalsFromCosts();
         }
+    }
+
+    private function isManagerOrOwner(?User $user): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        return $user->hasAnyRole(['owner', 'manager']);
+    }
+
+    private function determineUnitCost(array $data, ?User $user, StockItem $item): float
+    {
+        if ($this->isManagerOrOwner($user)
+            && array_key_exists('unit_cost', $data)
+            && $data['unit_cost'] !== null
+        ) {
+            return (float) $data['unit_cost'];
+        }
+
+        return (float) ($item->default_purchase_price ?? 0);
+    }
+
+    private function movementPayload(StockMovement $movement): array
+    {
+        return [
+            'id' => $movement->id,
+            'movement_type' => $movement->movement_type,
+            'occurred_at' => $movement->occurred_at?->toDateTimeString(),
+            'from_location' => $movement->fromLocation?->only(['id', 'name']),
+            'to_location' => $movement->toLocation?->only(['id', 'name']),
+            'reference' => $this->movementReferencePayload($movement),
+            'lines' => $movement->lines->map(function ($line): array {
+                return [
+                    'id' => $line->id,
+                    'stock_item' => $line->stockItem?->only(['id', 'name', 'sku', 'unit']),
+                    'quantity' => (float) $line->quantity,
+                    'unit_cost' => (float) $line->unit_cost,
+                    'total_cost' => (float) $line->total_cost,
+                    'currency' => $line->currency,
+                ];
+            })->values(),
+            'created_by' => $movement->createdBy?->only(['id', 'name']),
+            'notes' => $movement->notes,
+        ];
+    }
+
+    private function movementReferencePayload(StockMovement $movement): ?array
+    {
+        if (! $movement->reference_type || ! $movement->reference_id) {
+            return null;
+        }
+
+        return match ($movement->reference_type) {
+            MaintenanceIntervention::class => [
+                'type' => 'maintenance_intervention',
+                'label' => sprintf('Intervention #%s', $movement->reference_id),
+                'url' => route('maintenance-interventions.show', ['maintenanceIntervention' => $movement->reference_id]),
+            ],
+            StockPurchase::class => [
+                'type' => 'stock_purchase',
+                'label' => sprintf('Réception #%s', $movement->reference_id),
+                'url' => null,
+            ],
+            StockTransfer::class => [
+                'type' => 'stock_transfer',
+                'label' => sprintf('Transfert #%s', $movement->reference_id),
+                'url' => null,
+            ],
+            StockInventory::class => [
+                'type' => 'stock_inventory',
+                'label' => sprintf('Inventaire #%s', $movement->reference_id),
+                'url' => null,
+            ],
+            default => null,
+        };
     }
 }

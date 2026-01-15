@@ -36,6 +36,7 @@ export default defineComponent({
             operationsOpen: false,
             financeOpen: false,
             mobileNavOpen: false,
+            stockMenuOpen: false,
         };
     },
     props: {
@@ -140,7 +141,18 @@ export default defineComponent({
                 this.operationsOpen = false;
             }
 
+            if (!target.closest('[data-dropdown="stock"]')) {
+                this.stockMenuOpen = false;
+            }
+
             if (!target.closest('[data-dropdown="finance"]')) {
+                this.financeOpen = false;
+            }
+        },
+        toggleStockMenu() {
+            this.stockMenuOpen = !this.stockMenuOpen;
+            if (this.stockMenuOpen) {
+                this.operationsOpen = false;
                 this.financeOpen = false;
             }
         },
@@ -222,6 +234,46 @@ export default defineComponent({
         },
         financeLinkVisible(): boolean {
             return this.cashLinkVisible || this.analyticsLinkVisible;
+        },
+        stockLinkVisible(): boolean {
+            const permissions = this.$page?.props?.auth?.can ?? {};
+
+            return Boolean(
+                permissions.stock_purchases_create
+                || permissions.stock_purchases_receive
+                || permissions.stock_transfers_create
+                || permissions.stock_transfers_complete
+                || permissions.stock_inventories_create
+                || permissions.stock_inventories_post
+                || permissions.stock_items_manage
+                || permissions.stock_locations_manage,
+            );
+        },
+        stockMenuItems(): Array<{ label: string; href: string }> {
+            const permissions = this.$page?.props?.auth?.can ?? {};
+            const items = [];
+
+            if (this.stockLinkVisible) {
+                items.push({ label: 'Tableau de bord', href: '/stock' });
+            }
+
+            if (permissions.stock_purchases_create || permissions.stock_purchases_receive) {
+                items.push({ label: 'Bon d’achat', href: '/stock/purchases' });
+            }
+
+            if (permissions.stock_transfers_create || permissions.stock_transfers_complete) {
+                items.push({ label: 'Transferts', href: '/stock/transfers' });
+            }
+
+            if (permissions.stock_inventories_create || permissions.stock_inventories_post) {
+                items.push({ label: 'Inventaires', href: '/stock/inventories' });
+            }
+
+            if (permissions.stock_locations_manage || permissions.stock_items_manage) {
+                items.push({ label: 'Emplacements', href: '/stock/locations' });
+            }
+
+            return items;
         },
         currentUser() {
             return (this.$page?.props as any)?.auth?.user ?? null;
@@ -308,6 +360,29 @@ export default defineComponent({
                     >
                         Housekeeping
                     </Link>
+                    <div v-if="stockMenuItems.length" class="relative" data-dropdown="stock">
+                        <button
+                            type="button"
+                            class="rounded-full px-3 py-1 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
+                            @click="toggleStockMenu"
+                        >
+                            Stock ▾
+                        </button>
+                        <div
+                            v-if="stockMenuOpen"
+                            class="absolute right-0 z-30 mt-2 w-44 rounded-xl border border-serena-border bg-white shadow-lg"
+                        >
+                            <Link
+                                v-for="item in stockMenuItems"
+                                :key="item.href"
+                                :href="item.href"
+                                class="block px-3 py-2 text-sm text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
+                                @click="stockMenuOpen = false"
+                            >
+                                {{ item.label }}
+                            </Link>
+                        </div>
+                    </div>
                     <div v-if="operationsLinkVisible" class="relative" data-dropdown="operations">
                         <button
                             type="button"
@@ -472,6 +547,18 @@ export default defineComponent({
                         <Link v-if="maintenanceLinkVisible" href="/maintenance" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
                             Maintenance
                         </Link>
+                        <div v-if="stockMenuItems.length" class="space-y-1">
+                            <p class="text-[11px] font-semibold uppercase tracking-wide text-serena-text-muted">Stock</p>
+                            <Link
+                                v-for="item in stockMenuItems"
+                                :key="item.href"
+                                :href="item.href"
+                                class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary"
+                                @click="mobileNavOpen = false"
+                            >
+                                {{ item.label }}
+                            </Link>
+                        </div>
                         <Link v-if="posLinkVisible" href="/pos" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
                             Point de Vente
                         </Link>

@@ -18,6 +18,8 @@ use App\Http\Controllers\Config\ProductCategoryController;
 use App\Http\Controllers\Config\ProductController;
 use App\Http\Controllers\Config\RoomController;
 use App\Http\Controllers\Config\RoomTypeController;
+use App\Http\Controllers\Config\StockItemController;
+use App\Http\Controllers\Config\StorageLocationController;
 use App\Http\Controllers\Config\TaxController;
 use App\Http\Controllers\Config\TechnicianController;
 use App\Http\Controllers\Config\UserConfigController;
@@ -44,6 +46,12 @@ use App\Http\Controllers\PosController;
 use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\ReservationFolioController;
 use App\Http\Controllers\ReservationStayController;
+use App\Http\Controllers\StockController;
+use App\Http\Controllers\StockInventoryController;
+use App\Http\Controllers\StockLocationController;
+use App\Http\Controllers\StockMovementController;
+use App\Http\Controllers\StockPurchaseController;
+use App\Http\Controllers\StockTransferController;
 use App\Http\Controllers\Users\UpdateUserHotelsController;
 use App\Http\Controllers\Users\UpdateUserRoleController;
 use App\Models\Tenant;
@@ -371,6 +379,49 @@ Route::middleware([
             '/maintenance/interventions/{maintenanceIntervention}/cost-lines/{maintenanceInterventionCost}',
             [MaintenanceInterventionCostController::class, 'destroy'],
         )->name('maintenance-interventions.cost-lines.destroy');
+        Route::post(
+            '/maintenance/interventions/{maintenanceIntervention}/items',
+            [MaintenanceInterventionController::class, 'storeItem'],
+        )->name('maintenance-interventions.items.store');
+
+        Route::get('/stock', [StockController::class, 'index'])
+            ->name('stock.index');
+        Route::get('/stock/purchases/create', [StockPurchaseController::class, 'create'])
+            ->name('stock.purchases.create');
+        Route::get('/stock/purchases', [StockPurchaseController::class, 'index'])
+            ->name('stock.purchases.index');
+        Route::get('/stock/purchases/create', [StockPurchaseController::class, 'create'])
+            ->name('stock.purchases.create');
+        Route::post('/stock/purchases', [StockPurchaseController::class, 'store'])
+            ->name('stock.purchases.store');
+        Route::get('/stock/purchases/{stockPurchase}', [StockPurchaseController::class, 'show'])
+            ->name('stock.purchases.show');
+        Route::post('/stock/purchases/{stockPurchase}/receive', [StockPurchaseController::class, 'receive'])
+            ->name('stock.purchases.receive');
+        Route::get('/stock/transfers', [StockTransferController::class, 'index'])
+            ->name('stock.transfers.index');
+        Route::get('/stock/transfers/create', [StockTransferController::class, 'create'])
+            ->name('stock.transfers.create');
+        Route::post('/stock/transfers', [StockTransferController::class, 'store'])
+            ->name('stock.transfers.store');
+        Route::get('/stock/transfers/{stockTransfer}', [StockTransferController::class, 'show'])
+            ->name('stock.transfers.show');
+        Route::post('/stock/transfers/{stockTransfer}/complete', [StockTransferController::class, 'complete'])
+            ->name('stock.transfers.complete');
+        Route::get('/stock/inventories', [StockInventoryController::class, 'index'])
+            ->name('stock.inventories.index');
+        Route::get('/stock/inventories/{stockInventory}', [StockInventoryController::class, 'show'])
+            ->name('stock.inventories.show');
+        Route::post('/stock/inventories', [StockInventoryController::class, 'store'])
+            ->name('stock.inventories.store');
+        Route::post('/stock/inventories/{stockInventory}/post', [StockInventoryController::class, 'post'])
+            ->name('stock.inventories.post');
+        Route::get('/stock/locations', [StockLocationController::class, 'index'])
+            ->name('stock.locations.index');
+        Route::get('/stock/locations/{storageLocation}', [StockLocationController::class, 'show'])
+            ->name('stock.locations.show');
+        Route::get('/stock/movements/{stockMovement}', [StockMovementController::class, 'show'])
+            ->name('stock.movements.show');
 
         Route::middleware('can:analytics.view')->group(function () {
             Route::get('/analytics', [\App\Http\Controllers\AnalyticsController::class, 'index'])->name('analytics.index');
@@ -418,6 +469,18 @@ Route::middleware([
                 ->name('technicians.store');
             Route::put('technicians/{technician}', [TechnicianController::class, 'update'])
                 ->name('technicians.update');
+            Route::get('stock-items', [StockItemController::class, 'index'])
+                ->name('stock-items.index');
+            Route::post('stock-items', [StockItemController::class, 'store'])
+                ->name('stock-items.store');
+            Route::put('stock-items/{stockItem}', [StockItemController::class, 'update'])
+                ->name('stock-items.update');
+            Route::get('storage-locations', [StorageLocationController::class, 'index'])
+                ->name('storage-locations.index');
+            Route::post('storage-locations', [StorageLocationController::class, 'store'])
+                ->name('storage-locations.store');
+            Route::put('storage-locations/{storageLocation}', [StorageLocationController::class, 'update'])
+                ->name('storage-locations.update');
             Route::resource('products', ProductController::class)->except(['show']);
             Route::resource('product-categories', ProductCategoryController::class)->only(['index', 'store', 'update', 'destroy']);
             Route::resource('users', UserConfigController::class)->except(['show']);

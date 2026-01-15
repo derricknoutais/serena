@@ -58,11 +58,11 @@ const sidebarNavItems = computed<NavItem[]>(() => [
 
 const currentPath = typeof window !== undefined ? window.location.pathname : '';
 
-const resourcesItems = computed<NavItem[]>(() => [
-    {
-        title: 'Hôtel',
-        href: '/settings/resources/hotel',
-    },
+    const resourcesItems = computed<NavItem[]>(() => [
+        {
+            title: 'Hôtel',
+            href: '/settings/resources/hotel',
+        },
     ...(permissions.value.room_types_view
         ? [{ title: 'Types de chambres', href: '/settings/resources/room-types' } satisfies NavItem]
         : []),
@@ -91,6 +91,12 @@ const resourcesItems = computed<NavItem[]>(() => [
     ...(permissions.value.maintenance_technicians_manage
         ? [{ title: 'Techniciens', href: '/settings/resources/technicians' } satisfies NavItem]
         : []),
+    ...(permissions.value.stock_items_manage
+        ? [{ title: 'Articles de stock', href: '/settings/resources/stock-items' } satisfies NavItem]
+        : []),
+    ...(permissions.value.stock_locations_manage
+        ? [{ title: 'Emplacements', href: '/settings/resources/storage-locations' } satisfies NavItem]
+        : []),
     ...(permissions.value.product_categories_view
         ? [{ title: 'Catégories de produits', href: '/settings/resources/product-categories' } satisfies NavItem]
         : []),
@@ -105,7 +111,7 @@ const resourcesItems = computed<NavItem[]>(() => [
         title: 'Journal d’activités',
         href: '/settings/resources/activity',
     },
-]);
+    ]);
 
 const isResourcesActive = computed(() => currentPath.startsWith('/settings/resources'));
 </script>

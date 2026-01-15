@@ -1,0 +1,35 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('stock_transfers', function (Blueprint $table): void {
+            $table->bigIncrements('id');
+            $table->uuid('tenant_id');
+            $table->unsignedBigInteger('hotel_id');
+            $table->unsignedBigInteger('from_location_id');
+            $table->unsignedBigInteger('to_location_id');
+            $table->string('status', 20)->default('draft');
+            $table->timestamp('transferred_at')->nullable();
+            $table->unsignedBigInteger('created_by_user_id')->nullable();
+            $table->timestamps();
+
+            $table->index(['tenant_id', 'hotel_id']);
+            $table->foreign('tenant_id')->references('id')->on('tenants')->cascadeOnDelete();
+            $table->foreign('hotel_id')->references('id')->on('hotels')->cascadeOnDelete();
+            $table->foreign('from_location_id')->references('id')->on('storage_locations')->cascadeOnDelete();
+            $table->foreign('to_location_id')->references('id')->on('storage_locations')->cascadeOnDelete();
+            $table->foreign('created_by_user_id')->references('id')->on('users')->nullOnDelete();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('stock_transfers');
+    }
+};

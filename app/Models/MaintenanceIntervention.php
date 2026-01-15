@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MaintenanceIntervention extends Model
 {
@@ -38,6 +39,7 @@ class MaintenanceIntervention extends Model
         'currency',
         'accounting_status',
         'submitted_to_accounting_at',
+        'stock_location_id',
     ];
 
     /**
@@ -89,6 +91,16 @@ class MaintenanceIntervention extends Model
         return $this->belongsToMany(MaintenanceTicket::class, 'maintenance_intervention_ticket')
             ->withPivot(['work_done', 'labor_cost', 'parts_cost'])
             ->withTimestamps();
+    }
+
+    public function stockLocation(): BelongsTo
+    {
+        return $this->belongsTo(StorageLocation::class, 'stock_location_id');
+    }
+
+    public function items(): HasMany
+    {
+        return $this->hasMany(MaintenanceInterventionItem::class, 'maintenance_intervention_id');
     }
 
     public function recalcTotalsFromCosts(): void
