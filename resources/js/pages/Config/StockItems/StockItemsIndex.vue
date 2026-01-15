@@ -191,8 +191,7 @@ export default {
 
             try {
                 if (this.editing) {
-                    await router.post(`/settings/resources/stock-items/${this.editing.id}`, this.form, {
-                        _method: 'PUT',
+                    await router.put(`/settings/resources/stock-items/${this.editing.id}`, this.form, {
                         preserveState: true,
                         onSuccess: () => this.closeModal(),
                     });
