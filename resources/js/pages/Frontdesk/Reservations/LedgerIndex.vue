@@ -147,10 +147,9 @@
 
 <script>
 import AppLayout from '@/layouts/AppLayout.vue';
-import { computed } from 'vue';
 import { router } from '@inertiajs/vue3';
-import { ledger, index } from '@/routes/reservations';
-import details from '@/routes/reservations/details';
+import { index } from '@/routes/reservations';
+import { details } from '@/routes/frontdesk/reservations';
 
 export default {
     name: 'ReservationsLedgerIndex',
@@ -206,17 +205,15 @@ export default {
         },
         applyFilters() {
             router.get(
-                ledger.url({
-                    query: {
-                        code: this.localFilters.code,
-                        guest: this.localFilters.guest,
-                        check_in_from: this.localFilters.check_in_from,
-                        check_in_to: this.localFilters.check_in_to,
-                        status: this.localFilters.status,
-                        sort: this.localFilters.sort,
-                    },
-                }),
-                {},
+                window.location.pathname,
+                {
+                    code: this.localFilters.code,
+                    guest: this.localFilters.guest,
+                    check_in_from: this.localFilters.check_in_from,
+                    check_in_to: this.localFilters.check_in_to,
+                    status: this.localFilters.status,
+                    sort: this.localFilters.sort,
+                },
                 { preserveState: true },
             );
         },
@@ -247,7 +244,7 @@ export default {
             if (!this.can.view_details) {
                 return;
             }
-            router.visit(details.show.url({ reservation: reservationId }));
+            router.visit(details.url({ reservation: reservationId }));
         },
         navigateTo(url) {
             if (!url) {
