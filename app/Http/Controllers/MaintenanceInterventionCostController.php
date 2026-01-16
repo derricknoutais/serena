@@ -7,21 +7,26 @@ use App\Http\Requests\UpdateMaintenanceInterventionCostRequest;
 use App\Models\MaintenanceIntervention;
 use App\Models\MaintenanceInterventionCost;
 use App\Models\User;
+use App\Services\MaintenanceCostService;
 use Illuminate\Http\JsonResponse;
 
 class MaintenanceInterventionCostController extends Controller
 {
+    public function __construct(private MaintenanceCostService $maintenanceCostService) {}
+
     public function store(
         StoreMaintenanceInterventionCostRequest $request,
         MaintenanceIntervention $maintenanceIntervention,
     ): JsonResponse {
-        $this->authorize('maintenance.interventions.costs.manage');
+        $this->authorizeCostEdit($request->user());
         $this->assertTenantHotel($request->user(), $maintenanceIntervention);
         $this->ensureMutable($maintenanceIntervention);
 
         /** @var User $user */
         $user = $request->user();
         $data = $request->validated();
+
+        $beforeTotal = (float) ($maintenanceIntervention->estimated_total_amount ?? $maintenanceIntervention->total_cost);
 
         $cost = $maintenanceIntervention->costs()->create([
             'tenant_id' => $maintenanceIntervention->tenant_id,
@@ -35,7 +40,9 @@ class MaintenanceInterventionCostController extends Controller
             'created_by_user_id' => $user->id,
         ]);
 
-        $maintenanceIntervention->recalcTotalsFromCosts();
+        $this->maintenanceCostService->recomputeInterventionTotals($maintenanceIntervention);
+        $maintenanceIntervention->refresh();
+        $afterTotal = (float) ($maintenanceIntervention->estimated_total_amount ?? $maintenanceIntervention->total_cost);
 
         activity('maintenance')
             ->performedOn($maintenanceIntervention)
@@ -45,12 +52,14 @@ class MaintenanceInterventionCostController extends Controller
                 'cost_id' => $cost->id,
                 'cost_type' => $cost->cost_type,
                 'total_amount' => (float) $cost->total_amount,
+                'totals_before' => $beforeTotal,
+                'totals_after' => $afterTotal,
             ])
-            ->event('maintenance.intervention_cost_added')
-            ->log('maintenance.intervention_cost_added');
+            ->event('maintenance.cost_line_added')
+            ->log('maintenance.cost_line_added');
 
         return response()->json([
-            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh()),
+            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh(), $user),
         ]);
     }
 
@@ -59,7 +68,7 @@ class MaintenanceInterventionCostController extends Controller
         MaintenanceIntervention $maintenanceIntervention,
         MaintenanceInterventionCost $maintenanceInterventionCost,
     ): JsonResponse {
-        $this->authorize('maintenance.interventions.costs.manage');
+        $this->authorizeCostEdit($request->user());
         $this->assertTenantHotel($request->user(), $maintenanceIntervention);
         $this->ensureMutable($maintenanceIntervention);
         $this->assertCostBelongsToIntervention($maintenanceIntervention, $maintenanceInterventionCost);
@@ -67,6 +76,8 @@ class MaintenanceInterventionCostController extends Controller
         /** @var User $user */
         $user = $request->user();
         $data = $request->validated();
+
+        $beforeTotal = (float) ($maintenanceIntervention->estimated_total_amount ?? $maintenanceIntervention->total_cost);
 
         $maintenanceInterventionCost->fill([
             'cost_type' => $data['cost_type'] ?? $maintenanceInterventionCost->cost_type,
@@ -78,7 +89,9 @@ class MaintenanceInterventionCostController extends Controller
         ]);
         $maintenanceInterventionCost->save();
 
-        $maintenanceIntervention->recalcTotalsFromCosts();
+        $this->maintenanceCostService->recomputeInterventionTotals($maintenanceIntervention);
+        $maintenanceIntervention->refresh();
+        $afterTotal = (float) ($maintenanceIntervention->estimated_total_amount ?? $maintenanceIntervention->total_cost);
 
         activity('maintenance')
             ->performedOn($maintenanceIntervention)
@@ -88,12 +101,14 @@ class MaintenanceInterventionCostController extends Controller
                 'cost_id' => $maintenanceInterventionCost->id,
                 'cost_type' => $maintenanceInterventionCost->cost_type,
                 'total_amount' => (float) $maintenanceInterventionCost->total_amount,
+                'totals_before' => $beforeTotal,
+                'totals_after' => $afterTotal,
             ])
-            ->event('maintenance.intervention_cost_updated')
-            ->log('maintenance.intervention_cost_updated');
+            ->event('maintenance.cost_line_updated')
+            ->log('maintenance.cost_line_updated');
 
         return response()->json([
-            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh()),
+            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh(), $user),
         ]);
     }
 
@@ -101,13 +116,16 @@ class MaintenanceInterventionCostController extends Controller
         MaintenanceIntervention $maintenanceIntervention,
         MaintenanceInterventionCost $maintenanceInterventionCost,
     ): JsonResponse {
-        $this->authorize('maintenance.interventions.costs.manage');
+        $this->authorizeCostEdit(request()->user());
         $this->assertTenantHotel(request()->user(), $maintenanceIntervention);
         $this->ensureMutable($maintenanceIntervention);
         $this->assertCostBelongsToIntervention($maintenanceIntervention, $maintenanceInterventionCost);
 
+        $beforeTotal = (float) ($maintenanceIntervention->estimated_total_amount ?? $maintenanceIntervention->total_cost);
         $maintenanceInterventionCost->delete();
-        $maintenanceIntervention->recalcTotalsFromCosts();
+        $this->maintenanceCostService->recomputeInterventionTotals($maintenanceIntervention);
+        $maintenanceIntervention->refresh();
+        $afterTotal = (float) ($maintenanceIntervention->estimated_total_amount ?? $maintenanceIntervention->total_cost);
 
         activity('maintenance')
             ->performedOn($maintenanceIntervention)
@@ -115,16 +133,18 @@ class MaintenanceInterventionCostController extends Controller
             ->withProperties([
                 'intervention_id' => $maintenanceIntervention->id,
                 'cost_id' => $maintenanceInterventionCost->id,
+                'totals_before' => $beforeTotal,
+                'totals_after' => $afterTotal,
             ])
-            ->event('maintenance.intervention_cost_deleted')
-            ->log('maintenance.intervention_cost_deleted');
+            ->event('maintenance.cost_line_removed')
+            ->log('maintenance.cost_line_removed');
 
         return response()->json([
-            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh()),
+            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh(), request()->user()),
         ]);
     }
 
-    private function interventionPayload(MaintenanceIntervention $intervention): array
+    private function interventionPayload(MaintenanceIntervention $intervention, ?User $user = null): array
     {
         $intervention->loadMissing([
             'technician:id,name,company_name',
@@ -133,6 +153,11 @@ class MaintenanceInterventionCostController extends Controller
             'tickets.type:id,name',
             'costs',
         ]);
+
+        $canViewCosts = $user?->can('maintenance.costs.view')
+            || $user?->can('maintenance.costs.edit')
+            || $user?->can('maintenance.interventions.costs.manage')
+            || $user?->hasAnyRole(['owner', 'manager']) === true;
 
         return [
             'id' => $intervention->id,
@@ -144,6 +169,9 @@ class MaintenanceInterventionCostController extends Controller
             'labor_cost' => (float) $intervention->labor_cost,
             'parts_cost' => (float) $intervention->parts_cost,
             'total_cost' => (float) $intervention->total_cost,
+            'estimated_subtotal_amount' => (float) ($intervention->estimated_subtotal_amount ?? $intervention->total_cost),
+            'estimated_total_amount' => (float) ($intervention->estimated_total_amount ?? $intervention->total_cost),
+            'cost_mode' => $intervention->cost_mode ?? 'estimated',
             'currency' => $intervention->currency,
             'accounting_status' => $intervention->accounting_status,
             'submitted_to_accounting_at' => $intervention->submitted_to_accounting_at?->toDateTimeString(),
@@ -152,18 +180,21 @@ class MaintenanceInterventionCostController extends Controller
             'rejected_at' => $intervention->rejected_at?->toDateTimeString(),
             'rejection_reason' => $intervention->rejection_reason,
             'paid_at' => $intervention->paid_at?->toDateTimeString(),
-            'costs' => $intervention->costs->map(function (MaintenanceInterventionCost $cost): array {
-                return [
-                    'id' => $cost->id,
-                    'cost_type' => $cost->cost_type,
-                    'label' => $cost->label,
-                    'quantity' => (float) $cost->quantity,
-                    'unit_price' => (float) $cost->unit_price,
-                    'total_amount' => (float) $cost->total_amount,
-                    'currency' => $cost->currency,
-                    'notes' => $cost->notes,
-                ];
-            })->values(),
+            'costs' => $canViewCosts
+                ? $intervention->costs->map(function (MaintenanceInterventionCost $cost): array {
+                    return [
+                        'id' => $cost->id,
+                        'cost_type' => $cost->cost_type,
+                        'label' => $cost->label,
+                        'quantity' => (float) $cost->quantity,
+                        'unit_price' => (float) $cost->unit_price,
+                        'total_amount' => (float) $cost->total_amount,
+                        'currency' => $cost->currency,
+                        'source' => $cost->source,
+                        'notes' => $cost->notes,
+                    ];
+                })->values()
+                : [],
             'tickets' => $intervention->tickets->map(function ($ticket): array {
                 return [
                     'id' => $ticket->id,
@@ -177,6 +208,19 @@ class MaintenanceInterventionCostController extends Controller
                 ];
             })->values(),
         ];
+    }
+
+    private function authorizeCostEdit(?User $user): void
+    {
+        if (! $user) {
+            abort(403);
+        }
+
+        if ($user->can('maintenance.costs.edit') || $user->can('maintenance.interventions.costs.manage')) {
+            return;
+        }
+
+        abort(403);
     }
 
     private function assertTenantHotel(?User $user, MaintenanceIntervention $intervention): void

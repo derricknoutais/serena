@@ -34,6 +34,17 @@ class UpdateStockItemRequest extends FormRequest
             'currency' => ['nullable', 'string', 'size:3'],
             'reorder_point' => ['nullable', 'numeric', 'gte:0'],
             'is_active' => ['nullable', 'boolean'],
+            'is_kit' => ['nullable', 'boolean'],
+            'components' => ['sometimes', 'array'],
+            'components.*.stock_item_id' => [
+                'required_with:components',
+                'integer',
+                Rule::exists('stock_items', 'id')
+                    ->where(fn ($query) => $query->where('tenant_id', $tenantId)
+                        ->where('hotel_id', $hotelId)
+                        ->where('is_kit', false)),
+            ],
+            'components.*.quantity' => ['required_with:components', 'numeric', 'gt:0'],
         ];
     }
 }

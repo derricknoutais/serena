@@ -13,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -44,6 +45,7 @@ class ReservationStatusController extends Controller
         ]);
 
         $action = $validated['action'];
+        $this->authorizeAction($action);
 
         $map = [
             'confirm' => Reservation::STATUS_CONFIRMED,
@@ -55,6 +57,7 @@ class ReservationStatusController extends Controller
 
         $targetStatus = $map[$action];
         $canOverrideFees = $request->user()?->hasAnyRole(['owner', 'manager']) ?? false;
+        $canOverrideBalance = $request->user()?->can('reservations.check_out_with_balance') ?? false;
         $actualCheckInAt = ! empty($validated['actual_check_in_at'])
             ? Carbon::parse($validated['actual_check_in_at'])
             : null;
@@ -130,6 +133,7 @@ class ReservationStatusController extends Controller
             $targetStatus,
             $validated,
             $canOverrideFees,
+            $canOverrideBalance,
             $actualCheckInAt,
             $actualCheckOutAt,
             $earlyAmount,
@@ -151,6 +155,7 @@ class ReservationStatusController extends Controller
                     $actualCheckOutAt,
                     $canOverrideFees,
                     isset($validated['late_fee_override']) ? (float) $validated['late_fee_override'] : null,
+                    $canOverrideBalance,
                 ),
                 'cancel' => $this->reservationStateMachine->cancel($reservation),
                 'no_show' => $this->reservationStateMachine->markNoShow($reservation),
@@ -257,6 +262,24 @@ class ReservationStatusController extends Controller
             ],
             'currency' => $decision['currency'],
         ]);
+    }
+
+    private function authorizeAction(string $action): void
+    {
+        $permission = match ($action) {
+            'confirm' => 'reservations.confirm',
+            'check_in' => 'reservations.check_in',
+            'check_out' => 'reservations.check_out',
+            'cancel' => 'reservations.cancel',
+            'no_show' => 'reservations.force_status',
+            default => 'reservations.force_status',
+        };
+
+        if (Gate::check($permission) || Gate::check('reservations.force_status')) {
+            return;
+        }
+
+        abort(403);
     }
 
     private function applyPenalty(Reservation $reservation, string $targetStatus, float $amount, ?string $note): void

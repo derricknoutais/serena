@@ -99,6 +99,62 @@
                             <input v-model="form.is_active" type="checkbox" class="h-4 w-4 rounded border-serena-border text-serena-primary focus:ring-serena-primary" />
                             Active
                         </label>
+                        <label class="flex items-center gap-2 text-sm font-medium text-serena-text-muted">
+                            <input
+                                v-model="form.is_kit"
+                                @change="!form.is_kit && (form.components = [])"
+                                type="checkbox"
+                                class="h-4 w-4 rounded border-serena-border text-serena-primary focus:ring-serena-primary"
+                            />
+                            Est un kit ?
+                        </label>
+                    </div>
+                    <div v-if="form.is_kit" class="rounded-2xl border border-serena-border/80 bg-serena-bg-soft px-4 py-4">
+                        <p class="text-sm font-semibold text-serena-text-main">Composition du kit</p>
+                        <div class="mt-3 grid gap-3 md:grid-cols-[2fr,1fr,auto]">
+                            <label class="text-sm font-medium text-serena-text-muted">
+                                Article
+                                <Multiselect
+                                    v-model="kitComponentSelection"
+                                    :options="componentOptions"
+                                    label="name"
+                                    track-by="id"
+                                    placeholder="Sélectionner un article"
+                                    :clear-on-select="true"
+                                    :close-on-select="true"
+                                    class="mt-1"
+                                />
+                            </label>
+                            <label class="text-sm font-medium text-serena-text-muted">
+                                Quantité
+                                <input
+                                    v-model.number="kitComponentQuantity"
+                                    type="number"
+                                    min="0.01"
+                                    step="0.01"
+                                    class="mt-1 w-full rounded-xl border border-serena-border px-3 py-2 focus:border-serena-primary focus:outline-none"
+                                />
+                            </label>
+                            <div class="flex items-end">
+                                <PrimaryButton type="button" class="w-full" @click="addComponent">Ajouter</PrimaryButton>
+                            </div>
+                        </div>
+                        <div v-if="form.components.length" class="mt-4 space-y-2">
+                            <div
+                                v-for="(component, index) in form.components"
+                                :key="component.stock_item_id"
+                                class="flex items-center justify-between rounded-xl border border-serena-border bg-white px-3 py-2 text-sm"
+                            >
+                                <div>
+                                    <p class="font-semibold text-serena-text-main">{{ componentLabel(component) }}</p>
+                                    <p class="text-xs text-serena-text-muted">Quantité : {{ formatQuantity(component.quantity) }}</p>
+                                </div>
+                                <button type="button" class="text-xs font-semibold text-serena-danger hover:underline" @click="removeComponent(index)">Supprimer</button>
+                            </div>
+                        </div>
+                        <p class="mt-3 text-xs text-serena-text-muted">
+                            Les kits sont automatiquement décomposés en articles simples lors des mouvements de stock et facturation.
+                        </p>
                     </div>
                     <div class="flex justify-end gap-2">
                         <SecondaryButton type="button" class="px-4 py-2 text-xs" @click="closeModal">Annuler</SecondaryButton>
@@ -114,15 +170,20 @@
 
 <script>
 import { router } from '@inertiajs/vue3';
+import Multiselect from 'vue-multiselect';
 import ConfigLayout from '@/layouts/ConfigLayout.vue';
 import PrimaryButton from '@/components/PrimaryButton.vue';
 import SecondaryButton from '@/components/SecondaryButton.vue';
 
 export default {
     name: 'StockItemsIndex',
-    components: { ConfigLayout, PrimaryButton, SecondaryButton },
+    components: { ConfigLayout, PrimaryButton, SecondaryButton, Multiselect },
     props: {
         stockItems: {
+            type: Array,
+            default: () => [],
+        },
+        componentOptions: {
             type: Array,
             default: () => [],
         },
@@ -133,6 +194,8 @@ export default {
             editing: null,
             submitting: false,
             form: this.resetForm(),
+            kitComponentSelection: null,
+            kitComponentQuantity: 1,
         };
     },
     computed: {
@@ -149,6 +212,50 @@ export default {
             const quantity = Number(value ?? 0);
             return quantity % 1 === 0 ? quantity.toFixed(0) : quantity.toFixed(2);
         },
+        componentLabel(component) {
+            if (!component) {
+                return '';
+            }
+
+            const option = this.componentOptions.find((item) => item.id === component.stock_item_id);
+            if (option) {
+                return option.name;
+            }
+
+            return component.name ?? 'Article';
+        },
+        prepareComponents(components) {
+            return components.map((component) => ({
+                stock_item_id: component.stock_item_id,
+                quantity: component.quantity,
+                name: component.name ?? this.componentOptions.find((item) => item.id === component.stock_item_id)?.name ?? '',
+            }));
+        },
+        addComponent() {
+            if (!this.kitComponentSelection || this.kitComponentQuantity <= 0) {
+                return;
+            }
+
+            const existing = this.form.components.find(
+                (component) => component.stock_item_id === this.kitComponentSelection.id,
+            );
+
+            if (existing) {
+                existing.quantity += this.kitComponentQuantity;
+            } else {
+                this.form.components.push({
+                    stock_item_id: this.kitComponentSelection.id,
+                    quantity: this.kitComponentQuantity,
+                    name: this.kitComponentSelection.name,
+                });
+            }
+
+            this.kitComponentSelection = null;
+            this.kitComponentQuantity = 1;
+        },
+        removeComponent(index) {
+            this.form.components.splice(index, 1);
+        },
         openModal(item = null) {
             this.editing = item;
             this.form = item
@@ -161,6 +268,8 @@ export default {
                     currency: item.currency,
                     reorder_point: item.reorder_point,
                     is_active: item.is_active,
+                    is_kit: item.is_kit,
+                    components: this.prepareComponents(item.components ?? []),
                 }
                 : this.resetForm();
             this.showModal = true;
@@ -169,6 +278,8 @@ export default {
             this.showModal = false;
             this.editing = null;
             this.form = this.resetForm();
+            this.kitComponentSelection = null;
+            this.kitComponentQuantity = 1;
         },
         resetForm() {
             return {
@@ -180,6 +291,8 @@ export default {
                 currency: 'XAF',
                 reorder_point: 0,
                 is_active: true,
+                is_kit: false,
+                components: [],
             };
         },
         async submitForm() {
@@ -190,13 +303,23 @@ export default {
             this.submitting = true;
 
             try {
+                const payload = {
+                    ...this.form,
+                    components: this.form.is_kit
+                        ? this.form.components.map((component) => ({
+                            stock_item_id: component.stock_item_id,
+                            quantity: component.quantity,
+                        }))
+                        : [],
+                };
+
                 if (this.editing) {
-                    await router.put(`/settings/resources/stock-items/${this.editing.id}`, this.form, {
+                    await router.put(`/settings/resources/stock-items/${this.editing.id}`, payload, {
                         preserveState: true,
                         onSuccess: () => this.closeModal(),
                     });
                 } else {
-                    await router.post('/settings/resources/stock-items', this.form, {
+                    await router.post('/settings/resources/stock-items', payload, {
                         preserveState: true,
                         onSuccess: () => this.closeModal(),
                     });

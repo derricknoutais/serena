@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support\Frontdesk;
 
+use App\Models\Folio;
 use App\Models\Guest;
 use App\Models\Hotel;
 use App\Models\Offer;
@@ -79,6 +80,15 @@ class ReservationsIndexData
                 ];
             });
 
+        $guestBalances = Folio::query()
+            ->where('tenant_id', $tenantId)
+            ->when($hotelId, fn ($query) => $query->where('hotel_id', $hotelId))
+            ->whereNotNull('guest_id')
+            ->where('is_main', true)
+            ->selectRaw('guest_id, SUM(balance) as balance')
+            ->groupBy('guest_id')
+            ->pluck('balance', 'guest_id');
+
         $guests = Guest::query()
             ->forTenant($tenantId)
             ->orderBy('last_name')
@@ -88,6 +98,7 @@ class ReservationsIndexData
             ->map(fn (Guest $g) => [
                 'id' => $g->id,
                 'name' => trim($g->first_name.' '.$g->last_name),
+                'balance_due' => (float) ($guestBalances[$g->id] ?? 0),
             ]);
 
         $roomTypes = RoomType::query()

@@ -42,6 +42,8 @@ class FolioController extends Controller
 
     public function storeItem(Request $request, Folio $folio): RedirectResponse
     {
+        Gate::authorize('folios.add_item');
+
         $this->authorizeFolio($request, $folio);
 
         $data = $request->validate($this->chargeValidationRules());

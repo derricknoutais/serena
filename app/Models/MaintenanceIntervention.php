@@ -36,7 +36,10 @@ class MaintenanceIntervention extends Model
         'labor_cost',
         'parts_cost',
         'total_cost',
+        'estimated_subtotal_amount',
+        'estimated_total_amount',
         'currency',
+        'cost_mode',
         'accounting_status',
         'submitted_to_accounting_at',
         'stock_location_id',
@@ -58,6 +61,8 @@ class MaintenanceIntervention extends Model
             'labor_cost' => 'decimal:2',
             'parts_cost' => 'decimal:2',
             'total_cost' => 'decimal:2',
+            'estimated_subtotal_amount' => 'decimal:2',
+            'estimated_total_amount' => 'decimal:2',
         ];
     }
 
@@ -105,21 +110,7 @@ class MaintenanceIntervention extends Model
 
     public function recalcTotalsFromCosts(): void
     {
-        $costs = $this->costs()->get();
-
-        $laborTotal = (float) $costs
-            ->where('cost_type', MaintenanceInterventionCost::TYPE_LABOR)
-            ->sum('total_amount');
-        $partsTotal = (float) $costs
-            ->where('cost_type', MaintenanceInterventionCost::TYPE_PARTS)
-            ->sum('total_amount');
-        $grandTotal = (float) $costs->sum('total_amount');
-
-        $this->labor_cost = $laborTotal;
-        $this->parts_cost = $partsTotal;
-        $this->total_cost = $grandTotal;
-
-        $this->save();
+        app(\App\Services\MaintenanceCostService::class)->recomputeInterventionTotals($this);
     }
 
     protected static function booted(): void

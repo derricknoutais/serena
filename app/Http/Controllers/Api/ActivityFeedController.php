@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Activity;
 use App\Models\Reservation;
 use App\Models\Room;
+use App\Support\ActivityFormatter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -35,7 +36,7 @@ class ActivityFeedController extends Controller
             })
             ->latest('created_at')
             ->limit(50)
-            ->with('causer')
+            ->with(['causer', 'subject'])
             ->get()
             ->map(fn (Activity $activity): array => $this->transformActivity($activity, $timezone));
 
@@ -60,7 +61,7 @@ class ActivityFeedController extends Controller
             })
             ->latest('created_at')
             ->limit(50)
-            ->with('causer')
+            ->with(['causer', 'subject'])
             ->get()
             ->map(fn (Activity $activity): array => $this->transformActivity($activity, $timezone));
 
@@ -108,7 +109,7 @@ class ActivityFeedController extends Controller
         }
 
         $activities = $query
-            ->with('causer')
+            ->with(['causer', 'subject'])
             ->latest('created_at')
             ->paginate(50);
 
@@ -146,11 +147,17 @@ class ActivityFeedController extends Controller
     private function transformActivity(Activity $activity, string $timezone): array
     {
         $createdAt = $activity->created_at?->copy()->setTimezone($timezone);
+        $formatted = ActivityFormatter::format($activity);
 
         return [
             'id' => $activity->id,
             'description' => $activity->description,
             'event' => $activity->event,
+            'action_label_fr' => $formatted['action_label_fr'],
+            'module_label_fr' => $formatted['module_label_fr'],
+            'subject_label' => $formatted['subject_label_fr'],
+            'summary_fr' => $formatted['sentence_fr'],
+            'meta' => $formatted['meta'],
             'created_at' => $createdAt?->format('d/m/Y H:i'),
             'properties' => $activity->properties?->toArray() ?? [],
             'causer' => $activity->causer

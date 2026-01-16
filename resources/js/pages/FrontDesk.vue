@@ -38,7 +38,12 @@
                     :initial-forecast="forecastData"
                     :can-view="canViewForecast"
                 />
-                <OperationsBoard v-else />
+                <OperationsBoard
+                    v-else
+                    :guests="reservationsData.guests"
+                    :offers="reservationsData.offers"
+                    :rooms="reservationsData.rooms"
+                />
             </div>
         </div>
     </AppLayout>
@@ -78,12 +83,12 @@
         },
         data() {
             return {
-                activeTab: 'planning',
+                activeTab: 'operations',
                 tabs: [
+                    { value: 'operations', label: 'Arrivées / Départs' },
                     { value: 'planning', label: 'Planning & Réservations' },
                     { value: 'rooms', label: 'Room Board' },
                     { value: 'forecast', label: 'Prévision' },
-                    { value: 'operations', label: 'Arrivées / Départs' },
                 ],
             };
         },

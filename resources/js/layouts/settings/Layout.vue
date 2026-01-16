@@ -97,6 +97,9 @@ const currentPath = typeof window !== undefined ? window.location.pathname : '';
     ...(permissions.value.stock_locations_manage
         ? [{ title: 'Emplacements', href: '/settings/resources/storage-locations' } satisfies NavItem]
         : []),
+    ...(permissions.value.pos_tables_manage
+        ? [{ title: 'Tables (POS)', href: '/settings/resources/bar-tables' } satisfies NavItem]
+        : []),
     ...(permissions.value.product_categories_view
         ? [{ title: 'Catégories de produits', href: '/settings/resources/product-categories' } satisfies NavItem]
         : []),

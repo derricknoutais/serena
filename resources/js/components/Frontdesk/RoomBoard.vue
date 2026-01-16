@@ -235,23 +235,6 @@
                             </div>
                         </div>
 
-                        <div class="space-y-1 text-xs text-gray-600">
-                            <div>
-                                <span class="font-semibold text-gray-700">Statut inventaire :</span>
-                                <span class="ml-1">{{ selectedRoom.status }}</span>
-                            </div>
-                            <div>
-                                <span class="font-semibold text-gray-700">Statut ménage :</span>
-                                <span class="ml-1">{{ hkStatusLabel(selectedRoom.hk_status) }}</span>
-                            </div>
-                            <div>
-                                <span class="font-semibold text-gray-700">Vente :</span>
-                                <span class="ml-1">
-                                    {{ selectedRoom.is_sellable ? 'Vendable' : 'Bloquée' }}
-                                </span>
-                            </div>
-                        </div>
-
                         <div
                             v-if="selectedRoom.current_reservation"
                             class="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs"
@@ -370,6 +353,96 @@
 
                         </div>
 
+                        <div
+                            v-if="selectedRoom.current_reservation"
+                            class="space-y-2"
+                        >
+                            <h4 class="text-xs font-semibold text-gray-700">
+                                Statut & séjour
+                            </h4>
+
+                            <div class="flex flex-wrap gap-2">
+                                <button
+                                    v-if="selectedRoom.current_reservation.status === 'pending'"
+                                    type="button"
+                                    class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+                                    :disabled="statusSubmitting"
+                                    @click="changeStatus('confirm')"
+                                >
+                                    Confirmer
+                                </button>
+                                <button
+                                    v-if="selectedRoom.current_reservation.status === 'pending'"
+                                    type="button"
+                                    class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
+                                    :disabled="statusSubmitting"
+                                    @click="changeStatus('cancel')"
+                                >
+                                    Annuler
+                                </button>
+                                <button
+                                    v-if="selectedRoom.current_reservation.status === 'confirmed'"
+                                    type="button"
+                                    class="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-green-700 disabled:opacity-60"
+                                    :disabled="statusSubmitting"
+                                    @click="changeStatus('check_in')"
+                                >
+                                    Check-in
+                                </button>
+                                <button
+                                    v-if="selectedRoom.current_reservation.status === 'confirmed'"
+                                    type="button"
+                                    class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
+                                    :disabled="statusSubmitting"
+                                    @click="changeStatus('cancel')"
+                                >
+                                    Annuler
+                                </button>
+                                <button
+                                    v-if="selectedRoom.current_reservation.status === 'confirmed'"
+                                    type="button"
+                                    class="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-amber-700 disabled:opacity-60"
+                                    :disabled="statusSubmitting"
+                                    @click="changeStatus('no_show')"
+                                >
+                                    No-show
+                                </button>
+                                <button
+                                    v-if="selectedRoom.current_reservation.status === 'in_house'"
+                                    type="button"
+                                    class="rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-gray-900 disabled:opacity-60"
+                                    :disabled="statusSubmitting"
+                                    @click="changeStatus('check_out')"
+                                >
+                                    Check-out
+                                </button>
+                                <button
+                                    v-if="canExtendStayAction"
+                                    type="button"
+                                    class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                                    @click="openStayModal('extend')"
+                                >
+                                    Prolonger
+                                </button>
+                                <button
+                                    v-if="canShortenStayAction"
+                                    type="button"
+                                    class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                                    @click="openStayModal('shorten')"
+                                >
+                                    Raccourcir
+                                </button>
+                                <button
+                                    v-if="canChangeRoomAction"
+                                    type="button"
+                                    class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                                    @click="openChangeRoomModal"
+                                >
+                                    Changer de chambre
+                                </button>
+                            </div>
+                        </div>
+
                         <div class="rounded-lg border border-gray-100 bg-gray-50/60 p-3">
                             <div class="flex items-center justify-between">
                                 <h4 class="text-xs font-semibold text-gray-700">
@@ -465,95 +538,7 @@
                             </div>
                         </div>
 
-                        <div
-                            v-if="selectedRoom.current_reservation"
-                            class="space-y-2"
-                        >
-                            <h4 class="text-xs font-semibold text-gray-700">
-                                Statut & séjour
-                            </h4>
 
-                            <div class="flex flex-wrap gap-2">
-                                <button
-                                    v-if="selectedRoom.current_reservation.status === 'pending'"
-                                    type="button"
-                                    class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
-                                    :disabled="statusSubmitting"
-                                    @click="changeStatus('confirm')"
-                                >
-                                    Confirmer
-                                </button>
-                                <button
-                                    v-if="selectedRoom.current_reservation.status === 'pending'"
-                                    type="button"
-                                    class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
-                                    :disabled="statusSubmitting"
-                                    @click="changeStatus('cancel')"
-                                >
-                                    Annuler
-                                </button>
-                                <button
-                                    v-if="selectedRoom.current_reservation.status === 'confirmed'"
-                                    type="button"
-                                    class="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-green-700 disabled:opacity-60"
-                                    :disabled="statusSubmitting"
-                                    @click="changeStatus('check_in')"
-                                >
-                                    Check-in
-                                </button>
-                                <button
-                                    v-if="selectedRoom.current_reservation.status === 'confirmed'"
-                                    type="button"
-                                    class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
-                                    :disabled="statusSubmitting"
-                                    @click="changeStatus('cancel')"
-                                >
-                                    Annuler
-                                </button>
-                                <button
-                                    v-if="selectedRoom.current_reservation.status === 'confirmed'"
-                                    type="button"
-                                    class="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-amber-700 disabled:opacity-60"
-                                    :disabled="statusSubmitting"
-                                    @click="changeStatus('no_show')"
-                                >
-                                    No-show
-                                </button>
-                                <button
-                                    v-if="selectedRoom.current_reservation.status === 'in_house'"
-                                    type="button"
-                                    class="rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-gray-900 disabled:opacity-60"
-                                    :disabled="statusSubmitting"
-                                    @click="changeStatus('check_out')"
-                                >
-                                    Check-out
-                                </button>
-                                <button
-                                    v-if="canExtendStayAction"
-                                    type="button"
-                                    class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                                    @click="openStayModal('extend')"
-                                >
-                                    Prolonger
-                                </button>
-                                <button
-                                    v-if="canShortenStayAction"
-                                    type="button"
-                                    class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                                    @click="openStayModal('shorten')"
-                                >
-                                    Raccourcir
-                                </button>
-                                <button
-                                    v-if="canChangeRoomAction"
-                                    type="button"
-                                    class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                                    @click="openChangeRoomModal"
-                                >
-                                    Changer de chambre
-                                </button>
-                            </div>
-                        </div>
 
                         <div class="mt-3 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
                             <div class="mb-2 flex items-center justify-between">
@@ -1380,6 +1365,7 @@ export default {
             roomActivityLoading: false,
             roomActivity: [],
             statusSubmitting: false,
+            lastWarnedWalkInGuestId: null,
             pendingFeeOverrides: {
                 early: null,
                 late: null,
@@ -1718,11 +1704,13 @@ export default {
 
             if (!newGuest) {
                 this.form.guest_id = null;
+                this.lastWarnedWalkInGuestId = null;
 
                 return;
             }
 
             this.form.guest_id = newGuest.id ?? null;
+            this.warnOutstandingGuestBalance(newGuest);
         },
         selectedWalkInOffer(newOffer) {
             if (!this.form) {
@@ -2666,6 +2654,60 @@ export default {
 
             return `${amount.toFixed(0)} XAF`;
         },
+        formatBalanceAmount(value, currency = 'XAF') {
+            const amount = Number(value || 0);
+            const cur = currency || 'XAF';
+
+            return `${amount.toFixed(0)} ${cur}`;
+        },
+        async confirmCheckoutWithBalance(reservationId) {
+            try {
+                const http = window.axios ?? axios;
+                const response = await http.get(`/reservations/${reservationId}/folio`);
+                const balance = Number(response.data?.folio?.balance ?? 0);
+                const currency = response.data?.folio?.currency ?? 'XAF';
+
+                if (balance <= 0.01) {
+                    return true;
+                }
+
+                const confirmation = await Swal.fire({
+                    icon: 'warning',
+                    title: 'Solde non réglé',
+                    text: `Le solde restant est de ${this.formatBalanceAmount(balance, currency)}. Confirmer le check-out ?`,
+                    showCancelButton: true,
+                    confirmButtonText: 'Confirmer',
+                    cancelButtonText: 'Annuler',
+                });
+
+                return confirmation.isConfirmed;
+            } catch {
+                return true;
+            }
+        },
+        warnOutstandingGuestBalance(guest) {
+            if (!guest || !guest.id) {
+                return;
+            }
+
+            const balance = Number(guest.balance_due ?? 0);
+
+            if (balance <= 0.01) {
+                return;
+            }
+
+            if (this.lastWarnedWalkInGuestId === guest.id) {
+                return;
+            }
+
+            this.lastWarnedWalkInGuestId = guest.id;
+
+            Swal.fire({
+                icon: 'warning',
+                title: 'Solde en attente',
+                text: `Ce client a un solde non réglé de ${this.formatAmount(balance)}.`,
+            });
+        },
         formatDateTime(value) {
             if (!value) {
                 return '';
@@ -3076,7 +3118,7 @@ export default {
                     return `Ménage: ${label}`;
                 }
                 default:
-                    return entry.description || 'Action';
+                    return entry.action_label_fr || entry.description || 'Action';
             }
         },
         reloadRoomBoard(extra = {}) {
@@ -3496,6 +3538,13 @@ export default {
             }
 
             if (['check_in', 'check_out'].includes(action)) {
+                if (action === 'check_out') {
+                    const confirmed = await this.confirmCheckoutWithBalance(reservation.id);
+                    if (!confirmed) {
+                        return;
+                    }
+                }
+
                 await this.promptActualDateTime(action, reservation.id);
 
                 return;

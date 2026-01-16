@@ -32,7 +32,12 @@
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-serena-border text-serena-text-main">
-                            <tr v-for="purchase in purchases" :key="purchase.id">
+                            <tr
+                                v-for="purchase in purchases"
+                                :key="purchase.id"
+                                class="cursor-pointer transition hover:bg-serena-bg-soft/60"
+                                @click="goToPurchase(purchase)"
+                            >
                                 <td class="px-4 py-3 font-semibold">{{ purchase.reference_no || `#${purchase.id}` }}</td>
                                 <td class="px-4 py-3">{{ purchase.storage_location?.name ?? '—' }}</td>
                                 <td class="px-4 py-3">{{ purchase.supplier_name ?? '—' }}</td>
@@ -85,6 +90,9 @@ export default {
         },
     },
     methods: {
+        goToPurchase(purchase) {
+            this.$inertia.visit(`/stock/purchases/${purchase.id}`);
+        },
         formatAmount(value, currency = 'XAF') {
             const amount = Number(value || 0);
             return `${amount.toFixed(0)} ${currency}`;

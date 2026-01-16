@@ -382,7 +382,7 @@
                                 <p>
                                     Total :
                                     <span class="font-semibold text-serena-text-main">
-                                        {{ formatAmount(intervention.total_cost, intervention.currency) }}
+                                        {{ formatAmount(intervention.estimated_total_amount ?? intervention.total_cost, intervention.currency) }}
                                     </span>
                                 </p>
                                 <p v-if="intervention.started_at">
@@ -457,7 +457,7 @@
                                         </span>
                                     </td>
                                     <td class="px-4 py-3 text-xs">
-                                        {{ formatAmount(intervention.total_cost, intervention.currency) }}
+                                        {{ formatAmount(intervention.estimated_total_amount ?? intervention.total_cost, intervention.currency) }}
                                     </td>
                                     <td class="px-4 py-3 text-right">
                                         <div class="flex justify-end gap-2">
@@ -837,11 +837,16 @@
 
                     <section class="space-y-4">
                         <div class="flex items-center justify-between">
-                            <h4 class="text-xs font-semibold uppercase tracking-wide text-serena-text-muted">
-                                Coûts
-                            </h4>
+                            <div>
+                                <h4 class="text-xs font-semibold uppercase tracking-wide text-serena-text-muted">
+                                    Coûts (estimés)
+                                </h4>
+                                <p class="text-[11px] text-serena-text-muted">
+                                    Info interne : aucune incidence sur la caisse ou les paiements.
+                                </p>
+                            </div>
                             <button
-                                v-if="canManageCostLines && !isInterventionLocked"
+                                v-if="canEditCostLines && !isInterventionLocked"
                                 type="button"
                                 class="rounded-lg border border-serena-border bg-white px-3 py-1 text-xs font-semibold text-serena-text-main hover:bg-serena-bg-soft"
                                 @click="openCostLineModal"
@@ -850,8 +855,12 @@
                             </button>
                         </div>
 
-                        <div v-if="!interventionCosts.length" class="rounded-xl border border-dashed border-serena-border bg-serena-bg-soft/40 p-4 text-center text-xs text-serena-text-muted">
-                            Aucun coût ajouté pour le moment.
+                        <div v-if="!canViewCostLines" class="rounded-xl border border-dashed border-serena-border bg-serena-bg-soft/40 p-4 text-center text-xs text-serena-text-muted">
+                            Vous n’avez pas accès aux coûts estimés.
+                        </div>
+
+                        <div v-else-if="!interventionCosts.length" class="rounded-xl border border-dashed border-serena-border bg-serena-bg-soft/40 p-4 text-center text-xs text-serena-text-muted">
+                            Aucun coût estimé ajouté pour le moment.
                         </div>
 
                         <div v-else class="overflow-x-auto rounded-xl border border-serena-border">
@@ -861,8 +870,8 @@
                                         <th class="px-3 py-2">Type</th>
                                         <th class="px-3 py-2">Libellé</th>
                                         <th class="px-3 py-2 text-right">Qté</th>
-                                        <th class="px-3 py-2 text-right">PU</th>
-                                        <th class="px-3 py-2 text-right">Total</th>
+                                        <th class="px-3 py-2 text-right">PU estimé</th>
+                                        <th class="px-3 py-2 text-right">Total estimé</th>
                                         <th class="px-3 py-2 text-right">Actions</th>
                                     </tr>
                                 </thead>
@@ -872,7 +881,15 @@
                                             {{ costTypeLabel(line.cost_type) }}
                                         </td>
                                         <td class="px-3 py-2">
-                                            {{ line.label }}
+                                            <div class="flex flex-col gap-1">
+                                                <span>{{ line.label }}</span>
+                                                <span
+                                                    v-if="line.source === 'stock'"
+                                                    class="inline-flex w-fit items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700"
+                                                >
+                                                    Stock (estimé)
+                                                </span>
+                                            </div>
                                         </td>
                                         <td class="px-3 py-2 text-right">
                                             {{ formatQuantity(line.quantity) }}
@@ -886,7 +903,7 @@
                                         <td class="px-3 py-2 text-right">
                                             <div class="flex justify-end gap-2">
                                                 <button
-                                                    v-if="canManageCostLines && !isInterventionLocked"
+                                                    v-if="canEditCostLines && !isInterventionLocked && line.source !== 'stock'"
                                                     type="button"
                                                     class="text-xs font-semibold text-serena-primary hover:text-serena-primary-dark"
                                                     @click="openCostLineModal(line)"
@@ -894,7 +911,7 @@
                                                     Modifier
                                                 </button>
                                                 <button
-                                                    v-if="canManageCostLines && !isInterventionLocked"
+                                                    v-if="canEditCostLines && !isInterventionLocked && line.source !== 'stock'"
                                                     type="button"
                                                     class="text-xs font-semibold text-rose-600 hover:text-rose-700"
                                                     @click="deleteCostLine(line)"
@@ -909,7 +926,7 @@
                         </div>
 
                         <div class="flex justify-end text-sm font-semibold text-serena-text-main">
-                            Total : {{ formatAmount(interventionComputedTotal, interventionForm.currency) }}
+                            Total estimé : {{ formatAmount(interventionComputedTotal, interventionForm.currency) }}
                         </div>
                     </section>
                 </div>
@@ -1046,7 +1063,7 @@
                         </div>
                         <div>
                             <label class="text-xs font-semibold text-serena-text-muted">
-                                Prix unitaire
+                                Prix unitaire estimé
                             </label>
                             <input
                                 v-model.number="costLineForm.unit_price"
@@ -1270,8 +1287,16 @@ export default {
         canMarkPaidIntervention() {
             return this.permissionFlags.maintenance_interventions_mark_paid ?? false;
         },
-        canManageCostLines() {
-            return this.permissionFlags.maintenance_interventions_costs_manage ?? false;
+        canViewCostLines() {
+            return this.permissionFlags.maintenance_costs_view
+                || this.permissionFlags.maintenance_costs_edit
+                || this.permissionFlags.maintenance_interventions_costs_manage
+                || false;
+        },
+        canEditCostLines() {
+            return this.permissionFlags.maintenance_costs_edit
+                || this.permissionFlags.maintenance_interventions_costs_manage
+                || false;
         },
         canEditIntervention() {
             if (!this.interventionForm.id) {
@@ -1325,7 +1350,7 @@ export default {
                 return this.interventionCosts.reduce((sum, line) => sum + Number(line.total_amount || 0), 0);
             }
 
-            return Number(this.interventionForm.total_cost || 0);
+            return Number(this.interventionForm.estimated_total_amount || this.interventionForm.total_cost || 0);
         },
         costLineTotalPreview() {
             const quantity = Number(this.costLineForm.quantity || 0);
@@ -1400,6 +1425,7 @@ export default {
                 accounting_status: 'draft',
                 currency: this.defaultCurrency(),
                 total_cost: 0,
+                estimated_total_amount: 0,
             };
         },
         blankCostLineForm() {
@@ -1814,6 +1840,7 @@ export default {
                 accounting_status: intervention.accounting_status ?? 'draft',
                 currency: intervention.currency ?? this.defaultCurrency(),
                 total_cost: intervention.total_cost ?? 0,
+                estimated_total_amount: intervention.estimated_total_amount ?? intervention.total_cost ?? 0,
             };
 
             this.interventionCosts = Array.isArray(intervention.costs) ? intervention.costs : [];
@@ -2098,7 +2125,7 @@ export default {
                 return;
             }
 
-            if (!this.canManageCostLines) {
+            if (!this.canEditCostLines) {
                 this.showUnauthorizedAlert();
 
                 return;

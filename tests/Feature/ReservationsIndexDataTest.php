@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Folio;
 use App\Models\Guest;
 use App\Models\Hotel;
 use App\Models\Reservation;
@@ -104,4 +105,57 @@ it('returns consistent date strings for planner events', function (): void {
     expect($event['check_in_date'])->toBe('2024-05-01T15:00:00');
     expect($event['check_out_date'])->toBe('2024-05-05T11:00:00');
     expect($event['actual_check_in_at'])->toBe('2024-05-01T16:30:00');
+});
+
+it('includes guest balance due in planner data', function (): void {
+    $user = User::factory()->create();
+    $tenantId = $user->tenant_id;
+
+    $hotel = Hotel::query()->create([
+        'tenant_id' => $tenantId,
+        'name' => 'Hotel Balance',
+        'code' => 'HTB',
+        'currency' => 'XAF',
+        'timezone' => 'Africa/Douala',
+        'address' => '2 Test St',
+        'city' => 'Douala',
+        'country' => 'CM',
+        'check_in_time' => '14:00',
+        'check_out_time' => '11:00',
+    ]);
+
+    $user->forceFill(['active_hotel_id' => $hotel->id])->save();
+
+    $guest = Guest::query()->create([
+        'tenant_id' => $tenantId,
+        'first_name' => 'Balance',
+        'last_name' => 'Guest',
+        'email' => 'balance@example.com',
+        'phone' => null,
+    ]);
+
+    $folio = Folio::query()->create([
+        'tenant_id' => $tenantId,
+        'hotel_id' => $hotel->id,
+        'reservation_id' => null,
+        'guest_id' => $guest->id,
+        'code' => 'FOL-BAL',
+        'status' => 'open',
+        'is_main' => true,
+        'type' => 'stay',
+        'origin' => 'manual',
+        'currency' => 'XAF',
+        'billing_name' => $guest->full_name,
+        'opened_at' => now(),
+    ]);
+    $folio->forceFill(['balance' => 12500])->save();
+
+    $request = Request::create('/frontdesk/reservations', 'GET');
+    $request->setUserResolver(static fn () => $user);
+
+    $data = ReservationsIndexData::build($request);
+    $guestEntry = collect($data['guests'])->firstWhere('id', $guest->id);
+
+    expect($guestEntry)->not->toBeNull()
+        ->and($guestEntry['balance_due'])->toBe(12500.0);
 });

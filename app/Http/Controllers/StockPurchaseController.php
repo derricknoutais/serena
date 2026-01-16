@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreStockPurchaseRequest;
+use App\Http\Requests\UpdateStockPurchaseRequest;
 use App\Models\Hotel;
 use App\Models\StockItem;
 use App\Models\StockPurchase;
@@ -13,6 +14,7 @@ use App\Services\InventoryService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -140,6 +142,105 @@ class StockPurchaseController extends Controller
 
         return Inertia::render('Stock/Purchases/Show', [
             'purchase' => $this->purchasePayload($stockPurchase),
+            'permissions' => [
+                'can_update_purchase' => $user?->can('stock.purchases.update') ?? false,
+            ],
+        ]);
+    }
+
+    public function edit(Request $request, StockPurchase $stockPurchase): Response
+    {
+        $this->authorize('stock.purchases.update');
+
+        /** @var User $user */
+        $user = $request->user();
+        $this->assertTenantHotel($user, $stockPurchase);
+
+        if ($stockPurchase->status !== StockPurchase::STATUS_DRAFT) {
+            abort(403, 'Le bon d’achat est déjà réceptionné.');
+        }
+
+        $storageLocations = StorageLocation::query()
+            ->where('tenant_id', $user->tenant_id)
+            ->where('hotel_id', $stockPurchase->hotel_id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $stockItems = StockItem::query()
+            ->select(['id', 'name', 'sku', 'unit', 'default_purchase_price', 'currency'])
+            ->where('tenant_id', $user->tenant_id)
+            ->where('hotel_id', $stockPurchase->hotel_id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+
+        $stockPurchase->load('storageLocation', 'lines.stockItem');
+
+        return Inertia::render('Stock/Purchases/Edit', [
+            'purchase' => $this->purchasePayload($stockPurchase),
+            'storageLocations' => $storageLocations,
+            'stockItems' => $stockItems,
+        ]);
+    }
+
+    public function update(UpdateStockPurchaseRequest $request, StockPurchase $stockPurchase): JsonResponse
+    {
+        $this->authorize('stock.purchases.update');
+
+        /** @var User $user */
+        $user = $request->user();
+        $this->assertTenantHotel($user, $stockPurchase);
+
+        if ($stockPurchase->status !== StockPurchase::STATUS_DRAFT) {
+            abort(409, 'Le bon d’achat est déjà réceptionné.');
+        }
+
+        $data = $request->validated();
+        $currency = $data['currency'] ?? $stockPurchase->currency ?? 'XAF';
+
+        DB::transaction(function () use ($data, $stockPurchase, $currency, $user): void {
+            $stockPurchase->forceFill([
+                'storage_location_id' => $data['storage_location_id'],
+                'reference_no' => $data['reference_no'] ?? null,
+                'supplier_name' => $data['supplier_name'] ?? null,
+                'purchased_at' => $data['purchased_at'] ?? null,
+                'currency' => $currency,
+            ])->save();
+
+            $stockPurchase->lines()->delete();
+
+            $lines = [];
+            $subtotal = 0;
+
+            foreach ($data['lines'] as $line) {
+                $lineCurrency = $line['currency'] ?? $currency;
+                $total = (float) $line['quantity'] * (float) $line['unit_cost'];
+                $subtotal += $total;
+
+                $lines[] = [
+                    'tenant_id' => $user->tenant_id,
+                    'hotel_id' => $stockPurchase->hotel_id,
+                    'stock_purchase_id' => $stockPurchase->id,
+                    'stock_item_id' => $line['stock_item_id'],
+                    'quantity' => $line['quantity'],
+                    'unit_cost' => $line['unit_cost'],
+                    'total_cost' => $total,
+                    'currency' => $lineCurrency,
+                    'notes' => $line['notes'] ?? null,
+                ];
+            }
+
+            StockPurchaseLine::query()->insert($lines);
+
+            $stockPurchase->forceFill([
+                'subtotal_amount' => $subtotal,
+                'total_amount' => $subtotal,
+            ])->save();
+        });
+
+        return response()->json([
+            'purchase' => $stockPurchase->load('lines.stockItem', 'storageLocation'),
         ]);
     }
 

@@ -5,12 +5,14 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Config\Concerns\ResolvesActiveHotel;
 use App\Http\Requests\StoreCounterSaleRequest;
 use App\Http\Requests\StoreRoomSaleRequest;
+use App\Models\BarOrder;
 use App\Models\Folio;
 use App\Models\Hotel;
 use App\Models\PaymentMethod;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Reservation;
+use App\Models\User;
 use App\Services\FolioBillingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -189,6 +191,8 @@ class PosController extends Controller
                 'cash_session_id' => $cashSessionId,
             ]);
 
+            $this->closeBarOrder($data['bar_order_id'] ?? null, $user, $hotel);
+
             return $folio;
         });
 
@@ -219,7 +223,7 @@ class PosController extends Controller
         $lines = $this->normalizeItems($data['items'], $products);
         $addedTotal = collect($lines)->sum(fn (array $line) => $line['total_amount']);
 
-        $folio = DB::transaction(function () use ($reservation, $lines) {
+        $folio = DB::transaction(function () use ($reservation, $lines, $data, $hotel, $user) {
             $folio = $this->folioBilling->ensureMainFolioForReservation($reservation);
 
             foreach ($lines as $line) {
@@ -238,6 +242,8 @@ class PosController extends Controller
                     'date' => now()->toDateString(),
                 ]);
             }
+
+            $this->closeBarOrder($data['bar_order_id'] ?? null, $user, $hotel);
 
             return $folio;
         });
@@ -326,6 +332,32 @@ class PosController extends Controller
     private function generateFolioCode(): string
     {
         return sprintf('POS-%s', Str::upper(Str::random(8)));
+    }
+
+    private function closeBarOrder(?int $barOrderId, User $user, Hotel $hotel): void
+    {
+        if (! $barOrderId) {
+            return;
+        }
+
+        $order = BarOrder::query()
+            ->where('tenant_id', $user->tenant_id)
+            ->where('hotel_id', $hotel->id)
+            ->lockForUpdate()
+            ->find($barOrderId);
+
+        if (! $order) {
+            return;
+        }
+
+        if (! in_array($order->status, [BarOrder::STATUS_DRAFT, BarOrder::STATUS_OPEN], true)) {
+            return;
+        }
+
+        $order->update([
+            'status' => BarOrder::STATUS_PAID,
+            'closed_at' => now(),
+        ]);
     }
 
     private function requireActiveHotel(Request $request): Hotel

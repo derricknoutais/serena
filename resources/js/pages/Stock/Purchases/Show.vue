@@ -6,12 +6,21 @@
                     <h1 class="text-2xl font-semibold text-serena-text-main">Bon d'achat</h1>
                     <p class="text-sm text-serena-text-muted">{{ purchase.reference_no ? `Réf. ${purchase.reference_no}` : `#${purchase.id}` }}</p>
                 </div>
-                <Link
-                    href="/stock/purchases"
-                    class="text-xs font-semibold uppercase tracking-wide text-serena-primary hover:underline"
-                >
-                    ← Retour aux bons
-                </Link>
+                <div class="flex items-center gap-2">
+                    <Link
+                        href="/stock/purchases"
+                        class="text-xs font-semibold uppercase tracking-wide text-serena-primary hover:underline"
+                    >
+                        ← Retour aux bons
+                    </Link>
+                    <Link
+                        v-if="permissions.can_update_purchase && purchase.status === 'draft'"
+                        :href="`/stock/purchases/${purchase.id}/edit`"
+                        class="rounded-full bg-serena-primary px-4 py-2 text-xs font-semibold text-white transition hover:bg-serena-primary-dark"
+                    >
+                        Modifier
+                    </Link>
+                </div>
             </div>
 
             <article class="rounded-2xl border border-serena-border bg-white p-6 shadow-sm">
@@ -89,6 +98,12 @@ export default {
         purchase: {
             type: Object,
             required: true,
+        },
+        permissions: {
+            type: Object,
+            default: () => ({
+                can_update_purchase: false,
+            }),
         },
     },
     methods: {

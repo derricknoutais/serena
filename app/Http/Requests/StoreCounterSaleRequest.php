@@ -57,6 +57,17 @@ class StoreCounterSaleRequest extends FormRequest
                     }),
             ],
             'client_label' => ['nullable', 'string', 'max:255'],
+            'bar_order_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('bar_orders', 'id')
+                    ->where('tenant_id', $tenantId)
+                    ->where(function ($query) use ($hotelId): void {
+                        if ($hotelId !== null) {
+                            $query->where('hotel_id', $hotelId);
+                        }
+                    }),
+            ],
         ];
     }
 }

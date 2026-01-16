@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Frontdesk;
 
 use App\Http\Controllers\Controller;
+use App\Models\Folio;
 use App\Models\Guest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -70,6 +71,7 @@ class GuestController extends Controller
                     'phone' => $guest->phone,
                     'full_name' => $guest->full_name ?? trim(($guest->last_name ?? '').' '.($guest->first_name ?? '')),
                     'name' => $guest->full_name ?? trim(($guest->last_name ?? '').' '.($guest->first_name ?? '')),
+                    'balance_due' => 0,
                 ],
             ]);
         }
@@ -168,6 +170,7 @@ class GuestController extends Controller
     public function search(Request $request): JsonResponse
     {
         $tenantId = $request->user()->tenant_id;
+        $hotelId = $request->user()->active_hotel_id ?? $request->session()->get('active_hotel_id');
         $term = $request->string('search')->toString();
 
         $results = Guest::forTenant($tenantId)
@@ -183,6 +186,28 @@ class GuestController extends Controller
                 'phone',
             ]);
 
-        return response()->json($results);
+        $balances = Folio::query()
+            ->where('tenant_id', $tenantId)
+            ->when($hotelId, fn ($query) => $query->where('hotel_id', $hotelId))
+            ->whereNotNull('guest_id')
+            ->where('is_main', true)
+            ->whereIn('guest_id', $results->pluck('id'))
+            ->selectRaw('guest_id, SUM(balance) as balance')
+            ->groupBy('guest_id')
+            ->pluck('balance', 'guest_id');
+
+        $payload = $results->map(function (Guest $guest) use ($balances): array {
+            return [
+                'id' => $guest->id,
+                'first_name' => $guest->first_name,
+                'last_name' => $guest->last_name,
+                'email' => $guest->email,
+                'phone' => $guest->phone,
+                'full_name' => $guest->full_name ?? trim(($guest->last_name ?? '').' '.($guest->first_name ?? '')),
+                'balance_due' => (float) ($balances[$guest->id] ?? 0),
+            ];
+        });
+
+        return response()->json($payload);
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support\Frontdesk;
 
+use App\Models\Folio;
 use App\Models\Guest;
 use App\Models\HousekeepingTask;
 use App\Models\HousekeepingTaskChecklistItem;
@@ -359,19 +360,29 @@ class RoomBoardData
             ];
         }
 
+        $guestBalances = Folio::query()
+            ->where('tenant_id', $tenantId)
+            ->where('hotel_id', $hotelId)
+            ->whereNotNull('guest_id')
+            ->where('is_main', true)
+            ->selectRaw('guest_id, SUM(balance) as balance')
+            ->groupBy('guest_id')
+            ->pluck('balance', 'guest_id');
+
         $guests = Guest::query()
             ->forTenant($tenantId)
             ->orderBy('last_name')
             ->orderBy('first_name')
             ->limit(200)
             ->get(['id', 'first_name', 'last_name', 'phone'])
-            ->map(static function (Guest $guest): array {
+            ->map(function (Guest $guest) use ($guestBalances): array {
                 return [
                     'id' => $guest->id,
                     'first_name' => $guest->first_name,
                     'last_name' => $guest->last_name,
                     'phone' => $guest->phone,
                     'full_name' => trim(($guest->last_name ?? '').' '.($guest->first_name ?? '')),
+                    'balance_due' => (float) ($guestBalances[$guest->id] ?? 0),
                 ];
             });
 

@@ -155,13 +155,21 @@
 
             <section class="rounded-2xl border border-serena-border bg-white p-5 shadow-sm">
                 <div class="flex items-center justify-between">
-                    <h2 class="text-lg font-semibold text-serena-text-main">Coût total</h2>
+                    <div>
+                        <h2 class="text-lg font-semibold text-serena-text-main">Coûts (estimés)</h2>
+                        <p class="text-xs text-serena-text-muted">
+                            Info interne : ces montants n’impactent ni la caisse ni les paiements.
+                        </p>
+                    </div>
                     <p class="text-sm font-semibold text-serena-text-main">
-                        {{ formatAmount(intervention.total_cost, intervention.currency) }}
+                        {{ formatAmount(intervention.estimated_total_amount ?? intervention.total_cost, intervention.currency) }}
                     </p>
                 </div>
-            <div v-if="!intervention.costs.length" class="mt-3 text-sm text-serena-text-muted">
-                Aucune ligne de coût ajoutée.
+            <div v-if="!permissions.can_view_costs" class="mt-3 text-sm text-serena-text-muted">
+                Vous n’avez pas accès aux coûts estimés.
+            </div>
+            <div v-else-if="!intervention.costs.length" class="mt-3 text-sm text-serena-text-muted">
+                Aucune ligne de coût estimé ajoutée.
             </div>
             <div v-else class="mt-4 overflow-x-auto rounded-xl border border-serena-border">
                 <table class="min-w-full divide-y divide-serena-border text-xs">
@@ -170,20 +178,31 @@
                             <th class="px-3 py-2">Type</th>
                             <th class="px-3 py-2">Libellé</th>
                             <th class="px-3 py-2 text-right">Qté</th>
-                            <th class="px-3 py-2 text-right">PU</th>
-                            <th class="px-3 py-2 text-right">Total</th>
+                            <th class="px-3 py-2 text-right">PU estimé</th>
+                            <th class="px-3 py-2 text-right">Total estimé</th>
                             <th class="px-3 py-2 text-right"></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-serena-border/60 text-serena-text-main">
                         <tr v-for="line in intervention.costs" :key="line.id">
                             <td class="px-3 py-2">{{ costTypeLabel(line.cost_type) }}</td>
-                            <td class="px-3 py-2">{{ line.label }}</td>
+                            <td class="px-3 py-2">
+                                <div class="flex flex-col gap-1">
+                                    <span>{{ line.label }}</span>
+                                    <span
+                                        v-if="line.source === 'stock'"
+                                        class="inline-flex w-fit items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700"
+                                    >
+                                        Stock (estimé)
+                                    </span>
+                                </div>
+                            </td>
                             <td class="px-3 py-2 text-right">{{ formatQuantity(line.quantity) }}</td>
                             <td class="px-3 py-2 text-right">{{ formatAmount(line.unit_price, line.currency) }}</td>
                             <td class="px-3 py-2 text-right">{{ formatAmount(line.total_amount, line.currency) }}</td>
                             <td class="px-3 py-2 text-right">
                                 <button
+                                    v-if="permissions.can_edit_costs && line.source !== 'stock'"
                                     type="button"
                                     class="text-[11px] font-semibold text-serena-primary transition hover:text-serena-primary-dark"
                                     @click="openCostLine(line)"
@@ -191,6 +210,7 @@
                                     Modifier
                                 </button>
                                 <button
+                                    v-if="permissions.can_edit_costs && line.source !== 'stock'"
                                     type="button"
                                     class="ml-2 text-[11px] font-semibold text-rose-600 transition hover:text-rose-700"
                                     @click="confirmDeleteCostLine(line)"
@@ -202,10 +222,10 @@
                     </tbody>
                 </table>
             </div>
-            <div class="mt-6 rounded-2xl border border-serena-border bg-white p-5 shadow-sm">
+            <div v-if="permissions.can_edit_costs" class="mt-6 rounded-2xl border border-serena-border bg-white p-5 shadow-sm">
                 <div class="flex items-center justify-between">
                     <h2 class="text-lg font-semibold text-serena-text-main">
-                        {{ editingCostLineId ? 'Modifier une ligne de coût' : 'Nouvelle ligne de coût' }}
+                        {{ editingCostLineId ? 'Modifier une ligne de coût estimé' : 'Nouvelle ligne de coût estimé' }}
                     </h2>
                     <p class="text-sm font-semibold text-serena-text-main">
                         {{ formatAmount(costFormTotal, intervention.currency) }}
@@ -239,7 +259,7 @@
                         type="number"
                         min="0"
                         step="0.01"
-                        placeholder="Prix unitaire"
+                        placeholder="Prix unitaire estimé"
                         class="rounded-xl border border-serena-border bg-white px-3 py-2 text-sm focus:border-serena-primary focus:outline-none focus:ring-2 focus:ring-serena-primary-soft"
                     />
                     <textarea
@@ -269,15 +289,18 @@
                     </button>
                 </div>
             </div>
+            <div v-else class="mt-4 rounded-xl border border-dashed border-serena-border bg-serena-bg-soft/50 p-4 text-xs text-serena-text-muted">
+                Vous n’avez pas les droits pour modifier les coûts estimés.
+            </div>
         </section>
         <section class="rounded-2xl border border-serena-border bg-white p-5 shadow-sm">
             <div class="flex items-center justify-between">
                 <h2 class="text-lg font-semibold text-serena-text-main">
-                    Pièces / Équipements utilisés
+                    Pièces / Équipements utilisés (estimé)
                 </h2>
                 <div class="text-sm text-right">
                     <p class="font-semibold">
-                        Coût pièces :
+                        Coût pièces (estimé) :
                         <span class="text-serena-text-main">
                             {{ formatAmount(intervention.stock_consumption_total, intervention.currency) }}
                         </span>
@@ -289,6 +312,9 @@
                     </p>
                 </div>
             </div>
+            <p class="mt-2 text-xs text-serena-text-muted">
+                Info interne : la consommation de pièces n’entraîne aucun paiement automatique.
+            </p>
             <div class="mt-4 space-y-3">
                 <div v-if="!intervention.items.length" class="text-sm text-serena-text-muted">
                     Aucune pièce consommée pour cette intervention.
@@ -366,7 +392,7 @@
                             type="number"
                             min="0"
                             step="0.01"
-                            placeholder="Prix unitaire (facultatif)"
+                            placeholder="Prix unitaire estimé (facultatif)"
                             class="rounded-xl border border-serena-border bg-white px-3 py-2 text-sm focus:border-serena-primary focus:outline-none focus:ring-2 focus:ring-serena-primary-soft"
                         />
                 </div>
@@ -506,6 +532,8 @@ export default {
                 can_approve: false,
                 can_reject: false,
                 can_mark_paid: false,
+                can_view_costs: false,
+                can_edit_costs: false,
                 can_add_stock_items: false,
                 can_override_negative_stock: false,
                 can_modify_submitted_stock_items: false,

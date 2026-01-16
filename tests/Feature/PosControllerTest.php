@@ -2,6 +2,8 @@
 
 require_once __DIR__.'/FolioTestHelpers.php';
 
+use App\Models\BarOrder;
+use App\Models\BarTable;
 use App\Models\Folio;
 use App\Models\FolioItem;
 use App\Models\Payment;
@@ -163,6 +165,91 @@ it('creates a folio and payment for a counter sale', function (): void {
     $folio = Folio::query()->first();
     expect($folio?->type)->toBe('pos');
     expect($folio?->payments()->value('amount'))->toBe(17600.0);
+});
+
+it('closes the bar order after a counter sale', function (): void {
+    [
+        'tenant' => $tenant,
+        'hotel' => $hotel,
+        'user' => $user,
+    ] = setupReservationEnvironment('pos-counter-close');
+
+    $user->assignRole('receptionist');
+
+    $category = ProductCategory::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Snacks',
+        'description' => null,
+        'is_active' => true,
+    ]);
+
+    $product = Product::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'product_category_id' => $category->id,
+        'name' => 'Jus',
+        'sku' => 'JUS-01',
+        'unit_price' => 2500,
+        'tax_id' => null,
+        'account_code' => '7070',
+        'is_active' => true,
+    ]);
+
+    $method = PaymentMethod::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Carte',
+        'code' => 'CARD',
+        'type' => 'card',
+        'is_active' => true,
+    ]);
+
+    $table = BarTable::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Table 99',
+        'area' => 'Salle',
+        'capacity' => 2,
+        'is_active' => true,
+        'sort_order' => 0,
+    ]);
+
+    $order = BarOrder::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'bar_table_id' => $table->id,
+        'status' => BarOrder::STATUS_OPEN,
+        'opened_at' => now(),
+        'cashier_user_id' => $user->id,
+    ]);
+
+    $payload = [
+        'items' => [
+            [
+                'product_id' => $product->id,
+                'name' => $product->name,
+                'quantity' => 1,
+                'unit_price' => 2500,
+                'tax_amount' => 0,
+                'total_amount' => 2500,
+            ],
+        ],
+        'payment_method_id' => $method->id,
+        'client_label' => 'Table 99',
+        'bar_order_id' => $order->id,
+    ];
+
+    $response = $this->actingAs($user)->postJson(sprintf(
+        'http://%s/pos/sales/counter',
+        tenantDomain($tenant),
+    ), $payload);
+
+    $response->assertCreated()->assertJsonPath('success', true);
+
+    $order->refresh();
+    expect($order->status)->toBe(BarOrder::STATUS_PAID);
+    expect($order->closed_at)->not->toBeNull();
 });
 
 it('adds folio charges for a room sale', function (): void {

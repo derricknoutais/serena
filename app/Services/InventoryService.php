@@ -14,10 +14,16 @@ use App\Models\StockPurchase;
 use App\Models\StockTransfer;
 use App\Models\StorageLocation;
 use App\Models\User;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class InventoryService
 {
+    public function __construct(
+        private KitExpander $kitExpander,
+        private MaintenanceCostService $maintenanceCostService,
+    ) {}
+
     public function consumeForIntervention(
         MaintenanceIntervention $intervention,
         StockItem $item,
@@ -26,25 +32,20 @@ class InventoryService
         ?float $unitCost = null,
         ?User $actor = null,
         bool $allowNegative = false,
-    ): MaintenanceInterventionItem {
-        if ($quantity <= 0) {
-            throw new InventoryException('La quantité doit être supérieure à zéro.');
-        }
-
+    ): Collection {
         $this->ensureScopeConsistency($intervention, $item, $location);
 
-        $unitCost = $unitCost ?? $item->default_purchase_price;
-        $totalCost = $unitCost * $quantity;
+        $overrideUnitCost = $unitCost ?? null;
+        $expandedEntries = $this->kitExpander->expand($item, $quantity, $overrideUnitCost);
 
+        /** @var Collection<int, MaintenanceInterventionItem> $entries */
         return DB::transaction(function () use (
             $intervention,
-            $item,
             $location,
-            $quantity,
-            $unitCost,
-            $totalCost,
+            $expandedEntries,
             $actor,
             $allowNegative,
+            $item,
         ) {
             $movement = StockMovement::create([
                 'tenant_id' => $intervention->tenant_id,
@@ -57,52 +58,67 @@ class InventoryService
                 'created_by_user_id' => $actor?->id,
             ]);
 
-            $movement->lines()->create([
-                'tenant_id' => $movement->tenant_id,
-                'hotel_id' => $movement->hotel_id,
-                'stock_item_id' => $item->id,
-                'quantity' => $quantity,
-                'unit_cost' => $unitCost,
-                'total_cost' => $totalCost,
-                'currency' => $item->currency,
-            ]);
+            $entries = collect();
 
-            $this->adjustStockOnHand(
-                $intervention->tenant_id,
-                $intervention->hotel_id,
-                $location->id,
-                $item->id,
-                -$quantity,
-                $allowNegative,
-            );
+            foreach ($expandedEntries as $entry) {
+                /** @var StockItem $component */
+                $component = $entry['stock_item'];
+                $componentQuantity = (float) $entry['quantity'];
+                $componentUnitCost = (float) $entry['unit_cost'];
+                $componentTotal = $componentQuantity * $componentUnitCost;
 
-            $itemEntry = $intervention->items()->create([
-                'tenant_id' => $intervention->tenant_id,
-                'hotel_id' => $intervention->hotel_id,
-                'stock_item_id' => $item->id,
-                'storage_location_id' => $location->id,
-                'quantity' => $quantity,
-                'unit_cost' => $unitCost,
-                'total_cost' => $totalCost,
-                'notes' => null,
-                'created_by_user_id' => $actor?->id,
-            ]);
+                $movement->lines()->create([
+                    'tenant_id' => $movement->tenant_id,
+                    'hotel_id' => $movement->hotel_id,
+                    'stock_item_id' => $component->id,
+                    'quantity' => $componentQuantity,
+                    'unit_cost' => $componentUnitCost,
+                    'total_cost' => $componentTotal,
+                    'currency' => $component->currency,
+                ]);
 
-            $intervention->costs()->create([
-                'tenant_id' => $intervention->tenant_id,
-                'hotel_id' => $intervention->hotel_id,
-                'maintenance_intervention_id' => $intervention->id,
-                'cost_type' => MaintenanceInterventionCost::TYPE_PARTS,
-                'label' => sprintf('Pièce: %s', $item->name),
-                'quantity' => $quantity,
-                'unit_price' => $unitCost,
-                'currency' => $item->currency,
-                'created_by_user_id' => $actor?->id,
-            ]);
+                $this->adjustStockOnHand(
+                    $intervention->tenant_id,
+                    $intervention->hotel_id,
+                    $location->id,
+                    $component->id,
+                    -$componentQuantity,
+                    $allowNegative,
+                );
 
-            $intervention->recalcTotalsFromCosts();
+                $notes = $item->isKit() ? sprintf('Kit %s', $item->name) : null;
 
-            return $itemEntry;
+                $itemEntry = $intervention->items()->create([
+                    'tenant_id' => $intervention->tenant_id,
+                    'hotel_id' => $intervention->hotel_id,
+                    'stock_item_id' => $component->id,
+                    'storage_location_id' => $location->id,
+                    'quantity' => $componentQuantity,
+                    'unit_cost' => $componentUnitCost,
+                    'total_cost' => $componentTotal,
+                    'notes' => $notes,
+                    'created_by_user_id' => $actor?->id,
+                ]);
+
+                $intervention->costs()->create([
+                    'tenant_id' => $intervention->tenant_id,
+                    'hotel_id' => $intervention->hotel_id,
+                    'maintenance_intervention_id' => $intervention->id,
+                    'cost_type' => MaintenanceInterventionCost::TYPE_PARTS,
+                    'label' => sprintf('Pièce: %s', $component->name),
+                    'quantity' => $componentQuantity,
+                    'unit_price' => $componentUnitCost,
+                    'currency' => $component->currency,
+                    'source' => MaintenanceInterventionCost::SOURCE_STOCK,
+                    'created_by_user_id' => $actor?->id,
+                ]);
+
+                $entries->push($itemEntry);
+            }
+
+            $this->maintenanceCostService->recomputeInterventionTotals($intervention);
+
+            return $entries;
         });
     }
 
@@ -125,23 +141,41 @@ class InventoryService
             ]);
 
             foreach ($purchase->lines as $line) {
-                $movement->lines()->create([
-                    'tenant_id' => $movement->tenant_id,
-                    'hotel_id' => $movement->hotel_id,
-                    'stock_item_id' => $line->stock_item_id,
-                    'quantity' => $line->quantity,
-                    'unit_cost' => $line->unit_cost,
-                    'total_cost' => $line->total_cost,
-                    'currency' => $line->currency,
-                ]);
+                $stockItem = $line->stockItem ?? StockItem::query()->find($line->stock_item_id);
 
-                $this->adjustStockOnHand(
-                    $purchase->tenant_id,
-                    $purchase->hotel_id,
-                    $purchase->storage_location_id,
-                    $line->stock_item_id,
-                    $line->quantity,
+                if (! $stockItem) {
+                    continue;
+                }
+
+                $expanded = $this->kitExpander->expand(
+                    $stockItem,
+                    (float) $line->quantity,
+                    (float) ($line->unit_cost ?? 0),
                 );
+
+                foreach ($expanded as $entry) {
+                    $component = $entry['stock_item'];
+                    $quantity = (float) $entry['quantity'];
+                    $unitCost = (float) $entry['unit_cost'];
+
+                    $movement->lines()->create([
+                        'tenant_id' => $movement->tenant_id,
+                        'hotel_id' => $movement->hotel_id,
+                        'stock_item_id' => $component->id,
+                        'quantity' => $quantity,
+                        'unit_cost' => $unitCost,
+                        'total_cost' => $unitCost * $quantity,
+                        'currency' => $component->currency,
+                    ]);
+
+                    $this->adjustStockOnHand(
+                        $purchase->tenant_id,
+                        $purchase->hotel_id,
+                        $purchase->storage_location_id,
+                        $component->id,
+                        $quantity,
+                    );
+                }
             }
 
             $purchase->forceFill([
@@ -176,31 +210,49 @@ class InventoryService
             ]);
 
             foreach ($transfer->lines as $line) {
-                $movement->lines()->create([
-                    'tenant_id' => $movement->tenant_id,
-                    'hotel_id' => $movement->hotel_id,
-                    'stock_item_id' => $line->stock_item_id,
-                    'quantity' => $line->quantity,
-                    'unit_cost' => $line->unit_cost,
-                    'total_cost' => $line->total_cost,
-                    'currency' => $line->currency,
-                ]);
+                $stockItem = $line->stockItem ?? StockItem::query()->find($line->stock_item_id);
 
-                $this->adjustStockOnHand(
-                    $transfer->tenant_id,
-                    $transfer->hotel_id,
-                    $transfer->from_location_id,
-                    $line->stock_item_id,
-                    -$line->quantity,
+                if (! $stockItem) {
+                    continue;
+                }
+
+                $expanded = $this->kitExpander->expand(
+                    $stockItem,
+                    (float) $line->quantity,
+                    (float) ($line->unit_cost ?? 0),
                 );
 
-                $this->adjustStockOnHand(
-                    $transfer->tenant_id,
-                    $transfer->hotel_id,
-                    $transfer->to_location_id,
-                    $line->stock_item_id,
-                    $line->quantity,
-                );
+                foreach ($expanded as $entry) {
+                    $component = $entry['stock_item'];
+                    $quantity = (float) $entry['quantity'];
+                    $unitCost = (float) $entry['unit_cost'];
+
+                    $movement->lines()->create([
+                        'tenant_id' => $movement->tenant_id,
+                        'hotel_id' => $movement->hotel_id,
+                        'stock_item_id' => $component->id,
+                        'quantity' => $quantity,
+                        'unit_cost' => $unitCost,
+                        'total_cost' => $unitCost * $quantity,
+                        'currency' => $component->currency,
+                    ]);
+
+                    $this->adjustStockOnHand(
+                        $transfer->tenant_id,
+                        $transfer->hotel_id,
+                        $transfer->from_location_id,
+                        $component->id,
+                        -$quantity,
+                    );
+
+                    $this->adjustStockOnHand(
+                        $transfer->tenant_id,
+                        $transfer->hotel_id,
+                        $transfer->to_location_id,
+                        $component->id,
+                        $quantity,
+                    );
+                }
             }
 
             $transfer->forceFill([

@@ -6,9 +6,11 @@ use App\Http\Requests\StoreStockInventoryRequest;
 use App\Models\Hotel;
 use App\Models\StockInventory;
 use App\Models\StockInventoryLine;
+use App\Models\StockItem;
 use App\Models\StockOnHand;
 use App\Models\User;
 use App\Services\InventoryService;
+use App\Services\KitExpander;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,7 +19,10 @@ use Inertia\Response;
 
 class StockInventoryController extends Controller
 {
-    public function __construct(private InventoryService $inventoryService) {}
+    public function __construct(
+        private InventoryService $inventoryService,
+        private KitExpander $kitExpander,
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -64,26 +69,42 @@ class StockInventoryController extends Controller
         ]);
 
         $lines = [];
+        $stockItems = StockItem::query()
+            ->where('tenant_id', $user->tenant_id)
+            ->where('hotel_id', $hotel->id)
+            ->whereIntegerInRaw('id', collect($data['lines'])->pluck('stock_item_id'))
+            ->get()
+            ->keyBy('id');
 
         foreach ($data['lines'] as $line) {
-            $systemQuantity = StockOnHand::query()
-                ->where('tenant_id', $user->tenant_id)
-                ->where('hotel_id', $hotel->id)
-                ->where('storage_location_id', $data['storage_location_id'])
-                ->where('stock_item_id', $line['stock_item_id'])
-                ->value('quantity_on_hand') ?? 0;
+            $stockItem = $stockItems[$line['stock_item_id']] ?? null;
 
-            $variance = (float) $line['counted_quantity'] - (float) $systemQuantity;
+            if (! $stockItem) {
+                continue;
+            }
 
-            $lines[] = [
-                'tenant_id' => $user->tenant_id,
-                'hotel_id' => $hotel->id,
-                'stock_inventory_id' => $inventory->id,
-                'stock_item_id' => $line['stock_item_id'],
-                'counted_quantity' => $line['counted_quantity'],
-                'system_quantity' => $systemQuantity,
-                'variance_quantity' => $variance,
-            ];
+            $expanded = $this->kitExpander->expand($stockItem, (float) $line['counted_quantity']);
+
+            foreach ($expanded as $entry) {
+                $component = $entry['stock_item'];
+                $countedQuantity = (float) $entry['quantity'];
+                $systemQuantity = StockOnHand::query()
+                    ->where('tenant_id', $user->tenant_id)
+                    ->where('hotel_id', $hotel->id)
+                    ->where('storage_location_id', $data['storage_location_id'])
+                    ->where('stock_item_id', $component->id)
+                    ->value('quantity_on_hand') ?? 0;
+
+                $lines[] = [
+                    'tenant_id' => $user->tenant_id,
+                    'hotel_id' => $hotel->id,
+                    'stock_inventory_id' => $inventory->id,
+                    'stock_item_id' => $component->id,
+                    'counted_quantity' => $countedQuantity,
+                    'system_quantity' => $systemQuantity,
+                    'variance_quantity' => $countedQuantity - (float) $systemQuantity,
+                ];
+            }
         }
 
         StockInventoryLine::query()->insert($lines);

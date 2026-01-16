@@ -29,19 +29,16 @@ use Inertia\Inertia;
 
 class MaintenanceInterventionController extends Controller
 {
-    private InventoryService $inventoryService;
-
-    public function __construct(InventoryService $inventoryService)
-    {
-        $this->inventoryService = $inventoryService;
-    }
+    public function __construct(private InventoryService $inventoryService) {}
 
     public function show(Request $request, MaintenanceIntervention $maintenanceIntervention): JsonResponse|\Inertia\Response
     {
         $this->authorize('maintenance.interventions.update');
         $this->assertTenantHotel($request->user(), $maintenanceIntervention);
 
-        $payload = $this->interventionPayload($maintenanceIntervention);
+        /** @var User|null $user */
+        $user = $request->user();
+        $payload = $this->interventionPayload($maintenanceIntervention, $user);
 
         $availableTickets = MaintenanceTicket::query()
             ->where('tenant_id', $maintenanceIntervention->tenant_id)
@@ -99,8 +96,6 @@ class MaintenanceInterventionController extends Controller
             ]);
         }
 
-        $user = $request->user();
-
         return Inertia::render('Maintenance/InterventionDetail', [
             'intervention' => $payload,
             'availableTickets' => $availableTickets,
@@ -113,11 +108,12 @@ class MaintenanceInterventionController extends Controller
                 'can_approve' => $user?->can('maintenance.interventions.approve') ?? false,
                 'can_reject' => $user?->can('maintenance.interventions.reject') ?? false,
                 'can_mark_paid' => $user?->can('maintenance.interventions.mark_paid') ?? false,
-                'can_manage_costs' => $user?->can('maintenance.interventions.costs.manage') ?? false,
+                'can_view_costs' => $this->canViewCosts($user),
+                'can_edit_costs' => $this->canEditCosts($user),
                 'can_add_stock_items' => $user?->can('maintenance.interventions.add_stock_items') ?? false,
                 'can_override_negative_stock' => $user?->can('stock.override_negative') ?? false,
                 'can_modify_submitted_stock_items' => $this->isManagerOrOwner($user),
-                'can_override_unit_cost' => $this->isManagerOrOwner($user),
+                'can_override_unit_cost' => $this->canOverrideUnitCost($user),
             ],
         ]);
     }
@@ -163,7 +159,7 @@ class MaintenanceInterventionController extends Controller
             ->log('maintenance.intervention_created');
 
         return response()->json([
-            'intervention' => $this->interventionPayload($intervention->fresh()),
+            'intervention' => $this->interventionPayload($intervention->fresh(), $user),
         ]);
     }
 
@@ -215,7 +211,7 @@ class MaintenanceInterventionController extends Controller
             ->log('maintenance.intervention_updated');
 
         return response()->json([
-            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh()),
+            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh(), $request->user()),
         ]);
     }
 
@@ -253,7 +249,7 @@ class MaintenanceInterventionController extends Controller
             ->log('maintenance.intervention_ticket_attached');
 
         return response()->json([
-            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh()),
+            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh(), $request->user()),
         ]);
     }
 
@@ -280,7 +276,7 @@ class MaintenanceInterventionController extends Controller
             ->log('maintenance.intervention_ticket_detached');
 
         return response()->json([
-            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh()),
+            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh(), $request->user()),
         ]);
     }
 
@@ -311,7 +307,9 @@ class MaintenanceInterventionController extends Controller
             ->where('hotel_id', $maintenanceIntervention->hotel_id)
             ->findOrFail($data['stock_item_id']);
 
-        $entry = $this->inventoryService->consumeForIntervention(
+        $beforeTotal = (float) ($maintenanceIntervention->estimated_total_amount ?? $maintenanceIntervention->total_cost);
+
+        $entries = $this->inventoryService->consumeForIntervention(
             $maintenanceIntervention,
             $item,
             $location,
@@ -321,20 +319,28 @@ class MaintenanceInterventionController extends Controller
             $request->boolean('allow_negative_stock')
                 && $request->user()?->can('stock.override_negative'),
         );
+        $maintenanceIntervention->refresh();
+        $afterTotal = (float) ($maintenanceIntervention->estimated_total_amount ?? $maintenanceIntervention->total_cost);
 
         activity('maintenance')
             ->performedOn($maintenanceIntervention)
             ->causedBy($request->user())
             ->withProperties([
                 'intervention_id' => $maintenanceIntervention->id,
-                'item_id' => $entry->stock_item_id,
-                'quantity' => $entry->quantity,
+                'items' => $entries->map(fn ($entry) => [
+                    'stock_item_id' => $entry->stock_item_id,
+                    'quantity' => (float) $entry->quantity,
+                    'unit_cost' => (float) $entry->unit_cost,
+                    'total_cost' => (float) $entry->total_cost,
+                ])->toArray(),
+                'totals_before' => $beforeTotal,
+                'totals_after' => $afterTotal,
             ])
-            ->event('maintenance.intervention_item_consumed')
-            ->log('maintenance.intervention_item_consumed');
+            ->event('maintenance.stock_consumed_for_intervention')
+            ->log('maintenance.stock_consumed_for_intervention');
 
         return response()->json([
-            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh()),
+            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh(), $request->user()),
         ]);
     }
 
@@ -372,7 +378,7 @@ class MaintenanceInterventionController extends Controller
             ->log('maintenance.intervention_submitted');
 
         return response()->json([
-            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh()),
+            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh(), $request->user()),
         ]);
     }
 
@@ -411,7 +417,7 @@ class MaintenanceInterventionController extends Controller
             ->log('maintenance.intervention_approved');
 
         return response()->json([
-            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh()),
+            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh(), $user),
         ]);
     }
 
@@ -450,7 +456,7 @@ class MaintenanceInterventionController extends Controller
             ->log('maintenance.intervention_rejected');
 
         return response()->json([
-            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh()),
+            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh(), $user),
         ]);
     }
 
@@ -486,11 +492,11 @@ class MaintenanceInterventionController extends Controller
             ->log('maintenance.intervention_paid');
 
         return response()->json([
-            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh()),
+            'intervention' => $this->interventionPayload($maintenanceIntervention->fresh(), $user),
         ]);
     }
 
-    private function interventionPayload(MaintenanceIntervention $intervention): array
+    private function interventionPayload(MaintenanceIntervention $intervention, ?User $user = null): array
     {
         $intervention->loadMissing([
             'technician:id,name,company_name',
@@ -498,9 +504,11 @@ class MaintenanceInterventionController extends Controller
             'tickets.room:id,number',
             'tickets.type:id,name',
             'costs',
-            'items.stockItem:id,name,sku,unit',
+            'items.stockItem:id,name,sku,unit,default_purchase_price',
             'items.storageLocation:id,name',
         ]);
+
+        $canViewCosts = $this->canViewCosts($user);
 
         return [
             'id' => $intervention->id,
@@ -512,6 +520,9 @@ class MaintenanceInterventionController extends Controller
             'labor_cost' => (float) $intervention->labor_cost,
             'parts_cost' => (float) $intervention->parts_cost,
             'total_cost' => (float) $intervention->total_cost,
+            'estimated_subtotal_amount' => (float) ($intervention->estimated_subtotal_amount ?? $intervention->total_cost),
+            'estimated_total_amount' => (float) ($intervention->estimated_total_amount ?? $intervention->total_cost),
+            'cost_mode' => $intervention->cost_mode ?? 'estimated',
             'currency' => $intervention->currency,
             'stock_location' => $intervention->stockLocation?->only(['id', 'name']),
             'accounting_status' => $intervention->accounting_status,
@@ -521,18 +532,21 @@ class MaintenanceInterventionController extends Controller
             'rejected_at' => $intervention->rejected_at?->toDateTimeString(),
             'rejection_reason' => $intervention->rejection_reason,
             'paid_at' => $intervention->paid_at?->toDateTimeString(),
-            'costs' => $intervention->costs->map(function ($cost): array {
-                return [
-                    'id' => $cost->id,
-                    'cost_type' => $cost->cost_type,
-                    'label' => $cost->label,
-                    'quantity' => (float) $cost->quantity,
-                    'unit_price' => (float) $cost->unit_price,
-                    'total_amount' => (float) $cost->total_amount,
-                    'currency' => $cost->currency,
-                    'notes' => $cost->notes,
-                ];
-            })->values(),
+            'costs' => $canViewCosts
+                ? $intervention->costs->map(function ($cost): array {
+                    return [
+                        'id' => $cost->id,
+                        'cost_type' => $cost->cost_type,
+                        'label' => $cost->label,
+                        'quantity' => (float) $cost->quantity,
+                        'unit_price' => (float) $cost->unit_price,
+                        'total_amount' => (float) $cost->total_amount,
+                        'currency' => $cost->currency,
+                        'source' => $cost->source,
+                        'notes' => $cost->notes,
+                    ];
+                })->values()
+                : [],
             'tickets' => $intervention->tickets->map(function (MaintenanceTicket $ticket): array {
                 return [
                     'id' => $ticket->id,
@@ -548,7 +562,7 @@ class MaintenanceInterventionController extends Controller
             'items' => $intervention->items->map(function (MaintenanceInterventionItem $item): array {
                 return [
                     'id' => $item->id,
-                    'stock_item' => $item->stockItem?->only(['id', 'name', 'sku', 'unit']),
+                    'stock_item' => $item->stockItem?->only(['id', 'name', 'sku', 'unit', 'default_purchase_price']),
                     'storage_location' => $item->storageLocation?->only(['id', 'name']),
                     'quantity' => (float) $item->quantity,
                     'unit_cost' => (float) $item->unit_cost,
@@ -732,7 +746,7 @@ class MaintenanceInterventionController extends Controller
 
     private function determineUnitCost(array $data, ?User $user, StockItem $item): float
     {
-        if ($this->isManagerOrOwner($user)
+        if ($this->canOverrideUnitCost($user)
             && array_key_exists('unit_cost', $data)
             && $data['unit_cost'] !== null
         ) {
@@ -740,6 +754,27 @@ class MaintenanceInterventionController extends Controller
         }
 
         return (float) ($item->default_purchase_price ?? 0);
+    }
+
+    private function canViewCosts(?User $user): bool
+    {
+        return $user?->can('maintenance.costs.view')
+            || $user?->can('maintenance.costs.edit')
+            || $user?->can('maintenance.interventions.costs.manage')
+            || $user?->hasAnyRole(['owner', 'manager']) === true;
+    }
+
+    private function canEditCosts(?User $user): bool
+    {
+        return $user?->can('maintenance.costs.edit')
+            || $user?->can('maintenance.interventions.costs.manage')
+            || $user?->hasAnyRole(['owner', 'manager']) === true;
+    }
+
+    private function canOverrideUnitCost(?User $user): bool
+    {
+        return $user?->can('maintenance.costs.override_unit_cost')
+            || $user?->hasAnyRole(['owner', 'manager']) === true;
     }
 
     private function movementPayload(StockMovement $movement): array

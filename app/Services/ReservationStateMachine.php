@@ -177,13 +177,14 @@ class ReservationStateMachine
         ?Carbon $actualAt = null,
         bool $canOverrideFees = false,
         ?float $lateOverride = null,
+        bool $canOverrideBalance = false,
     ): Reservation {
         $this->assertTransition($reservation, Reservation::STATUS_CHECKED_OUT);
 
         $reservation->loadMissing(['room', 'guest', 'mainFolio']);
 
         $mainFolio = $reservation->mainFolio;
-        if ($mainFolio && $mainFolio->balance > 0.01 && ! $canOverrideFees) {
+        if ($mainFolio && $mainFolio->balance > 0.01 && ! $canOverrideBalance) {
             throw ValidationException::withMessages([
                 'check_out' => 'Le folio doit être soldé avant le check-out.',
             ]);
@@ -240,6 +241,9 @@ class ReservationStateMachine
             $canOverrideFees,
         );
 
+        $remainingBalance = $mainFolio?->balance ?? 0;
+        $remainingCurrency = $mainFolio?->currency;
+
         activity('reservation')
             ->performedOn($updated)
             ->causedBy(auth()->user())
@@ -252,6 +256,8 @@ class ReservationStateMachine
                 'check_in_date' => $updated->check_in_date,
                 'check_out_date' => $updated->check_out_date,
                 'actual_check_out_at' => $updated->actual_check_out_at,
+                'remaining_balance' => (float) $remainingBalance,
+                'remaining_balance_currency' => $remainingCurrency,
             ])
             ->event('checked_out')
             ->log('checked_out');

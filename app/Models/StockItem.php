@@ -24,6 +24,7 @@ class StockItem extends Model
         'default_purchase_price',
         'currency',
         'reorder_point',
+        'is_kit',
     ];
 
     protected function casts(): array
@@ -32,6 +33,7 @@ class StockItem extends Model
             'is_active' => 'boolean',
             'default_purchase_price' => 'decimal:2',
             'reorder_point' => 'decimal:2',
+            'is_kit' => 'boolean',
         ];
     }
 
@@ -48,5 +50,15 @@ class StockItem extends Model
     public function movementLines(): HasMany
     {
         return $this->hasMany(StockMovementLine::class, 'stock_item_id');
+    }
+
+    public function components(): HasMany
+    {
+        return $this->hasMany(StockItemComponent::class, 'kit_stock_item_id');
+    }
+
+    public function isKit(): bool
+    {
+        return (bool) $this->is_kit;
     }
 }

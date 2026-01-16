@@ -7,7 +7,6 @@ use App\Models\Offer;
 use App\Models\Reservation;
 use App\Services\FolioBillingService;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 
 beforeEach(function (): void {
     config([
@@ -22,10 +21,16 @@ beforeEach(function (): void {
         'frontdesk.view',
         'housekeeping.view',
         'analytics.view',
+        'reservations.confirm',
+        'reservations.check_in',
+        'reservations.check_out',
+        'reservations.check_out_with_balance',
         'reservations.override_datetime',
         'reservations.extend_stay',
         'reservations.shorten_stay',
         'reservations.change_room',
+        'reservations.cancel',
+        'reservations.force_status',
         'payments.create',
         'folio_items.void',
         'housekeeping.mark_inspected',
@@ -59,6 +64,11 @@ if (! function_exists('grantFrontdeskAccess')) {
     function grantFrontdeskAccess($user): void
     {
         $user->givePermissionTo('frontdesk.view');
+        $user->givePermissionTo('reservations.confirm');
+        $user->givePermissionTo('reservations.check_in');
+        $user->givePermissionTo('reservations.check_out');
+        $user->givePermissionTo('reservations.cancel');
+        $user->givePermissionTo('reservations.force_status');
     }
 }
 
@@ -426,7 +436,7 @@ it('blocks check-out when the folio has an outstanding balance', function (): vo
     expect($reservation->fresh()->status)->toBe(Reservation::STATUS_IN_HOUSE);
 });
 
-it('allows managers to check out even when the folio has a balance', function (): void {
+it('allows checkout with balance when permission is granted', function (): void {
     [
         'tenant' => $tenant,
         'user' => $user,
@@ -434,14 +444,7 @@ it('allows managers to check out even when the folio has a balance', function ()
     ] = setupReservationEnvironment('status-checkout-manager');
 
     grantFrontdeskAccess($user);
-
-    $guard = config('auth.defaults.guard', 'web');
-    Role::query()->firstOrCreate([
-        'name' => 'manager',
-        'guard_name' => $guard,
-    ]);
-
-    $user->assignRole('manager');
+    $user->givePermissionTo('reservations.check_out_with_balance');
 
     $reservation->update([
         'status' => Reservation::STATUS_IN_HOUSE,

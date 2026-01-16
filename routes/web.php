@@ -1,13 +1,17 @@
 <?php
 
 use App\Http\Controllers\Activity\ActivityController;
+use App\Http\Controllers\Activity\ActivityJournalController;
 use App\Http\Controllers\Api\ActivityFeedController;
 use App\Http\Controllers\Api\OfferTimeController;
 use App\Http\Controllers\Auth\BadgeLoginController;
 use App\Http\Controllers\Auth\CheckEmailAvailabilityController;
 use App\Http\Controllers\Auth\CheckTenantSlugController;
 use App\Http\Controllers\Auth\SwitchUserController;
+use App\Http\Controllers\BarOrderController;
+use App\Http\Controllers\BarTableController;
 use App\Http\Controllers\Config\ActiveHotelController;
+use App\Http\Controllers\Config\BarTableConfigController;
 use App\Http\Controllers\Config\HotelConfigController;
 use App\Http\Controllers\Config\HousekeepingChecklistController;
 use App\Http\Controllers\Config\HousekeepingChecklistItemController;
@@ -23,11 +27,16 @@ use App\Http\Controllers\Config\StorageLocationController;
 use App\Http\Controllers\Config\TaxController;
 use App\Http\Controllers\Config\TechnicianController;
 use App\Http\Controllers\Config\UserConfigController;
+use App\Http\Controllers\DemoRequestController;
 use App\Http\Controllers\FolioController;
+use App\Http\Controllers\Frontdesk\FolioAdjustmentController;
 use App\Http\Controllers\Frontdesk\FrontdeskController;
 use App\Http\Controllers\Frontdesk\GuestController;
 use App\Http\Controllers\Frontdesk\ReservationController;
+use App\Http\Controllers\Frontdesk\ReservationCorrectionController;
+use App\Http\Controllers\Frontdesk\ReservationDetailsController;
 use App\Http\Controllers\Frontdesk\ReservationStatusController;
+use App\Http\Controllers\Frontdesk\ReservationTimelineController;
 use App\Http\Controllers\Frontdesk\RoomBoardController;
 use App\Http\Controllers\Frontdesk\RoomBoardWalkInController;
 use App\Http\Controllers\Frontdesk\RoomHousekeepingController;
@@ -105,69 +114,7 @@ Route::middleware([
         ->name('push.test');
 
     Route::middleware('auth')->group(function () {
-        Route::get('/dashboard', function () {
-            /** @var \App\Models\User $user */
-            $user = request()->user();
-
-            $activeHotelId = session('active_hotel_id', $user?->active_hotel_id);
-
-            if ($user !== null && $activeHotelId !== null) {
-                $belongs = $user->hotels()->where('hotels.id', $activeHotelId)->exists();
-                if (! $belongs) {
-                    $activeHotelId = null;
-                }
-            }
-
-            if ($user !== null && $activeHotelId === null) {
-                $firstHotel = $user->hotels()->first();
-                if ($firstHotel) {
-                    $activeHotelId = $firstHotel->id;
-                    $user->forceFill(['active_hotel_id' => $activeHotelId])->save();
-                    session()->put('active_hotel_id', $activeHotelId);
-                }
-            }
-
-            $hotel = null;
-
-            if ($activeHotelId !== null) {
-                $hotel = \App\Models\Hotel::query()
-                    ->where('tenant_id', $user->tenant_id)
-                    ->where('id', $activeHotelId)
-                    ->first();
-            }
-
-            return Inertia::render('Dashboard', [
-                'users' => \App\Models\User::query()
-                    ->orderBy('name')
-                    ->with(['roles'])
-                    ->get()
-                    ->map(
-                        fn ($user) => [
-                            'id' => $user->id,
-                            'name' => $user->name,
-                            'email' => $user->email,
-                            'role' => $user->roles->first()?->name,
-                        ],
-                    ),
-                'roles' => \Spatie\Permission\Models\Role::query()->orderBy('name')->get()->map(
-                    fn ($role) => [
-                        'name' => $role->name,
-                    ],
-                ),
-                'hotel' => $hotel?->only([
-                    'id',
-                    'name',
-                    'code',
-                    'currency',
-                    'timezone',
-                    'address',
-                    'city',
-                    'country',
-                    'check_in_time',
-                    'check_out_time',
-                ]),
-            ]);
-        })
+        Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])
             ->middleware(['auth', 'verified'])
             ->name('dashboard');
 
@@ -212,6 +159,21 @@ Route::middleware([
             Route::post('/pos/sales/room', [PosController::class, 'storeRoomSale'])
                 ->middleware('can:pos.create')
                 ->name('pos.sales.room');
+
+            Route::get('/bar/tables', [BarTableController::class, 'index'])
+                ->name('bar.tables.index');
+            Route::post('/bar/tables', [BarTableController::class, 'store'])
+                ->middleware('can:pos.tables.manage')
+                ->name('bar.tables.store');
+            Route::put('/bar/tables/{barTable}', [BarTableController::class, 'update'])
+                ->middleware('can:pos.tables.manage')
+                ->name('bar.tables.update');
+            Route::post('/bar/orders/open-for-table', [BarOrderController::class, 'openForTable'])
+                ->middleware('can:pos.create')
+                ->name('bar.orders.open_for_table');
+            Route::patch('/bar/orders/{barOrder}/move-table', [BarOrderController::class, 'moveTable'])
+                ->middleware('can:pos.tables.manage')
+                ->name('bar.orders.move_table');
         });
 
         Route::get('/night-audit', [NightAuditController::class, 'index'])
@@ -287,16 +249,25 @@ Route::middleware([
             Route::patch('/reservations/{reservation}/status', [ReservationStatusController::class, 'update'])
                 ->middleware('idempotency')
                 ->name('reservations.status');
+            Route::patch('/reservations/{reservation}/guest', [ReservationCorrectionController::class, 'changeGuest'])
+                ->name('reservations.guest.update');
+            Route::patch('/reservations/{reservation}/offer', [ReservationCorrectionController::class, 'changeOffer'])
+                ->name('reservations.offer.update');
+            Route::patch('/reservations/{reservation}/stay-datetimes', [ReservationCorrectionController::class, 'overrideStayTimes'])
+                ->name('reservations.stay.datetimes');
             Route::patch('/reservations/{reservation}/stay/dates', [ReservationStayController::class, 'updateDates'])
                 ->middleware('idempotency')
                 ->name('reservations.stay.dates');
             Route::patch('/reservations/{reservation}/stay/room', [ReservationStayController::class, 'changeRoom'])
                 ->name('reservations.stay.room');
+            Route::get('/frontdesk/reservations/{reservation}/details', [ReservationDetailsController::class, 'show'])
+                ->name('frontdesk.reservations.details');
 
             Route::prefix('frontdesk')->group(function () {
                 Route::get('/arrivals', [FrontdeskController::class, 'arrivals'])->name('frontdesk.arrivals');
                 Route::get('/departures', [FrontdeskController::class, 'departures'])->name('frontdesk.departures');
                 Route::get('/in-house', [FrontdeskController::class, 'inHouse'])->name('frontdesk.in_house');
+                Route::get('/issues', [FrontdeskController::class, 'issues'])->name('frontdesk.issues');
             });
 
             Route::get('/reservations/{reservation}/folio', [ReservationFolioController::class, 'show'])
@@ -310,6 +281,8 @@ Route::middleware([
                 ->name('reservations.stay.preview');
             Route::get('/reservations/{reservation}/activity', [ActivityFeedController::class, 'reservation'])
                 ->name('reservations.activity');
+            Route::get('/reservations/{reservation}/timeline', [ReservationTimelineController::class, 'show'])
+                ->name('reservations.timeline');
             Route::get('/rooms/{room}/activity', [ActivityFeedController::class, 'room'])
                 ->name('rooms.activity');
             Route::get('/audit/activity', [ActivityFeedController::class, 'index'])
@@ -319,6 +292,8 @@ Route::middleware([
             Route::post('/folios/{folio}/items', [FolioController::class, 'storeItem'])->name('folios.items.store');
             Route::patch('/folios/{folio}/items/{item}', [FolioController::class, 'updateItem'])->name('folios.items.update');
             Route::delete('/folios/{folio}/items/{item}', [FolioController::class, 'destroyItem'])->name('folios.items.destroy');
+            Route::post('/folios/{folio}/adjustment', [FolioAdjustmentController::class, 'store'])
+                ->name('folios.adjustments.store');
             Route::post('/folios/{folio}/payments', [FolioController::class, 'storePayment'])->name('folios.payments.store');
             Route::patch('/folios/{folio}/payments/{payment}', [FolioController::class, 'updatePayment'])->name('folios.payments.update');
             Route::delete('/folios/{folio}/payments/{payment}', [FolioController::class, 'destroyPayment'])->name('folios.payments.destroy');
@@ -394,8 +369,12 @@ Route::middleware([
             ->name('stock.purchases.create');
         Route::post('/stock/purchases', [StockPurchaseController::class, 'store'])
             ->name('stock.purchases.store');
+        Route::get('/stock/purchases/{stockPurchase}/edit', [StockPurchaseController::class, 'edit'])
+            ->name('stock.purchases.edit');
         Route::get('/stock/purchases/{stockPurchase}', [StockPurchaseController::class, 'show'])
             ->name('stock.purchases.show');
+        Route::put('/stock/purchases/{stockPurchase}', [StockPurchaseController::class, 'update'])
+            ->name('stock.purchases.update');
         Route::post('/stock/purchases/{stockPurchase}/receive', [StockPurchaseController::class, 'receive'])
             ->name('stock.purchases.receive');
         Route::get('/stock/transfers', [StockTransferController::class, 'index'])
@@ -442,6 +421,9 @@ Route::middleware([
     Route::get('/activity', [ActivityController::class, 'index'])
         ->middleware(['auth', 'verified'])
         ->name('activity.index');
+    Route::get('/journal', [ActivityJournalController::class, 'index'])
+        ->middleware(['auth', 'verified'])
+        ->name('journal.index');
 
     Route::prefix('settings/resources')
         ->name('ressources.')
@@ -481,6 +463,12 @@ Route::middleware([
                 ->name('storage-locations.store');
             Route::put('storage-locations/{storageLocation}', [StorageLocationController::class, 'update'])
                 ->name('storage-locations.update');
+            Route::get('bar-tables', [BarTableConfigController::class, 'index'])
+                ->name('bar-tables.index');
+            Route::post('bar-tables', [BarTableConfigController::class, 'store'])
+                ->name('bar-tables.store');
+            Route::put('bar-tables/{barTable}', [BarTableConfigController::class, 'update'])
+                ->name('bar-tables.update');
             Route::resource('products', ProductController::class)->except(['show']);
             Route::resource('product-categories', ProductCategoryController::class)->only(['index', 'store', 'update', 'destroy']);
             Route::resource('users', UserConfigController::class)->except(['show']);
@@ -531,10 +519,60 @@ Route::middleware('web')->group(function () {
             return redirect()->route('dashboard');
         }
 
+        $whatsappNumber = preg_replace('/\D+/', '', (string) config('serena.whatsapp_number'));
+        $whatsappMessage = (string) config('serena.whatsapp_message');
+        $whatsappLink = sprintf(
+            'https://wa.me/%s?text=%s',
+            $whatsappNumber,
+            rawurlencode($whatsappMessage),
+        );
+
         return Inertia::render('Landing/Index', [
             'canRegister' => Features::enabled(Features::registration()),
+            'pricingAmount' => config('serena.pricing_amount'),
+            'whatsappLink' => $whatsappLink,
+            'demoSuccess' => (bool) session('demoSuccess'),
+            'scrollTo' => session('scrollTo'),
+            'screenshots' => [
+                [
+                    'title' => 'Tableau de bord FrontDesk',
+                    'description' => 'Arrivées, départs et alertes en un coup d’œil.',
+                ],
+                [
+                    'title' => 'RoomBoard',
+                    'description' => 'Vue visuelle des chambres et du ménage.',
+                ],
+                [
+                    'title' => 'Facturation & paiements',
+                    'description' => 'Encaissements et folio maîtrisés.',
+                ],
+                [
+                    'title' => 'Maintenance',
+                    'description' => 'Tickets, interventions et estimations.',
+                ],
+            ],
         ]);
     })->name('home');
+
+    Route::get('/demo', function () {
+        return redirect()->route('home')->with('scrollTo', 'demo');
+    })->name('demo');
+
+    Route::post('/demo-request', [DemoRequestController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('demo.request');
+
+    Route::get('/whatsapp', function () {
+        $whatsappNumber = preg_replace('/\D+/', '', (string) config('serena.whatsapp_number'));
+        $whatsappMessage = (string) config('serena.whatsapp_message');
+        $whatsappLink = sprintf(
+            'https://wa.me/%s?text=%s',
+            $whatsappNumber,
+            rawurlencode($whatsappMessage),
+        );
+
+        return redirect()->away($whatsappLink);
+    })->name('whatsapp.redirect');
 
     Route::get('/login/tenant', function () {
         return Inertia::render('Auth/TenantLogin', [

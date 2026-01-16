@@ -56,6 +56,17 @@ class StoreRoomSaleRequest extends FormRequest
             'items.*.tax_amount' => ['nullable', 'numeric', 'min:0'],
             'items.*.total_amount' => ['required', 'numeric', 'min:0'],
             'items.*.name' => ['nullable', 'string', 'max:255'],
+            'bar_order_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('bar_orders', 'id')
+                    ->where('tenant_id', $tenantId)
+                    ->where(function ($query) use ($hotelId): void {
+                        if ($hotelId !== null) {
+                            $query->where('hotel_id', $hotelId);
+                        }
+                    }),
+            ],
         ];
     }
 }

@@ -803,6 +803,7 @@
                 activityLoading: false,
                 activityRequestKey: null,
                 reservationActivity: [],
+                lastWarnedGuestId: null,
                 pendingFeeOverrides: {
                     early: null,
                     late: null,
@@ -845,6 +846,17 @@
             },
             selectedGuest(newVal) {
                 this.form.guest_id = newVal ? newVal.id : '';
+                if (!newVal) {
+                    this.lastWarnedGuestId = null;
+
+                    return;
+                }
+
+                if (!this.showModal || this.editingId) {
+                    return;
+                }
+
+                this.warnOutstandingGuestBalance(newVal);
             },
             selectedRoomType(newVal) {
                 this.form.room_type_id = newVal ? newVal.id : '';
@@ -1161,6 +1173,9 @@
                 }
             },
             activityLabel(entry) {
+                if (entry.action_label_fr) {
+                    return entry.action_label_fr;
+                }
                 const event = entry.event || entry.description || '';
 
                 switch (event) {
@@ -1608,6 +1623,60 @@
 
                 return `${amount.toFixed(0)} ${currency}`;
             },
+            formatBalanceAmount(value, currency = null) {
+                const amount = Number(value || 0);
+                const cur = currency || this.defaults.currency || 'XAF';
+
+                return this.formatFeeAmount(amount, cur);
+            },
+            async confirmCheckoutWithBalance(reservationId) {
+                try {
+                    const http = window.axios ?? axios;
+                    const response = await http.get(`/reservations/${reservationId}/folio`);
+                    const balance = Number(response.data?.folio?.balance ?? 0);
+                    const currency = response.data?.folio?.currency ?? this.defaults.currency ?? 'XAF';
+
+                    if (balance <= 0.01) {
+                        return true;
+                    }
+
+                    const confirmation = await Swal.fire({
+                        icon: 'warning',
+                        title: 'Solde non réglé',
+                        text: `Le solde restant est de ${this.formatBalanceAmount(balance, currency)}. Confirmer le check-out ?`,
+                        showCancelButton: true,
+                        confirmButtonText: 'Confirmer',
+                        cancelButtonText: 'Annuler',
+                    });
+
+                    return confirmation.isConfirmed;
+                } catch {
+                    return true;
+                }
+            },
+            warnOutstandingGuestBalance(guest) {
+                if (!guest || !guest.id) {
+                    return;
+                }
+
+                const balance = Number(guest.balance_due ?? 0);
+
+                if (balance <= 0.01) {
+                    return;
+                }
+
+                if (this.lastWarnedGuestId === guest.id) {
+                    return;
+                }
+
+                this.lastWarnedGuestId = guest.id;
+
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Solde en attente',
+                    text: `Ce client a un solde non réglé de ${this.formatAmount(balance)}.`,
+                });
+            },
             formatFeeAmount(value, currency) {
                 const amount = Number(value || 0);
                 const cur = currency || this.defaults.currency || 'XAF';
@@ -1974,6 +2043,13 @@
                     return;
                 }
                 if (['check_in', 'check_out'].includes(action)) {
+                    if (action === 'check_out') {
+                        const confirmed = await this.confirmCheckoutWithBalance(targetId);
+                        if (!confirmed) {
+                            return;
+                        }
+                    }
+
                     await this.promptActualDateTime(action, targetId);
 
                     return;

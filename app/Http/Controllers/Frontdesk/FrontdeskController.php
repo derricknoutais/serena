@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Frontdesk;
 
 use App\Http\Controllers\Controller;
 use App\Models\Reservation;
+use App\Models\User;
 use App\Services\OccupancyForecastService;
 use App\Support\Frontdesk\ReservationsIndexData;
 use App\Support\Frontdesk\RoomBoardData;
@@ -65,7 +66,7 @@ class FrontdeskController extends Controller
             ])
             ->get();
 
-        return response()->json(['data' => $reservations->map(fn ($reservation) => $this->transform($reservation))]);
+        return response()->json(['data' => $reservations->map(fn ($reservation) => $this->transform($reservation, $request->user()))]);
     }
 
     public function departures(Request $request): JsonResponse
@@ -75,7 +76,7 @@ class FrontdeskController extends Controller
             ->where('status', Reservation::STATUS_IN_HOUSE)
             ->get();
 
-        return response()->json(['data' => $reservations->map(fn ($reservation) => $this->transform($reservation))]);
+        return response()->json(['data' => $reservations->map(fn ($reservation) => $this->transform($reservation, $request->user()))]);
     }
 
     public function inHouse(Request $request): JsonResponse
@@ -84,7 +85,17 @@ class FrontdeskController extends Controller
             ->where('status', Reservation::STATUS_IN_HOUSE)
             ->get();
 
-        return response()->json(['data' => $reservations->map(fn ($reservation) => $this->transform($reservation))]);
+        return response()->json(['data' => $reservations->map(fn ($reservation) => $this->transform($reservation, $request->user()))]);
+    }
+
+    public function issues(Request $request): JsonResponse
+    {
+        $reservations = $this->baseQuery($request)
+            ->where('status', Reservation::STATUS_IN_HOUSE)
+            ->whereDate('check_out_date', '<', Carbon::today())
+            ->get();
+
+        return response()->json(['data' => $reservations->map(fn ($reservation) => $this->transform($reservation, $request->user()))]);
     }
 
     private function baseQuery(Request $request)
@@ -105,7 +116,7 @@ class FrontdeskController extends Controller
             ->orderBy('check_in_date');
     }
 
-    private function transform(Reservation $reservation): array
+    private function transform(Reservation $reservation, User $user): array
     {
         $guest = $reservation->guest;
         $room = $reservation->room;
@@ -129,11 +140,11 @@ class FrontdeskController extends Controller
             'check_out_date' => $reservation->check_out_date?->toDateString(),
             'status' => $reservation->status,
             'status_label' => $reservation->status_label,
-            'actions' => $this->availableActions($reservation),
+            'actions' => $this->availableActions($reservation, $user),
         ];
     }
 
-    private function availableActions(Reservation $reservation): array
+    private function availableActions(Reservation $reservation, User $user): array
     {
         $map = [
             'confirm' => Reservation::STATUS_CONFIRMED,
@@ -144,7 +155,22 @@ class FrontdeskController extends Controller
         ];
 
         return collect($map)
-            ->filter(fn ($status, $action) => $reservation->canTransition($status))
+            ->filter(function ($status, $action) use ($reservation, $user): bool {
+                if (! $reservation->canTransition($status)) {
+                    return false;
+                }
+
+                $permission = match ($action) {
+                    'confirm' => 'reservations.confirm',
+                    'check_in' => 'reservations.check_in',
+                    'check_out' => 'reservations.check_out',
+                    'cancel' => 'reservations.cancel',
+                    'no_show' => 'reservations.force_status',
+                    default => 'reservations.force_status',
+                };
+
+                return $user?->can($permission) ?? false;
+            })
             ->keys()
             ->values()
             ->all();

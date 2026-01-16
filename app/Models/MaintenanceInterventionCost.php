@@ -10,6 +10,12 @@ class MaintenanceInterventionCost extends Model
 {
     use HasFactory;
 
+    public const SOURCE_MANUAL = 'manual';
+
+    public const SOURCE_STOCK = 'stock';
+
+    public const SOURCE_EXTERNAL = 'external';
+
     public const TYPE_LABOR = 'labor';
 
     public const TYPE_PARTS = 'parts';
@@ -33,6 +39,7 @@ class MaintenanceInterventionCost extends Model
         'unit_price',
         'total_amount',
         'currency',
+        'source',
         'notes',
         'created_by_user_id',
     ];

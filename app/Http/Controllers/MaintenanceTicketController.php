@@ -195,6 +195,7 @@ class MaintenanceTicketController extends Controller
                 'started_at' => $intervention->started_at?->toDateTimeString(),
                 'ended_at' => $intervention->ended_at?->toDateTimeString(),
                 'total_cost' => (float) $intervention->total_cost,
+                'estimated_total_amount' => (float) ($intervention->estimated_total_amount ?? $intervention->total_cost),
                 'currency' => $intervention->currency,
                 'rooms' => $intervention->tickets->map(fn ($ticket) => $ticket->room?->number)->filter()->unique()->values(),
             ]);
