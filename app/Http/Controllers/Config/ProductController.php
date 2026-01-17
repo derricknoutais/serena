@@ -32,7 +32,6 @@ class ProductController extends Controller
                 'name' => $product->name,
                 'product_category_id' => $product->product_category_id,
                 'unit_price' => $product->unit_price,
-                'account_code' => $product->account_code,
                 'is_active' => $product->is_active,
                 'category' => $product->category?->name,
                 'tax_id' => $product->tax_id,
@@ -90,7 +89,6 @@ class ProductController extends Controller
             'sku' => ['nullable', 'string'],
             'unit_price' => ['required', 'numeric', 'min:0'],
             'tax_id' => ['nullable', 'integer', 'exists:taxes,id'],
-            'account_code' => ['required', 'string'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
 
@@ -99,11 +97,13 @@ class ProductController extends Controller
             ->when($this->activeHotelId($request), fn ($q) => $q->where('id', $this->activeHotelId($request)))
             ->firstOrFail();
 
-        Product::query()->create([
+        $product = new Product([
             ...$data,
             'tenant_id' => $request->user()->tenant_id,
             'hotel_id' => $hotel->id,
         ]);
+        $product->account_code = '';
+        $product->save();
 
         return redirect()->route('ressources.products.index')->with('success', 'Produit créé.');
     }
@@ -146,7 +146,6 @@ class ProductController extends Controller
             'sku' => ['nullable', 'string'],
             'unit_price' => ['required', 'numeric', 'min:0'],
             'tax_id' => ['nullable', 'integer', 'exists:taxes,id'],
-            'account_code' => ['required', 'string'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
 

@@ -22,7 +22,6 @@
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Nom</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Catégorie</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Prix</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Compte</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Actif</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Actions</th>
                     </tr>
@@ -32,7 +31,6 @@
                         <td class="px-4 py-3 text-sm text-gray-800">{{ product.name }}</td>
                         <td class="px-4 py-3 text-sm text-gray-600">{{ product.category || '—' }}</td>
                         <td class="px-4 py-3 text-sm text-gray-600">{{ product.unit_price }}</td>
-                        <td class="px-4 py-3 text-sm text-gray-600">{{ product.account_code }}</td>
                         <td class="px-4 py-3 text-sm text-gray-600">
                             <span
                                 class="inline-flex rounded-full px-2 py-1 text-xs font-medium"
@@ -174,22 +172,6 @@
                             </div>
                         </Field>
 
-                        <Field name="account_code" rules="required" v-slot="{ field, meta }">
-                            <div>
-                                <label class="text-sm font-medium text-gray-700">
-                                    Code comptable <span class="text-red-600">*</span>
-                                </label>
-                                <input
-                                    v-bind="field"
-                                    type="text"
-                                    @input="(e) => { field.onChange(e); form.account_code = e.target.value; }"
-                                    class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                                />
-                                <ErrorMessage name="account_code" class="mt-1 text-xs text-red-600" />
-                                <p v-if="!meta.valid && meta.touched" class="mt-1 text-xs text-red-600">Champ requis.</p>
-                                <p v-if="errors.account_code" class="mt-1 text-xs text-red-600">{{ errors.account_code }}</p>
-                            </div>
-                        </Field>
 
                         <Field name="is_active" type="checkbox" v-slot="{ field }">
                             <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
@@ -260,7 +242,6 @@ export default {
                 sku: '',
                 unit_price: '',
                 tax_id: null,
-                account_code: '',
                 is_active: true,
             },
         };
@@ -338,7 +319,6 @@ export default {
                 sku: product.sku || '',
                 unit_price: product.unit_price || '',
                 tax_id: product.tax_id ? this.taxOptions.find((t) => t.value === product.tax_id) ?? null : null,
-                account_code: product.account_code || '',
                 is_active: !!product.is_active,
             };
             this.formKey += 1;
@@ -355,7 +335,6 @@ export default {
                 sku: '',
                 unit_price: '',
                 tax_id: null,
-                account_code: '',
                 is_active: true,
             };
         },
@@ -378,7 +357,6 @@ export default {
                 sku: this.form.sku,
                 unit_price: this.form.unit_price,
                 tax_id: this.form.tax_id ? this.form.tax_id?.value ?? this.form.tax_id : null,
-                account_code: this.form.account_code,
                 is_active: this.form.is_active,
             };
             const url = this.isEditing ? `/settings/resources/products/${this.editId}` : '/settings/resources/products';

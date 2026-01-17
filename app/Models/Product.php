@@ -22,7 +22,6 @@ class Product extends Model
         'sku',
         'unit_price',
         'tax_id',
-        'account_code',
         'is_active',
     ];
 
