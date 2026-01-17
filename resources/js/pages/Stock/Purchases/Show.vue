@@ -13,6 +13,14 @@
                     >
                         ← Retour aux bons
                     </Link>
+                    <button
+                        v-if="permissions.can_receive_purchase && purchase.status === 'draft'"
+                        type="button"
+                        class="rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700"
+                        @click="receivePurchase"
+                    >
+                        Recevoir
+                    </button>
                     <Link
                         v-if="permissions.can_update_purchase && purchase.status === 'draft'"
                         :href="`/stock/purchases/${purchase.id}/edit`"
@@ -20,6 +28,14 @@
                     >
                         Modifier
                     </Link>
+                    <button
+                        v-if="permissions.can_update_purchase && purchase.status === 'draft'"
+                        type="button"
+                        class="rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
+                        @click="voidPurchase"
+                    >
+                        Annuler
+                    </button>
                 </div>
             </div>
 
@@ -85,8 +101,9 @@
 </template>
 
 <script>
+import Swal from 'sweetalert2';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { Link } from '@inertiajs/vue3';
+import { Link, router } from '@inertiajs/vue3';
 
 export default {
     name: 'StockPurchaseShow',
@@ -103,10 +120,62 @@ export default {
             type: Object,
             default: () => ({
                 can_update_purchase: false,
+                can_receive_purchase: false,
             }),
         },
     },
     methods: {
+        async receivePurchase() {
+            if (!this.permissions.can_receive_purchase || this.purchase.status !== 'draft') {
+                return;
+            }
+
+            const result = await Swal.fire({
+                title: 'Recevoir ce bon d\'achat ?',
+                text: 'Cette action mettra le stock à jour.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Oui, recevoir',
+                cancelButtonText: 'Annuler',
+            });
+
+            if (!result.isConfirmed) {
+                return;
+            }
+
+            await router.post(`/stock/purchases/${this.purchase.id}/receive`, {}, {
+                preserveScroll: true,
+                onFinish: () => {
+                    router.reload({ only: ['purchase'] });
+                },
+            });
+        },
+        async voidPurchase() {
+            if (!this.permissions.can_update_purchase || this.purchase.status !== 'draft') {
+                return;
+            }
+
+            const result = await Swal.fire({
+                title: 'Annuler ce bon d\'achat ?',
+                text: 'Cette action est irreversible.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Oui, annuler',
+                cancelButtonText: 'Retour',
+                confirmButtonColor: '#e11d48',
+            });
+
+            if (!result.isConfirmed) {
+                return;
+            }
+
+            await router.post(`/stock/purchases/${this.purchase.id}/void`, {}, {
+                preserveScroll: true,
+                onFinish: () => {
+                    router.reload({ only: ['purchase'] });
+                },
+            });
+        },
         formatAmount(value, currency = 'XAF') {
             const amount = Number(value || 0);
             return `${amount.toFixed(0)} ${currency}`;

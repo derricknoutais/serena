@@ -379,6 +379,8 @@ Route::middleware([
             ->name('stock.purchases.update');
         Route::post('/stock/purchases/{stockPurchase}/receive', [StockPurchaseController::class, 'receive'])
             ->name('stock.purchases.receive');
+        Route::post('/stock/purchases/{stockPurchase}/void', [StockPurchaseController::class, 'void'])
+            ->name('stock.purchases.void');
         Route::get('/stock/transfers', [StockTransferController::class, 'index'])
             ->name('stock.transfers.index');
         Route::get('/stock/transfers/create', [StockTransferController::class, 'create'])

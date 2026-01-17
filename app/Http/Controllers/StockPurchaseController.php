@@ -144,6 +144,7 @@ class StockPurchaseController extends Controller
             'purchase' => $this->purchasePayload($stockPurchase),
             'permissions' => [
                 'can_update_purchase' => $user?->can('stock.purchases.update') ?? false,
+                'can_receive_purchase' => $user?->can('stock.purchases.receive') ?? false,
             ],
         ]);
     }
@@ -251,6 +252,25 @@ class StockPurchaseController extends Controller
         $this->assertTenantHotel($user, $stockPurchase);
 
         $this->inventoryService->receivePurchase($stockPurchase, $user);
+
+        return response()->json([
+            'purchase' => $stockPurchase->load('lines.stockItem', 'storageLocation'),
+        ]);
+    }
+
+    public function void(Request $request, StockPurchase $stockPurchase): JsonResponse
+    {
+        $this->authorize('stock.purchases.update');
+        $user = $request->user();
+        $this->assertTenantHotel($user, $stockPurchase);
+
+        if ($stockPurchase->status !== StockPurchase::STATUS_DRAFT) {
+            abort(409, 'Le bon d’achat est déjà réceptionné ou annulé.');
+        }
+
+        $stockPurchase->forceFill([
+            'status' => StockPurchase::STATUS_VOID,
+        ])->save();
 
         return response()->json([
             'purchase' => $stockPurchase->load('lines.stockItem', 'storageLocation'),

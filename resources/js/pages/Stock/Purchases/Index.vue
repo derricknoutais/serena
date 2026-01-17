@@ -50,12 +50,22 @@
                                     </span>
                                 </td>
                                 <td class="px-4 py-3 text-right">
-                                    <Link
-                                        :href="`/stock/purchases/${purchase.id}`"
-                                        class="text-xs font-semibold text-serena-primary hover:text-serena-primary-dark"
-                                    >
-                                        Détails
-                                    </Link>
+                                    <div class="flex items-center justify-end gap-3">
+                                        <button
+                                            v-if="permissions.can_receive_purchase && purchase.status === 'draft'"
+                                            type="button"
+                                            class="text-xs font-semibold text-emerald-700 hover:text-emerald-900"
+                                            @click.stop="receivePurchase(purchase)"
+                                        >
+                                            Recevoir
+                                        </button>
+                                        <Link
+                                            :href="`/stock/purchases/${purchase.id}`"
+                                            class="text-xs font-semibold text-serena-primary hover:text-serena-primary-dark"
+                                        >
+                                            Détails
+                                        </Link>
+                                    </div>
                                 </td>
                             </tr>
                         </tbody>
@@ -67,8 +77,9 @@
 </template>
 
 <script>
+import Swal from 'sweetalert2';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { Link } from '@inertiajs/vue3';
+import { Link, router } from '@inertiajs/vue3';
 
 export default {
     name: 'StockPurchaseIndex',
@@ -92,6 +103,31 @@ export default {
     methods: {
         goToPurchase(purchase) {
             this.$inertia.visit(`/stock/purchases/${purchase.id}`);
+        },
+        async receivePurchase(purchase) {
+            if (!this.permissions.can_receive_purchase || purchase.status !== 'draft') {
+                return;
+            }
+
+            const result = await Swal.fire({
+                title: 'Recevoir ce bon d\'achat ?',
+                text: 'Cette action mettra le stock à jour.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Oui, recevoir',
+                cancelButtonText: 'Annuler',
+            });
+
+            if (!result.isConfirmed) {
+                return;
+            }
+
+            await router.post(`/stock/purchases/${purchase.id}/receive`, {}, {
+                preserveScroll: true,
+                onFinish: () => {
+                    router.reload({ only: ['purchases'] });
+                },
+            });
         },
         formatAmount(value, currency = 'XAF') {
             const amount = Number(value || 0);
