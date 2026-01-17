@@ -99,6 +99,7 @@ class PermissionsCatalog
             'stock.inventories.create',
             'stock.inventories.post',
             'stock.override_negative',
+            'hotels.documents.update',
             'resources.view',
             // Maintenance
             'maintenance_tickets.view',
@@ -147,13 +148,14 @@ class PermissionsCatalog
         $overridePermissions = [
             'payments.override_closed_day',
             'payments.override_refund_limit',
+            'hotels.documents.update',
         ];
         $defaultPermissions = array_values(array_diff($allPermissions, $overridePermissions));
 
         return [
-            'owner' => $defaultPermissions,
-            'manager' => $defaultPermissions,
-            'superadmin' => $defaultPermissions,
+            'owner' => array_values(array_merge($defaultPermissions, ['hotels.documents.update'])),
+            'manager' => array_values(array_merge($defaultPermissions, ['hotels.documents.update'])),
+            'superadmin' => array_values(array_merge($defaultPermissions, ['hotels.documents.update'])),
             'receptionist' => [
                 'dashboard.view',
                 'frontdesk.view',

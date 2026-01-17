@@ -2374,10 +2374,26 @@ export default {
             this.changeRoomSubmitting = true;
 
             try {
-                await axios.patch(
+                if (this.selectedRoom.current_reservation.status !== 'in_house') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Action indisponible',
+                        text: 'Le changement de chambre est disponible uniquement apres le check-in.',
+                    });
+                    return;
+                }
+
+                const vacatedUsage = await this.promptVacatedUsage();
+
+                if (!vacatedUsage) {
+                    return;
+                }
+
+                const response = await axios.patch(
                     `/reservations/${this.selectedRoom.current_reservation.id}/stay/room`,
                     {
                         room_id: this.changeRoomSelection,
+                        vacated_usage: vacatedUsage,
                     },
                 );
 
@@ -2389,6 +2405,38 @@ export default {
                 });
 
                 this.closeChangeRoomModal();
+                const moveRoomPayload = response?.data?.room_move;
+                if (moveRoomPayload?.old_room_id) {
+                    this.applyRoomPatch(moveRoomPayload.old_room_id, {
+                        status: moveRoomPayload.old_room_status,
+                        hk_status: moveRoomPayload.old_room_hk_status,
+                        current_reservation: null,
+                    });
+                }
+
+                if (moveRoomPayload?.new_room_id) {
+                    const newRoom = this.findRoomById(moveRoomPayload.new_room_id);
+                    const reservation = this.selectedRoom?.current_reservation ?? null;
+                    const updatedReservation = reservation
+                        ? {
+                            ...reservation,
+                            room_id: moveRoomPayload.new_room_id,
+                            room_number: newRoom?.number ?? reservation.room_number,
+                            room_type_id: newRoom?.room_type_id ?? reservation.room_type_id,
+                            room_type_name: newRoom?.room_type_name ?? reservation.room_type_name,
+                        }
+                        : null;
+
+                    this.applyRoomPatch(moveRoomPayload.new_room_id, {
+                        status: moveRoomPayload.new_room_status,
+                        current_reservation: updatedReservation,
+                    });
+
+                    if (newRoom) {
+                        this.selectedRoom = newRoom;
+                    }
+                }
+
                 this.reloadRoomBoard();
             } catch (error) {
                 const message = error.response?.data?.message
@@ -2403,6 +2451,33 @@ export default {
             } finally {
                 this.changeRoomSubmitting = false;
             }
+        },
+        async promptVacatedUsage() {
+            const result = await Swal.fire({
+                title: 'La chambre quittee a-t-elle ete utilisee ?',
+                icon: 'question',
+                showDenyButton: true,
+                showCancelButton: true,
+                confirmButtonText: 'Oui, utilisee',
+                denyButtonText: 'Non, pas utilisee',
+                cancelButtonText: 'Je ne sais pas',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+            });
+
+            if (result.isConfirmed) {
+                return 'used';
+            }
+
+            if (result.isDenied) {
+                return 'not_used';
+            }
+
+            if (result.dismiss === Swal.DismissReason.cancel) {
+                return 'unknown';
+            }
+
+            return null;
         },
         openMaintenanceModal(room) {
             if (!this.canReportMaintenance || !room) {

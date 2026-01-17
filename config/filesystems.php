@@ -14,6 +14,7 @@ return [
     */
 
     'default' => env('FILESYSTEM_DISK', 'local'),
+    'document_logos_disk' => env('DOCUMENT_LOGOS_DISK', 'public'),
 
     /*
     |--------------------------------------------------------------------------

@@ -333,7 +333,7 @@ class MaintenanceTicketController extends Controller
             ->event('created')
             ->log('created');
 
-        if ($room->status === Room::STATUS_OCCUPIED && $ticket->blocks_sale) {
+        if (in_array($room->status, [Room::STATUS_OCCUPIED, Room::STATUS_IN_USE], true) && $ticket->blocks_sale) {
             $room->block_sale_after_checkout = true;
             $room->save();
         }
@@ -431,7 +431,7 @@ class MaintenanceTicketController extends Controller
             ->where('blocks_sale', true)
             ->exists();
 
-        if ($room->status === Room::STATUS_OCCUPIED && $hasBlockingOpenTickets) {
+        if (in_array($room->status, [Room::STATUS_OCCUPIED, Room::STATUS_IN_USE], true) && $hasBlockingOpenTickets) {
             $room->block_sale_after_checkout = true;
             $room->save();
         }
@@ -477,7 +477,7 @@ class MaintenanceTicketController extends Controller
             ->where('blocks_sale', true)
             ->exists();
 
-        if ($room->status === Room::STATUS_OCCUPIED && $hasBlockingOpenTickets) {
+        if (in_array($room->status, [Room::STATUS_OCCUPIED, Room::STATUS_IN_USE], true) && $hasBlockingOpenTickets) {
             $room->block_sale_after_checkout = true;
             $room->save();
         }

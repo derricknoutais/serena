@@ -1,22 +1,11 @@
+@extends('documents.layout')
+
 @php($format = $format ?? 'standard')
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <title>Facture {{ $invoice->number }}</title>
-    <style>
-        :root {
-            color-scheme: light;
-        }
+@php($isPreview = $isPreview ?? false)
 
-        body {
-            font-family: 'Helvetica Neue', Arial, sans-serif;
-            margin: 0;
-            padding: 2rem;
-            background: #f7f7f8;
-            color: #1f2937;
-        }
+@section('title', 'Facture '.$invoice->number)
 
+@section('document_styles')
         .card {
             background: #fff;
             border-radius: 1rem;
@@ -166,16 +155,16 @@
                 padding: 0;
             }
 
+            .format-switch {
+                display: none;
+            }
+
             body.is-tsp100 {
                 padding: 0;
             }
 
             body.is-tsp100 .card {
                 padding: 0;
-            }
-
-            body.is-tsp100 .format-switch {
-                display: none;
             }
 
             body.is-tsp100 {
@@ -190,20 +179,22 @@
                 width: 80mm;
             }
         }
-    </style>
-</head>
-<body class="{{ $format === 'tsp100' ? 'is-tsp100' : '' }}">
+@endsection
+
+@section('content')
     <div class="card">
-        <div class="format-switch">
-            <a href="{{ route('invoices.pdf', ['invoice' => $invoice->id, 'format' => 'standard']) }}"
-                class="{{ $format === 'standard' ? 'active' : '' }}">
-                Format standard
-            </a>
-            <a href="{{ route('invoices.pdf', ['invoice' => $invoice->id, 'format' => 'tsp100']) }}"
-                class="{{ $format === 'tsp100' ? 'active' : '' }}">
-                TSP100 (80mm)
-            </a>
-        </div>
+        @if (! $isPreview)
+            <div class="format-switch">
+                <a href="{{ route('invoices.pdf', ['invoice' => $invoice->id, 'format' => 'standard']) }}"
+                    class="{{ $format === 'standard' ? 'active' : '' }}">
+                    Format standard
+                </a>
+                <a href="{{ route('invoices.pdf', ['invoice' => $invoice->id, 'format' => 'tsp100']) }}"
+                    class="{{ $format === 'tsp100' ? 'active' : '' }}">
+                    TSP100 (80mm)
+                </a>
+            </div>
+        @endif
 
         <div class="meta">
             <div>
@@ -271,11 +262,14 @@
             </tr>
         </table>
     </div>
+@endsection
 
-    <script>
-        window.addEventListener('load', () => {
-            setTimeout(() => window.print(), 400);
-        });
-    </script>
-</body>
-</html>
+@section('scripts')
+    @if (! $isPreview)
+        <script>
+            window.addEventListener('load', () => {
+                setTimeout(() => window.print(), 400);
+            });
+        </script>
+    @endif
+@endsection

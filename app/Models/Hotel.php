@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 use Stancl\Tenancy\Database\Concerns\BelongsToTenant;
 
 class Hotel extends Model
@@ -28,6 +29,7 @@ class Hotel extends Model
         'check_in_time',
         'check_out_time',
         'stay_settings',
+        'document_settings',
         'business_day_start_time',
         'business_day_timezone',
     ];
@@ -39,7 +41,55 @@ class Hotel extends Model
     {
         return [
             'stay_settings' => 'array',
+            'document_settings' => 'array',
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getDocumentSettingsAttribute($value): array
+    {
+        $decoded = [];
+
+        if (is_array($value)) {
+            $decoded = $value;
+        } elseif (is_string($value)) {
+            $decoded = json_decode($value, true) ?? [];
+        }
+
+        $addressParts = array_filter([
+            $this->address,
+            $this->city,
+            $this->country,
+        ]);
+
+        $defaults = [
+            'display_name' => $this->name,
+            'contact' => [
+                'address' => trim(implode(', ', $addressParts)),
+                'phone' => null,
+                'email' => null,
+            ],
+            'legal' => [
+                'nif' => null,
+                'rccm' => null,
+            ],
+            'header_text' => null,
+            'footer_text' => null,
+            'logo_path' => null,
+            'logo_url' => null,
+        ];
+
+        $settings = array_replace_recursive($defaults, $decoded);
+        $logoPath = $settings['logo_path'] ?? null;
+
+        if ($logoPath) {
+            $disk = config('filesystems.document_logos_disk', 'public');
+            $settings['logo_url'] = Storage::disk($disk)->url($logoPath);
+        }
+
+        return $settings;
     }
 
     public function tenant(): BelongsTo

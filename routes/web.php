@@ -13,6 +13,8 @@ use App\Http\Controllers\BarTableController;
 use App\Http\Controllers\Config\ActiveHotelController;
 use App\Http\Controllers\Config\BarTableConfigController;
 use App\Http\Controllers\Config\HotelConfigController;
+use App\Http\Controllers\Config\HotelDocumentLogoController;
+use App\Http\Controllers\Config\HotelDocumentPreviewController;
 use App\Http\Controllers\Config\HousekeepingChecklistController;
 use App\Http\Controllers\Config\HousekeepingChecklistItemController;
 use App\Http\Controllers\Config\MaintenanceTypeController;
@@ -432,6 +434,13 @@ Route::middleware([
             Route::post('/active-hotel', ActiveHotelController::class)->name('active-hotel');
             Route::get('/hotel', [HotelConfigController::class, 'edit'])->name('hotel.edit');
             Route::put('/hotel', [HotelConfigController::class, 'update'])->name('hotel.update');
+            Route::post('/hotel/documents/logo', [HotelDocumentLogoController::class, 'store'])
+                ->name('hotel.documents.logo.store');
+            Route::delete('/hotel/documents/logo', [HotelDocumentLogoController::class, 'destroy'])
+                ->name('hotel.documents.logo.destroy');
+            Route::get('/hotel/documents/invoice-preview', [HotelDocumentPreviewController::class, 'invoice'])
+                ->middleware('can:hotels.documents.update')
+                ->name('hotel.documents.preview.invoice');
 
             Route::resource('room-types', RoomTypeController::class);
             Route::post('room-types/{roomType}/prices', [RoomTypeController::class, 'storePrice'])->name('room-types.prices.store');

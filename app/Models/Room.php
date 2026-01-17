@@ -18,6 +18,8 @@ class Room extends Model
 
     public const STATUS_OCCUPIED = 'occupied';
 
+    public const STATUS_IN_USE = 'in_use';
+
     public const STATUS_OUT_OF_ORDER = 'out_of_order';
 
     public const HK_STATUS_DIRTY = 'dirty';

@@ -16,10 +16,15 @@ class RoomStateMachine
     private const ALLOWED_TRANSITIONS = [
         Room::STATUS_AVAILABLE => [
             Room::STATUS_OCCUPIED,
+            Room::STATUS_IN_USE,
             Room::STATUS_OUT_OF_ORDER,
         ],
         Room::STATUS_OCCUPIED => [
             Room::STATUS_AVAILABLE,
+        ],
+        Room::STATUS_IN_USE => [
+            Room::STATUS_AVAILABLE,
+            Room::STATUS_OUT_OF_ORDER,
         ],
         Room::STATUS_OUT_OF_ORDER => [
             Room::STATUS_AVAILABLE,
@@ -47,9 +52,25 @@ class RoomStateMachine
         return $room;
     }
 
+    public function markInUse(Room $room, Reservation $reservation): Room
+    {
+        $this->assertTransition($room, Room::STATUS_IN_USE);
+
+        if ((string) $reservation->room_id !== (string) $room->id) {
+            throw ValidationException::withMessages([
+                'room_id' => 'La chambre sélectionnée ne correspond pas à la réservation.',
+            ]);
+        }
+
+        $room->status = Room::STATUS_IN_USE;
+        $room->save();
+
+        return $room;
+    }
+
     public function markAvailable(Room $room): Room
     {
-        if (! in_array($room->status, [Room::STATUS_OCCUPIED, Room::STATUS_OUT_OF_ORDER], true)) {
+        if (! in_array($room->status, [Room::STATUS_OCCUPIED, Room::STATUS_IN_USE, Room::STATUS_OUT_OF_ORDER], true)) {
             return $room;
         }
 
@@ -61,7 +82,7 @@ class RoomStateMachine
 
     public function markOutOfService(Room $room): Room
     {
-        if ($room->status === Room::STATUS_OCCUPIED) {
+        if (in_array($room->status, [Room::STATUS_OCCUPIED, Room::STATUS_IN_USE], true)) {
             throw ValidationException::withMessages([
                 'room_status' => 'Impossible de mettre la chambre hors service pendant un séjour.',
             ]);

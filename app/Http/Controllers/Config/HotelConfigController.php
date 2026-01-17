@@ -4,10 +4,10 @@ namespace App\Http\Controllers\Config;
 
 use App\Http\Controllers\Config\Concerns\ResolvesActiveHotel;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UpdateHotelRequest;
 use App\Models\Hotel;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -39,26 +39,9 @@ class HotelConfigController extends Controller
         ]);
     }
 
-    public function update(Request $request): RedirectResponse
+    public function update(UpdateHotelRequest $request): RedirectResponse
     {
-        $data = $request->validate([
-            'name' => ['required', 'string'],
-            'currency' => ['required', 'string', 'size:3'],
-            'timezone' => ['string', 'nullable'],
-            'check_in_time' => ['required'],
-            'check_out_time' => ['required'],
-            'address' => ['nullable', 'string'],
-            'city' => ['nullable', 'string'],
-            'country' => ['nullable', 'string'],
-            'early_policy' => ['nullable', 'string', Rule::in(['forbidden', 'free', 'paid'])],
-            'early_fee_type' => ['nullable', 'string', Rule::in(['flat', 'percent'])],
-            'early_fee_value' => ['nullable', 'numeric', 'min:0'],
-            'early_cutoff_time' => ['nullable', 'string'],
-            'late_policy' => ['nullable', 'string', Rule::in(['forbidden', 'free', 'paid'])],
-            'late_fee_type' => ['nullable', 'string', Rule::in(['flat', 'percent'])],
-            'late_fee_value' => ['nullable', 'numeric', 'min:0'],
-            'late_max_time' => ['nullable', 'string'],
-        ]);
+        $data = $request->validated();
 
         $staySettings = [
             'standard_checkin_time' => $data['check_in_time'] ?? null,
@@ -90,6 +73,43 @@ class HotelConfigController extends Controller
         );
 
         $hotel = $this->activeHotel($request);
+        $existingDocumentSettings = $hotel?->document_settings ?? [];
+        $canUpdateDocuments = $request->user()->can('hotels.documents.update');
+
+        unset($existingDocumentSettings['logo_url']);
+
+        $documentSettings = $existingDocumentSettings;
+
+        if ($canUpdateDocuments) {
+            $documentSettings = array_replace_recursive($existingDocumentSettings, [
+                'display_name' => $data['document_display_name'] ?? $data['name'],
+                'contact' => [
+                    'address' => $data['document_contact_address'] ?? null,
+                    'phone' => $data['document_contact_phone'] ?? null,
+                    'email' => $data['document_contact_email'] ?? null,
+                ],
+                'legal' => [
+                    'nif' => $data['document_legal_nif'] ?? null,
+                    'rccm' => $data['document_legal_rccm'] ?? null,
+                ],
+                'header_text' => $data['document_header_text'] ?? null,
+                'footer_text' => $data['document_footer_text'] ?? null,
+            ]);
+        }
+
+        unset($documentSettings['logo_url']);
+
+        $data['document_settings'] = $documentSettings;
+        unset(
+            $data['document_display_name'],
+            $data['document_contact_address'],
+            $data['document_contact_phone'],
+            $data['document_contact_email'],
+            $data['document_legal_nif'],
+            $data['document_legal_rccm'],
+            $data['document_header_text'],
+            $data['document_footer_text'],
+        );
 
         if ($hotel === null) {
             $hotel = Hotel::query()

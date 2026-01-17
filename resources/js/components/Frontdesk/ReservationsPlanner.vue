@@ -1514,10 +1514,26 @@
                 this.changeRoomSubmitting = true;
 
                 try {
+                    if (this.selectedEvent?.status !== 'in_house') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Action indisponible',
+                            text: 'Le changement de chambre est disponible uniquement apres le check-in.',
+                        });
+                        return;
+                    }
+
+                    const vacatedUsage = await this.promptVacatedUsage();
+
+                    if (!vacatedUsage) {
+                        return;
+                    }
+
                     await axios.patch(
                         `/reservations/${this.selectedEvent.id}/stay/room`,
                         {
                             room_id: this.changeRoomSelection,
+                            vacated_usage: vacatedUsage,
                         },
                     );
 
@@ -1550,6 +1566,33 @@
                 } finally {
                     this.changeRoomSubmitting = false;
                 }
+            },
+            async promptVacatedUsage() {
+                const result = await Swal.fire({
+                    title: 'La chambre quittee a-t-elle ete utilisee ?',
+                    icon: 'question',
+                    showDenyButton: true,
+                    showCancelButton: true,
+                    confirmButtonText: 'Oui, utilisee',
+                    denyButtonText: 'Non, pas utilisee',
+                    cancelButtonText: 'Je ne sais pas',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                });
+
+                if (result.isConfirmed) {
+                    return 'used';
+                }
+
+                if (result.isDenied) {
+                    return 'not_used';
+                }
+
+                if (result.dismiss === Swal.DismissReason.cancel) {
+                    return 'unknown';
+                }
+
+                return null;
             },
             calculateStayUnits(kind, start, end, offer = null) {
                 const startDate = new Date(start);

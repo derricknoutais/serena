@@ -170,7 +170,7 @@ class RoomBoardData
 
             if ($room->status === Room::STATUS_OUT_OF_ORDER) {
                 $uiStatus = 'out_of_order';
-            } elseif ($room->status === Room::STATUS_OCCUPIED) {
+            } elseif (in_array($room->status, [Room::STATUS_OCCUPIED, Room::STATUS_IN_USE], true)) {
                 $uiStatus = 'occupied';
                 $isOccupied = true;
                 if ($inHouseReservation !== null) {

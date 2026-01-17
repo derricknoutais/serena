@@ -125,7 +125,7 @@ class DashboardController extends Controller
             ->count();
 
         $roomsOccupied = (clone $rooms)
-            ->where('status', Room::STATUS_OCCUPIED)
+            ->whereIn('status', [Room::STATUS_OCCUPIED, Room::STATUS_IN_USE])
             ->count();
 
         $roomsAvailable = (clone $rooms)
