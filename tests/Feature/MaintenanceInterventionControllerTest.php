@@ -148,7 +148,7 @@ it('submits interventions for accounting', function (): void {
     expect($intervention->submitted_to_accounting_at)->not->toBeNull();
 });
 
-it('closes tickets when submitting interventions', function (): void {
+it('closes tickets when approving interventions', function (): void {
     [
         'tenant' => $tenant,
         'user' => $user,
@@ -196,13 +196,21 @@ it('closes tickets when submitting interventions', function (): void {
         'parts_cost' => 0,
     ]);
 
-    $response = actingAs($user)->postJson(sprintf(
+    $submitResponse = actingAs($user)->postJson(sprintf(
         'http://%s/maintenance/interventions/%s/submit',
         tenantDomain($tenant),
         $intervention->id,
     ));
 
-    $response->assertSuccessful();
+    $submitResponse->assertSuccessful();
+
+    $approveResponse = actingAs($user)->postJson(sprintf(
+        'http://%s/maintenance/interventions/%s/approve',
+        tenantDomain($tenant),
+        $intervention->id,
+    ));
+
+    $approveResponse->assertSuccessful();
 
     $ticket->refresh();
 

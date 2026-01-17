@@ -367,8 +367,6 @@ class MaintenanceInterventionController extends Controller
             'rejection_reason' => null,
         ])->save();
 
-        $this->closeTicketsAfterSubmit($maintenanceIntervention, $user);
-
         activity('maintenance')
             ->performedOn($maintenanceIntervention)
             ->causedBy($user)
@@ -407,6 +405,8 @@ class MaintenanceInterventionController extends Controller
             'rejected_by_user_id' => null,
             'rejection_reason' => null,
         ])->save();
+
+        $this->closeTicketsAfterSubmit($maintenanceIntervention, $user);
 
         activity('maintenance')
             ->performedOn($maintenanceIntervention)
