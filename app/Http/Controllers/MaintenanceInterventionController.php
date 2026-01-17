@@ -15,6 +15,7 @@ use App\Models\Hotel;
 use App\Models\MaintenanceIntervention;
 use App\Models\MaintenanceInterventionItem;
 use App\Models\MaintenanceTicket;
+use App\Models\Room;
 use App\Models\StockInventory;
 use App\Models\StockItem;
 use App\Models\StockMovement;
@@ -365,6 +366,8 @@ class MaintenanceInterventionController extends Controller
             'rejected_by_user_id' => null,
             'rejection_reason' => null,
         ])->save();
+
+        $this->closeTicketsAfterSubmit($maintenanceIntervention, $user);
 
         activity('maintenance')
             ->performedOn($maintenanceIntervention)
@@ -732,6 +735,59 @@ class MaintenanceInterventionController extends Controller
         if ($lines !== []) {
             $intervention->costs()->createMany($lines);
             $intervention->recalcTotalsFromCosts();
+        }
+    }
+
+    private function closeTicketsAfterSubmit(MaintenanceIntervention $intervention, User $user): void
+    {
+        $tickets = $intervention->tickets()->with('room')->get();
+
+        foreach ($tickets as $ticket) {
+            if ($ticket->status === MaintenanceTicket::STATUS_CLOSED) {
+                continue;
+            }
+
+            $ticket->forceFill([
+                'status' => MaintenanceTicket::STATUS_CLOSED,
+                'closed_at' => now(),
+                'closed_by_user_id' => $user->id,
+            ])->save();
+
+            activity('maintenance')
+                ->performedOn($ticket)
+                ->causedBy($user)
+                ->withProperties([
+                    'status' => $ticket->status,
+                    'closed_at' => $ticket->closed_at?->toDateTimeString(),
+                    'closed_by_user_id' => $user->id,
+                    'intervention_id' => $intervention->id,
+                ])
+                ->event('closed')
+                ->log('closed');
+
+            $room = $ticket->room;
+
+            if (! $room) {
+                continue;
+            }
+
+            $hasBlockingOpenTickets = $room->maintenanceTickets()
+                ->whereIn('status', [
+                    MaintenanceTicket::STATUS_OPEN,
+                    MaintenanceTicket::STATUS_IN_PROGRESS,
+                ])
+                ->where('blocks_sale', true)
+                ->exists();
+
+            if (in_array($room->status, [Room::STATUS_OCCUPIED, Room::STATUS_IN_USE], true) && $hasBlockingOpenTickets) {
+                $room->block_sale_after_checkout = true;
+            }
+
+            if (! $hasBlockingOpenTickets) {
+                $room->block_sale_after_checkout = false;
+            }
+
+            $room->save();
         }
     }
 

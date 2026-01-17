@@ -101,6 +101,7 @@
 </template>
 
 <script>
+import axios from 'axios';
 import Swal from 'sweetalert2';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Link, router } from '@inertiajs/vue3';
@@ -143,12 +144,27 @@ export default {
                 return;
             }
 
-            await router.post(`/stock/purchases/${this.purchase.id}/receive`, {}, {
-                preserveScroll: true,
-                onFinish: () => {
-                    router.reload({ only: ['purchase'] });
-                },
-            });
+            try {
+                await axios.post(`/stock/purchases/${this.purchase.id}/receive`, null, {
+                    headers: { Accept: 'application/json' },
+                });
+
+                await Swal.fire({
+                    icon: 'success',
+                    title: 'Bon d\'achat réceptionné',
+                    timer: 1500,
+                    showConfirmButton: false,
+                });
+
+                router.reload({ only: ['purchase'] });
+            } catch (error) {
+                const message = error.response?.data?.message ?? 'Impossible de réceptionner le bon d\'achat.';
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erreur',
+                    text: message,
+                });
+            }
         },
         async voidPurchase() {
             if (!this.permissions.can_update_purchase || this.purchase.status !== 'draft') {
@@ -169,12 +185,27 @@ export default {
                 return;
             }
 
-            await router.post(`/stock/purchases/${this.purchase.id}/void`, {}, {
-                preserveScroll: true,
-                onFinish: () => {
-                    router.reload({ only: ['purchase'] });
-                },
-            });
+            try {
+                await axios.post(`/stock/purchases/${this.purchase.id}/void`, null, {
+                    headers: { Accept: 'application/json' },
+                });
+
+                await Swal.fire({
+                    icon: 'success',
+                    title: 'Bon d\'achat annulé',
+                    timer: 1500,
+                    showConfirmButton: false,
+                });
+
+                router.reload({ only: ['purchase'] });
+            } catch (error) {
+                const message = error.response?.data?.message ?? 'Impossible d\'annuler le bon d\'achat.';
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erreur',
+                    text: message,
+                });
+            }
         },
         formatAmount(value, currency = 'XAF') {
             const amount = Number(value || 0);

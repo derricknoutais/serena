@@ -148,6 +148,69 @@ it('submits interventions for accounting', function (): void {
     expect($intervention->submitted_to_accounting_at)->not->toBeNull();
 });
 
+it('closes tickets when submitting interventions', function (): void {
+    [
+        'tenant' => $tenant,
+        'user' => $user,
+        'hotel' => $hotel,
+        'room' => $room,
+    ] = setupReservationEnvironment('intervention-submit-closes-tickets');
+
+    $user->assignRole('manager');
+
+    $type = MaintenanceType::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'name' => 'Plomberie',
+        'is_active' => true,
+    ]);
+
+    $ticket = MaintenanceTicket::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'room_id' => $room->id,
+        'maintenance_type_id' => $type->id,
+        'reported_by_user_id' => $user->id,
+        'status' => MaintenanceTicket::STATUS_OPEN,
+        'severity' => MaintenanceTicket::SEVERITY_MEDIUM,
+        'blocks_sale' => false,
+        'title' => 'Robinet',
+        'opened_at' => now(),
+    ]);
+
+    $intervention = MaintenanceIntervention::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'created_by_user_id' => $user->id,
+        'labor_cost' => 500,
+        'parts_cost' => 0,
+        'currency' => 'XAF',
+        'accounting_status' => MaintenanceIntervention::STATUS_DRAFT,
+    ]);
+
+    $intervention->tickets()->attach($ticket->id, [
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'work_done' => 'Fait',
+        'labor_cost' => 0,
+        'parts_cost' => 0,
+    ]);
+
+    $response = actingAs($user)->postJson(sprintf(
+        'http://%s/maintenance/interventions/%s/submit',
+        tenantDomain($tenant),
+        $intervention->id,
+    ));
+
+    $response->assertSuccessful();
+
+    $ticket->refresh();
+
+    expect($ticket->status)->toBe(MaintenanceTicket::STATUS_CLOSED)
+        ->and($ticket->closed_by_user_id)->toBe($user->id)
+        ->and($ticket->closed_at)->not->toBeNull();
+});
+
 it('adds a cost line and recalculates estimated totals without creating payments', function (): void {
     [
         'tenant' => $tenant,
