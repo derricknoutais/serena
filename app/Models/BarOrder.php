@@ -26,6 +26,8 @@ class BarOrder extends Model
         'opened_at',
         'closed_at',
         'cashier_user_id',
+        'stock_consumed_at',
+        'stock_returned_at',
     ];
 
     protected function casts(): array
@@ -33,6 +35,8 @@ class BarOrder extends Model
         return [
             'opened_at' => 'datetime',
             'closed_at' => 'datetime',
+            'stock_consumed_at' => 'datetime',
+            'stock_returned_at' => 'datetime',
         ];
     }
 

@@ -1970,6 +1970,17 @@ export default {
                 }
             } catch (error) {
                 console.error('Erreur lors du calcul de la date de départ pour le walk-in', error);
+
+                const message =
+                    error.response?.data?.message
+                    ?? error.response?.data?.errors?.offer?.[0]
+                    ?? 'Impossible de calculer la date de départ.';
+
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Offre invalide',
+                    text: message,
+                });
             }
 
             return new Date(start.getTime() + 24 * 60 * 60 * 1000);

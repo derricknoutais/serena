@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BarOrder;
+use App\Models\Folio;
 use App\Models\Hotel;
 use App\Models\MaintenanceIntervention;
 use App\Models\MaintenanceInterventionItem;
@@ -69,7 +71,12 @@ class StockController extends Controller
             ->where('hotel_id', $hotel->id)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'category']);
+
+        $barStorageLocationIds = $availableStorageLocations
+            ->where('category', 'bar')
+            ->pluck('id')
+            ->values();
 
         $availableStockItems = StockItem::query()
             ->where('tenant_id', $user->tenant_id)
@@ -97,6 +104,7 @@ class StockController extends Controller
             'storageLocations' => $availableStorageLocations,
             'stockItems' => $availableStockItems,
             'movements' => $recentMovements->map(fn (StockMovement $movement) => $this->movementPayload($movement)),
+            'barStorageLocationIds' => $barStorageLocationIds,
             'permissions' => [
                 'can_create_purchase' => $user->can('stock.purchases.create'),
                 'can_receive_purchase' => $user->can('stock.purchases.receive'),
@@ -135,6 +143,8 @@ class StockController extends Controller
             'from_location' => $movement->fromLocation?->only(['id', 'name']),
             'to_location' => $movement->toLocation?->only(['id', 'name']),
             'reference' => $this->movementReference($movement),
+            'reference_type' => $movement->reference_type,
+            'reference_id' => $movement->reference_id,
             'lines' => $movement->lines->map(function ($line) {
                 return [
                     'id' => $line->id,
@@ -174,6 +184,16 @@ class StockController extends Controller
             StockInventory::class => [
                 'type' => 'stock_inventory',
                 'label' => sprintf('Inventaire #%s', $movement->reference_id),
+                'url' => null,
+            ],
+            BarOrder::class => [
+                'type' => 'bar_order',
+                'label' => sprintf('Commande Bar #%s', $movement->reference_id),
+                'url' => null,
+            ],
+            Folio::class => [
+                'type' => 'pos_sale',
+                'label' => sprintf('Vente POS #%s', $movement->reference_id),
                 'url' => null,
             ],
             default => null,

@@ -81,7 +81,7 @@
                                             track-by="id"
                                             label="name"
                                             :model-value="stockItems.find((item) => String(item.id) === String(line.stock_item_id)) ?? null"
-                                            @update:modelValue="(value) => (line.stock_item_id = value?.id ?? '')"
+                                            @update:modelValue="(value) => onStockItemSelected(line, value)"
                                             placeholder="Sélectionner"
                                             class="w-full"
                                             :allow-empty="true"
@@ -249,6 +249,10 @@ export default {
             const qty = Number(line.quantity ?? 0);
             const cost = Number(line.unit_cost ?? 0);
             return qty * cost;
+        },
+        onStockItemSelected(line, value) {
+            line.stock_item_id = value?.id ?? '';
+            line.unit_cost = value?.default_purchase_price ?? 0;
         },
         addLine() {
             this.form.lines.push(this.emptyLine(this.form.currency || 'XAF'));

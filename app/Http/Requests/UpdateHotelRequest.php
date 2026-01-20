@@ -17,6 +17,8 @@ class UpdateHotelRequest extends FormRequest
      */
     public function rules(): array
     {
+        $hotelId = $this->user()?->active_hotel_id ?? $this->user()?->hotel_id;
+
         return [
             'name' => ['required', 'string'],
             'currency' => ['required', 'string', 'size:3'],
@@ -42,6 +44,13 @@ class UpdateHotelRequest extends FormRequest
             'document_legal_rccm' => ['nullable', 'string', 'max:120'],
             'document_header_text' => ['nullable', 'string'],
             'document_footer_text' => ['nullable', 'string'],
+            'default_bar_stock_location_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('storage_locations', 'id')
+                    ->where('tenant_id', $this->user()?->tenant_id)
+                    ->where('hotel_id', $hotelId),
+            ],
         ];
     }
 }

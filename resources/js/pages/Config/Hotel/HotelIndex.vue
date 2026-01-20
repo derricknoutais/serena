@@ -22,7 +22,7 @@
             <div v-if="canManageHotel" class="space-y-4">
                 <div class="flex flex-wrap items-center gap-2 rounded-xl bg-white p-2 shadow-sm">
                     <button
-                        v-for="tab in tabs"
+                        v-for="tab in availableTabs"
                         :key="tab.value"
                         type="button"
                         class="cursor-pointer rounded-lg px-4 py-2 text-sm font-semibold transition"
@@ -410,6 +410,61 @@
                             </div>
                         </div>
                     </section>
+
+                    <section v-show="activeTab === 'bar_stock'" class="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <h2 class="text-base font-semibold text-gray-900">Stock Bar</h2>
+                                <p class="text-xs text-gray-500">Emplacement par defaut pour les ventes POS.</p>
+                            </div>
+                            <div class="flex items-center gap-3 text-xs">
+                                <span :class="statusClass(segmentStatus.bar_stock)">{{ statusLabel(segmentStatus.bar_stock) }}</span>
+                                <PrimaryButton
+                                    type="button"
+                                    class="px-3 py-2 text-xs"
+                                    :disabled="segmentSaving.bar_stock"
+                                    @click="saveSegment('bar_stock')"
+                                >
+                                    Enregistrer
+                                </PrimaryButton>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 grid gap-4 md:grid-cols-2">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">
+                                    Emplacement Bar par defaut
+                                </label>
+                                <select
+                                    v-model="form.default_bar_stock_location_id"
+                                    class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                    @change="scheduleAutoSave('bar_stock')"
+                                >
+                                    <option :value="null">Aucun</option>
+                                    <option v-for="location in barStockLocationsList" :key="location.id" :value="location.id">
+                                        {{ location.name }}
+                                    </option>
+                                </select>
+                                <p v-if="errors.default_bar_stock_location_id" class="mt-1 text-xs text-red-600">
+                                    {{ errors.default_bar_stock_location_id }}
+                                </p>
+                            </div>
+
+                            <div class="flex items-end">
+                                <PrimaryButton
+                                    type="button"
+                                    class="px-4 py-2 text-xs"
+                                    :disabled="creatingBarLocation"
+                                    @click="createBarLocation"
+                                >
+                                    {{ creatingBarLocation ? 'Creation...' : 'Creer emplacement Bar' }}
+                                </PrimaryButton>
+                            </div>
+                        </div>
+                        <p v-if="!barStockLocationsList.length" class="mt-3 text-xs text-gray-500">
+                            Aucun emplacement Bar n'existe encore pour cet hotel.
+                        </p>
+                    </section>
                 </form>
             </div>
         </div>
@@ -436,6 +491,10 @@ export default {
             type: Object,
             default: () => ({}),
         },
+        barStockLocations: {
+            type: Array,
+            default: () => [],
+        },
     },
     data() {
         return {
@@ -444,22 +503,27 @@ export default {
                 { value: 'general', label: 'Informations' },
                 { value: 'policies', label: 'Politiques' },
                 { value: 'documents', label: 'Documents' },
+                { value: 'bar_stock', label: 'Stock Bar', permission: 'canManageBarStock' },
             ],
             autoSaveDelay: 700,
             segmentStatus: {
                 general: 'idle',
                 policies: 'idle',
                 documents: 'idle',
+                bar_stock: 'idle',
             },
             segmentSaving: {
                 general: false,
                 policies: false,
                 documents: false,
+                bar_stock: false,
             },
             segmentTimers: {},
             documentLogoSubmitting: false,
             documentLogoError: '',
             documentLogoPreviewUrl: this.hotel?.document_settings?.logo_url || '',
+            barStockLocationsList: [...this.barStockLocations],
+            creatingBarLocation: false,
             form: {
                 name: this.hotel?.name || '',
                 currency: this.hotel?.currency || 'XAF',
@@ -486,6 +550,7 @@ export default {
                 document_header_text: this.hotel?.document_settings?.header_text || '',
                 document_footer_text: this.hotel?.document_settings?.footer_text || '',
                 document_logo_path: this.hotel?.document_settings?.logo_path || null,
+                default_bar_stock_location_id: this.hotel?.default_bar_stock_location_id ?? null,
             },
             hasHotel: Boolean(this.hotel && this.hotel.id),
         };
@@ -497,11 +562,17 @@ export default {
         isOwner() {
             return (this.$page.props?.auth?.user?.roles || []).some((r) => r.name === 'owner');
         },
+        canManageBarStock() {
+            return this.$page.props?.auth?.can?.stock_manage_bar_settings ?? false;
+        },
         canManageHotel() {
-            return this.isOwner || this.canUpdateDocuments;
+            return this.isOwner || this.canUpdateDocuments || this.canManageBarStock;
         },
         canUpdateDocuments() {
             return this.$page.props?.auth?.can?.hotels_documents_update ?? false;
+        },
+        availableTabs() {
+            return this.tabs.filter((tab) => !tab.permission || this[tab.permission]);
         },
         invoicePreviewUrl() {
             return '/settings/resources/hotel/documents/invoice-preview';
@@ -525,7 +596,7 @@ export default {
     },
     methods: {
         setActiveTab(tab) {
-            const allowed = this.tabs.map((item) => item.value);
+            const allowed = this.availableTabs.map((item) => item.value);
             if (!allowed.includes(tab)) {
                 return;
             }
@@ -623,6 +694,30 @@ export default {
                 return 'text-amber-600';
             }
             return 'text-gray-400';
+        },
+        async createBarLocation() {
+            if (!this.canManageBarStock) {
+                return;
+            }
+
+            this.creatingBarLocation = true;
+
+            try {
+                const response = await axios.post('/settings/resources/hotel/bar-stock-location');
+                const location = response?.data?.location;
+
+                if (location && !this.barStockLocationsList.find((item) => item.id === location.id)) {
+                    this.barStockLocationsList.push(location);
+                }
+
+                if (response?.data?.default_bar_stock_location_id) {
+                    this.form.default_bar_stock_location_id = response.data.default_bar_stock_location_id;
+                }
+            } catch (error) {
+                // ignore
+            } finally {
+                this.creatingBarLocation = false;
+            }
         },
         processDocumentLogo(fieldName, file, metadata, load, error, progress, abort) {
             if (!this.canUpdateDocuments) {

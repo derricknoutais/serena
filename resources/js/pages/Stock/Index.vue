@@ -211,16 +211,36 @@
                 </article>
 
                 <article class="rounded-2xl border border-serena-border bg-white p-6 shadow-sm">
-                    <header class="flex items-center justify-between">
+                    <header class="flex flex-wrap items-center justify-between gap-3">
                         <div>
                             <h2 class="text-lg font-semibold text-serena-text-main">Emplacements</h2>
                             <p class="text-sm text-serena-text-muted">
                                 Sélectionnez un emplacement pour consulter les articles stockés et leurs quantités.
                             </p>
                         </div>
-                        <span class="text-xs font-semibold uppercase tracking-wide text-serena-text-muted">
-                            {{ storageLocations.length }} emplacements
-                        </span>
+                        <div class="flex items-center gap-3 text-xs">
+                            <div class="flex items-center gap-2 rounded-full border border-serena-border bg-white p-1">
+                                <button
+                                    type="button"
+                                    class="rounded-full px-3 py-1 font-semibold"
+                                    :class="stockView === 'all' ? 'bg-serena-primary text-white' : 'text-serena-text-muted'"
+                                    @click="stockView = 'all'"
+                                >
+                                    Tout
+                                </button>
+                                <button
+                                    type="button"
+                                    class="rounded-full px-3 py-1 font-semibold"
+                                    :class="stockView === 'bar' ? 'bg-serena-primary text-white' : 'text-serena-text-muted'"
+                                    @click="stockView = 'bar'"
+                                >
+                                    Stock Bar
+                                </button>
+                            </div>
+                            <span class="font-semibold uppercase tracking-wide text-serena-text-muted">
+                                {{ filteredStorageLocations.length }} emplacements
+                            </span>
+                        </div>
                     </header>
                     <div class="mt-4 grid gap-3 md:grid-cols-2">
                         <button
@@ -489,6 +509,10 @@ export default {
             type: Array,
             default: () => [],
         },
+        barStorageLocationIds: {
+            type: Array,
+            default: () => [],
+        },
         stockItems: {
             type: Array,
             default: () => [],
@@ -522,13 +546,46 @@ export default {
             showInventoryModal: false,
             inventoryForm: this.createInventoryForm(),
             inventorySubmitting: false,
-        selectedLocationId: '',
-        selectedItemId: '',
+            selectedLocationId: '',
+            selectedItemId: '',
+            stockView: 'all',
         };
     },
     computed: {
+        filteredStorageLocations() {
+            if (this.stockView !== 'bar') {
+                return this.storageLocations;
+            }
+
+            const allowed = new Set(this.barStorageLocationIds || []);
+
+            return this.storageLocations.filter((location) => allowed.has(location.id));
+        },
+        filteredStockOnHand() {
+            if (this.stockView !== 'bar') {
+                return this.stockOnHand;
+            }
+
+            const allowed = new Set(this.barStorageLocationIds || []);
+
+            return this.stockOnHand.filter((record) => allowed.has(record.storage_location?.id));
+        },
+        filteredMovements() {
+            if (this.stockView !== 'bar') {
+                return this.movements;
+            }
+
+            const allowed = new Set(this.barStorageLocationIds || []);
+
+            return this.movements.filter((movement) => {
+                const fromId = movement.from_location?.id;
+                const toId = movement.to_location?.id;
+
+                return allowed.has(fromId) || allowed.has(toId);
+            });
+        },
         locationStockMap() {
-            return this.stockOnHand.reduce((map, record) => {
+            return this.filteredStockOnHand.reduce((map, record) => {
                 const locationId = record.storage_location?.id;
                 if (!locationId) {
                     return map;
@@ -544,7 +601,7 @@ export default {
             }, {});
         },
         locationSummaries() {
-            return this.storageLocations.map((location) => {
+            return this.filteredStorageLocations.map((location) => {
                 const records = this.locationStockMap[location.id] ?? [];
                 const totalQuantity = records.reduce(
                     (total, record) => total + Number(record.quantity_on_hand ?? 0),
@@ -563,7 +620,7 @@ export default {
             return this.locationStockMap[this.selectedLocationId] ?? [];
         },
         selectedLocation() {
-            return this.storageLocations.find((location) => location.id === this.selectedLocationId) ?? null;
+            return this.filteredStorageLocations.find((location) => location.id === this.selectedLocationId) ?? null;
         },
         itemSummaries() {
             const map = new Map();
@@ -616,7 +673,7 @@ export default {
                 return [];
             }
 
-            return this.movements.filter((movement) =>
+            return this.filteredMovements.filter((movement) =>
                 movement.lines?.some((line) => line.stock_item?.id === this.selectedItemId),
             );
         },
@@ -774,7 +831,7 @@ export default {
     watch: {
         storageLocations: {
             handler(locations) {
-                const firstId = locations[0]?.id ?? '';
+                const firstId = this.filteredStorageLocations[0]?.id ?? '';
 
                 if (!this.inventoryForm.storage_location_id) {
                     this.inventoryForm.storage_location_id = firstId;
@@ -785,6 +842,10 @@ export default {
                 }
             },
             immediate: true,
+        },
+        stockView() {
+            const firstId = this.filteredStorageLocations[0]?.id ?? '';
+            this.selectedLocationId = firstId;
         },
         stockItems: {
             handler(items) {

@@ -176,6 +176,9 @@ Route::middleware([
             Route::patch('/bar/orders/{barOrder}/move-table', [BarOrderController::class, 'moveTable'])
                 ->middleware('can:pos.tables.manage')
                 ->name('bar.orders.move_table');
+            Route::post('/bar/orders/{barOrder}/void', [BarOrderController::class, 'void'])
+                ->middleware('can:pos.stock.return')
+                ->name('bar.orders.void');
         });
 
         Route::get('/night-audit', [NightAuditController::class, 'index'])
@@ -436,6 +439,9 @@ Route::middleware([
             Route::post('/active-hotel', ActiveHotelController::class)->name('active-hotel');
             Route::get('/hotel', [HotelConfigController::class, 'edit'])->name('hotel.edit');
             Route::put('/hotel', [HotelConfigController::class, 'update'])->name('hotel.update');
+            Route::post('/hotel/bar-stock-location', [HotelConfigController::class, 'createBarStockLocation'])
+                ->middleware('can:stock.manage_bar_settings')
+                ->name('hotel.bar-stock-location');
             Route::post('/hotel/documents/logo', [HotelDocumentLogoController::class, 'store'])
                 ->name('hotel.documents.logo.store');
             Route::delete('/hotel/documents/logo', [HotelDocumentLogoController::class, 'destroy'])

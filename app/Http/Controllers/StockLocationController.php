@@ -37,7 +37,7 @@ class StockLocationController extends Controller
             'id' => $location->id,
             'name' => $location->name,
             'category' => $location->category,
-            'count' => ($stockOnHand[$location->id]?->count()) ?? 0,
+            'count' => $stockOnHand->get($location->id)?->count() ?? 0,
         ]);
 
         return Inertia::render('Stock/Locations/Index', [

@@ -8,7 +8,9 @@ use App\Http\Requests\OpenBarOrderForTableRequest;
 use App\Models\BarOrder;
 use App\Models\BarTable;
 use App\Models\Hotel;
+use App\Models\StockMovement;
 use App\Models\User;
+use App\Services\InventoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +19,8 @@ use Illuminate\Validation\ValidationException;
 class BarOrderController extends Controller
 {
     use ResolvesActiveHotel;
+
+    public function __construct(private readonly InventoryService $inventoryService) {}
 
     public function openForTable(OpenBarOrderForTableRequest $request): JsonResponse
     {
@@ -109,6 +113,65 @@ class BarOrderController extends Controller
 
         $barOrder->update([
             'bar_table_id' => $targetTable->id,
+        ]);
+
+        return response()->json([
+            'order' => $this->orderPayload($barOrder->load('barTable')),
+        ]);
+    }
+
+    public function void(Request $request, BarOrder $barOrder): JsonResponse
+    {
+        $this->authorize('pos.stock.return');
+
+        /** @var User $user */
+        $user = $request->user();
+        $hotel = $this->requireActiveHotel($request);
+
+        if ($barOrder->tenant_id !== $user->tenant_id || $barOrder->hotel_id !== $hotel->id) {
+            abort(404);
+        }
+
+        if ($barOrder->status === BarOrder::STATUS_VOID) {
+            return response()->json([
+                'order' => $this->orderPayload($barOrder->load('barTable')),
+            ]);
+        }
+
+        if ($barOrder->stock_consumed_at && $barOrder->stock_returned_at === null) {
+            $movements = StockMovement::query()
+                ->where('tenant_id', $user->tenant_id)
+                ->where('hotel_id', $hotel->id)
+                ->where('reference_type', BarOrder::class)
+                ->where('reference_id', $barOrder->id)
+                ->where('movement_type', StockMovement::TYPE_CONSUME)
+                ->with('lines')
+                ->get();
+
+            foreach ($movements as $movement) {
+                $this->inventoryService->returnForPosMovement(
+                    $movement,
+                    $user,
+                    sprintf('Annulation POS #%s', $barOrder->id),
+                );
+            }
+
+            $barOrder->forceFill(['stock_returned_at' => now()])->save();
+
+            activity('pos')
+                ->performedOn($barOrder)
+                ->causedBy($user)
+                ->withProperties([
+                    'order_id' => $barOrder->id,
+                    'movements_count' => $movements->count(),
+                ])
+                ->event('pos.stock_returned')
+                ->log('pos.stock_returned');
+        }
+
+        $barOrder->update([
+            'status' => BarOrder::STATUS_VOID,
+            'closed_at' => now(),
         ]);
 
         return response()->json([

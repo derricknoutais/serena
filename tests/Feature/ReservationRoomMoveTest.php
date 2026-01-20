@@ -2,11 +2,14 @@
 
 use App\Models\Guest;
 use App\Models\Hotel;
+use App\Models\Offer;
+use App\Models\OfferRoomTypePrice;
 use App\Models\Reservation;
 use App\Models\Room;
 use App\Models\RoomType;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\FolioBillingService;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Carbon;
@@ -133,6 +136,57 @@ beforeEach(function (): void {
 
 it('moves room and keeps hk status when not used', function (): void {
     $setup = makeRoomMoveSetup('move-not-used.serena.test');
+    $offer = Offer::query()->create([
+        'tenant_id' => $setup['tenant']->getKey(),
+        'hotel_id' => $setup['hotel']->getKey(),
+        'name' => 'Tarif souple',
+        'kind' => 'night',
+        'billing_mode' => 'per_stay',
+        'is_active' => true,
+    ]);
+
+    $newRoomType = RoomType::query()->create([
+        'tenant_id' => $setup['tenant']->getKey(),
+        'hotel_id' => $setup['hotel']->getKey(),
+        'name' => 'Suite',
+        'capacity_adults' => 2,
+        'capacity_children' => 1,
+        'base_price' => 25000,
+    ]);
+
+    $setup['newRoom']->update([
+        'room_type_id' => $newRoomType->getKey(),
+    ]);
+
+    OfferRoomTypePrice::query()->create([
+        'tenant_id' => $setup['tenant']->getKey(),
+        'hotel_id' => $setup['hotel']->getKey(),
+        'room_type_id' => $setup['roomType']->getKey(),
+        'offer_id' => $offer->getKey(),
+        'price' => 15000,
+        'currency' => 'XAF',
+    ]);
+
+    OfferRoomTypePrice::query()->create([
+        'tenant_id' => $setup['tenant']->getKey(),
+        'hotel_id' => $setup['hotel']->getKey(),
+        'room_type_id' => $newRoomType->getKey(),
+        'offer_id' => $offer->getKey(),
+        'price' => 25000,
+        'currency' => 'XAF',
+    ]);
+
+    $setup['reservation']->update([
+        'offer_id' => $offer->getKey(),
+        'offer_name' => $offer->name,
+        'offer_kind' => $offer->kind,
+        'check_in_date' => '2025-05-01 15:00:00',
+        'check_out_date' => '2025-05-04 11:00:00',
+        'actual_check_in_at' => '2025-05-01 15:00:00',
+        'unit_price' => 15000,
+        'base_amount' => 45000,
+        'total_amount' => 45000,
+    ]);
 
     $this->actingAs($setup['user'])
         ->withHeaders(['Accept' => 'application/json'])
@@ -148,13 +202,80 @@ it('moves room and keeps hk status when not used', function (): void {
     $setup['oldRoom']->refresh();
     $setup['newRoom']->refresh();
 
+    $folio = app(FolioBillingService::class)
+        ->ensureMainFolioForReservation($setup['reservation']->fresh());
+    $stayItems = $folio->items()->where('is_stay_item', true)->get();
+    $adjustments = $folio->items()
+        ->where('type', 'stay_adjustment')
+        ->where('description', 'like', 'Changement de chambre%')
+        ->count();
+
     expect($setup['oldRoom']->status)->toBe(Room::STATUS_AVAILABLE)
         ->and($setup['oldRoom']->hk_status)->toBe(Room::HK_STATUS_INSPECTED)
         ->and($setup['newRoom']->status)->toBe(Room::STATUS_IN_USE);
+
+    expect($stayItems)->toHaveCount(1)
+        ->and($stayItems->first()->unit_price)->toBe(25000.0)
+        ->and($stayItems->first()->quantity)->toBe(3.0)
+        ->and($stayItems->first()->meta['room_id'])->toBe($setup['newRoom']->getKey())
+        ->and($stayItems->first()->meta['source'])->toBe('room_change')
+        ->and($folio->balance)->toBe(75000.0)
+        ->and($adjustments)->toBe(0);
 });
 
 it('moves room and marks old room dirty when used', function (): void {
     $setup = makeRoomMoveSetup('move-used.serena.test');
+    $offer = Offer::query()->create([
+        'tenant_id' => $setup['tenant']->getKey(),
+        'hotel_id' => $setup['hotel']->getKey(),
+        'name' => 'Tarif souple',
+        'kind' => 'night',
+        'billing_mode' => 'per_stay',
+        'is_active' => true,
+    ]);
+
+    $newRoomType = RoomType::query()->create([
+        'tenant_id' => $setup['tenant']->getKey(),
+        'hotel_id' => $setup['hotel']->getKey(),
+        'name' => 'Suite',
+        'capacity_adults' => 2,
+        'capacity_children' => 1,
+        'base_price' => 25000,
+    ]);
+
+    $setup['newRoom']->update([
+        'room_type_id' => $newRoomType->getKey(),
+    ]);
+
+    OfferRoomTypePrice::query()->create([
+        'tenant_id' => $setup['tenant']->getKey(),
+        'hotel_id' => $setup['hotel']->getKey(),
+        'room_type_id' => $setup['roomType']->getKey(),
+        'offer_id' => $offer->getKey(),
+        'price' => 15000,
+        'currency' => 'XAF',
+    ]);
+
+    OfferRoomTypePrice::query()->create([
+        'tenant_id' => $setup['tenant']->getKey(),
+        'hotel_id' => $setup['hotel']->getKey(),
+        'room_type_id' => $newRoomType->getKey(),
+        'offer_id' => $offer->getKey(),
+        'price' => 25000,
+        'currency' => 'XAF',
+    ]);
+
+    $setup['reservation']->update([
+        'offer_id' => $offer->getKey(),
+        'offer_name' => $offer->name,
+        'offer_kind' => $offer->kind,
+        'check_in_date' => '2025-05-01 15:00:00',
+        'check_out_date' => '2025-05-04 11:00:00',
+        'actual_check_in_at' => '2025-05-01 15:00:00',
+        'unit_price' => 15000,
+        'base_amount' => 45000,
+        'total_amount' => 45000,
+    ]);
 
     $this->actingAs($setup['user'])
         ->withHeaders(['Accept' => 'application/json'])
@@ -163,6 +284,7 @@ it('moves room and marks old room dirty when used', function (): void {
             [
                 'room_id' => $setup['newRoom']->id,
                 'vacated_usage' => 'used',
+                'moved_at' => '2025-05-03 10:00:00',
             ],
         )
         ->assertOk();
@@ -170,9 +292,27 @@ it('moves room and marks old room dirty when used', function (): void {
     $setup['oldRoom']->refresh();
     $setup['newRoom']->refresh();
 
+    $folio = app(FolioBillingService::class)
+        ->ensureMainFolioForReservation($setup['reservation']->fresh());
+    $stayItems = $folio->items()->where('is_stay_item', true)->orderBy('date')->get();
+    $adjustments = $folio->items()
+        ->where('type', 'stay_adjustment')
+        ->where('description', 'like', 'Changement de chambre%')
+        ->count();
+
     expect($setup['oldRoom']->status)->toBe(Room::STATUS_AVAILABLE)
         ->and($setup['oldRoom']->hk_status)->toBe(Room::HK_STATUS_DIRTY)
         ->and($setup['newRoom']->status)->toBe(Room::STATUS_IN_USE);
+
+    expect($stayItems)->toHaveCount(2)
+        ->and($stayItems[0]->quantity)->toBe(1.0)
+        ->and($stayItems[0]->unit_price)->toBe(15000.0)
+        ->and($stayItems[0]->meta['room_id'])->toBe($setup['oldRoom']->getKey())
+        ->and($stayItems[1]->quantity)->toBe(2.0)
+        ->and($stayItems[1]->unit_price)->toBe(25000.0)
+        ->and($stayItems[1]->meta['room_id'])->toBe($setup['newRoom']->getKey())
+        ->and($folio->balance)->toBe(65000.0)
+        ->and($adjustments)->toBe(0);
 });
 
 it('moves room and marks old room to inspect when usage is unknown', function (): void {
@@ -195,6 +335,125 @@ it('moves room and marks old room to inspect when usage is unknown', function ()
     expect($setup['oldRoom']->status)->toBe(Room::STATUS_AVAILABLE)
         ->and($setup['oldRoom']->hk_status)->toBe(Room::HK_STATUS_AWAITING_INSPECTION)
         ->and($setup['newRoom']->status)->toBe(Room::STATUS_IN_USE);
+});
+
+it('cleans up old stay segments after multiple room changes', function (): void {
+    $setup = makeRoomMoveSetup('move-multi.serena.test');
+    $offer = Offer::query()->create([
+        'tenant_id' => $setup['tenant']->getKey(),
+        'hotel_id' => $setup['hotel']->getKey(),
+        'name' => 'Tarif souple',
+        'kind' => 'night',
+        'billing_mode' => 'per_stay',
+        'is_active' => true,
+    ]);
+
+    $secondRoomType = RoomType::query()->create([
+        'tenant_id' => $setup['tenant']->getKey(),
+        'hotel_id' => $setup['hotel']->getKey(),
+        'name' => 'Suite',
+        'capacity_adults' => 2,
+        'capacity_children' => 1,
+        'base_price' => 25000,
+    ]);
+
+    $thirdRoomType = RoomType::query()->create([
+        'tenant_id' => $setup['tenant']->getKey(),
+        'hotel_id' => $setup['hotel']->getKey(),
+        'name' => 'Penthouse',
+        'capacity_adults' => 2,
+        'capacity_children' => 1,
+        'base_price' => 30000,
+    ]);
+
+    $thirdRoom = Room::query()->create([
+        'tenant_id' => $setup['tenant']->getKey(),
+        'hotel_id' => $setup['hotel']->getKey(),
+        'room_type_id' => $thirdRoomType->getKey(),
+        'number' => '103',
+        'status' => Room::STATUS_AVAILABLE,
+        'hk_status' => Room::HK_STATUS_INSPECTED,
+    ]);
+
+    $setup['newRoom']->update([
+        'room_type_id' => $secondRoomType->getKey(),
+    ]);
+
+    OfferRoomTypePrice::query()->create([
+        'tenant_id' => $setup['tenant']->getKey(),
+        'hotel_id' => $setup['hotel']->getKey(),
+        'room_type_id' => $setup['roomType']->getKey(),
+        'offer_id' => $offer->getKey(),
+        'price' => 15000,
+        'currency' => 'XAF',
+    ]);
+
+    OfferRoomTypePrice::query()->create([
+        'tenant_id' => $setup['tenant']->getKey(),
+        'hotel_id' => $setup['hotel']->getKey(),
+        'room_type_id' => $secondRoomType->getKey(),
+        'offer_id' => $offer->getKey(),
+        'price' => 25000,
+        'currency' => 'XAF',
+    ]);
+
+    OfferRoomTypePrice::query()->create([
+        'tenant_id' => $setup['tenant']->getKey(),
+        'hotel_id' => $setup['hotel']->getKey(),
+        'room_type_id' => $thirdRoomType->getKey(),
+        'offer_id' => $offer->getKey(),
+        'price' => 30000,
+        'currency' => 'XAF',
+    ]);
+
+    $setup['reservation']->update([
+        'offer_id' => $offer->getKey(),
+        'offer_name' => $offer->name,
+        'offer_kind' => $offer->kind,
+        'check_in_date' => '2025-05-01 15:00:00',
+        'check_out_date' => '2025-05-04 11:00:00',
+        'actual_check_in_at' => '2025-05-01 15:00:00',
+        'unit_price' => 15000,
+        'base_amount' => 45000,
+        'total_amount' => 45000,
+    ]);
+
+    $this->actingAs($setup['user'])
+        ->withHeaders(['Accept' => 'application/json'])
+        ->patch(
+            "http://{$setup['domain']}/reservations/{$setup['reservation']->id}/stay/room",
+            [
+                'room_id' => $setup['newRoom']->id,
+                'vacated_usage' => 'used',
+                'moved_at' => '2025-05-02 16:00:00',
+            ],
+        )
+        ->assertOk();
+
+    $this->actingAs($setup['user'])
+        ->withHeaders(['Accept' => 'application/json'])
+        ->patch(
+            "http://{$setup['domain']}/reservations/{$setup['reservation']->id}/stay/room",
+            [
+                'room_id' => $thirdRoom->id,
+                'vacated_usage' => 'used',
+                'moved_at' => '2025-05-03 16:00:00',
+            ],
+        )
+        ->assertOk();
+
+    $folio = app(FolioBillingService::class)
+        ->ensureMainFolioForReservation($setup['reservation']->fresh());
+    $activeStayItems = $folio->items()->where('is_stay_item', true)->get();
+    $allStayItems = $folio->items()->withTrashed()->where('is_stay_item', true)->get();
+    $adjustments = $folio->items()
+        ->where('type', 'stay_adjustment')
+        ->where('description', 'like', 'Changement de chambre%')
+        ->count();
+
+    expect($activeStayItems)->toHaveCount(2)
+        ->and($allStayItems)->toHaveCount(4)
+        ->and($adjustments)->toBe(0);
 });
 
 it('cannot move to a room from another hotel', function (): void {

@@ -431,13 +431,14 @@ class ReservationStayController extends Controller
 
         $freshReservation = $reservation->fresh(['room']);
 
-        $this->billingService->resegmentStayForRoomChange(
+        $pivotUsed = $this->billingService->resegmentStayForRoomChange(
             $freshReservation,
             $previousRoom,
             $newRoom,
             $pivotDate,
             $oldUnitPrice,
             $newUnitPrice,
+            $vacatedUsage,
         );
 
         $previousRoomStatus = $previousRoom?->status;
@@ -465,10 +466,6 @@ class ReservationStayController extends Controller
 
         $delta = $newBaseAmount - $oldBaseAmount;
 
-        if (abs($delta) >= 0.01) {
-            $this->billingService->addStayAdjustment($reservation, $delta, 'Changement de chambre');
-        }
-
         if ($previousRoom) {
             $this->priorityService->syncRoomTasks($previousRoom, $request->user());
         }
@@ -489,6 +486,7 @@ class ReservationStayController extends Controller
                 'new_room_number' => $newRoom->number,
                 'vacated_usage' => $vacatedUsage,
                 'moved_at' => $pivotDate->toDateTimeString(),
+                'pivot_used' => ($pivotUsed ?? $pivotDate)->toDateTimeString(),
             ])
             ->event('room_moved')
             ->log('room_moved');

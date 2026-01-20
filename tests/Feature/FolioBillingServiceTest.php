@@ -321,6 +321,7 @@ it('soft deletes stay items and recreates segments on room change', function ():
         $pivot,
         80000,
         120000,
+        'used',
     );
 
     $folio->refresh();
@@ -363,6 +364,7 @@ it('does not allow stay item soft deletes once an invoice is issued', function (
         Carbon::parse('2025-05-03'),
         80000,
         120000,
+        'used',
     );
 
     $folio->refresh();

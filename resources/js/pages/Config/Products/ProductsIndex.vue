@@ -185,6 +185,96 @@
                                 Activer le produit
                             </label>
                         </Field>
+
+                        <Field v-if="canManageBarStock" name="manage_stock" type="checkbox" v-slot="{ field }">
+                            <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
+                                <input
+                                    v-bind="field"
+                                    type="checkbox"
+                                    class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                    :checked="form.manage_stock"
+                                    @change="(e) => { field.onChange(e); form.manage_stock = e.target.checked; }"
+                                />
+                                Gérer le stock
+                            </label>
+                        </Field>
+                    </div>
+
+                    <div v-if="canManageBarStock && form.manage_stock" class="grid gap-4 md:grid-cols-2">
+                        <Field name="stock_item_id" v-slot="{ field, meta }">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">
+                                    Article de stock (auto si vide)
+                                </label>
+                                <Multiselect
+                                    :model-value="field.value ?? form.stock_item_id"
+                                    @update:modelValue="(val) => { field.onChange(val); form.stock_item_id = val; }"
+                                    :options="stockItemOptions"
+                                    label="label"
+                                    track-by="value"
+                                    placeholder="Laisser vide pour creation auto"
+                                    :allow-empty="true"
+                                    class="mt-1"
+                                />
+                                <p v-if="errors.stock_item_id" class="mt-1 text-xs text-red-600">{{ errors.stock_item_id }}</p>
+                            </div>
+                        </Field>
+
+                        <Field name="stock_quantity_per_unit" rules="required|numeric|min:0.01" v-slot="{ field, meta }">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">
+                                    Qté consommée par vente <span class="text-red-600">*</span>
+                                </label>
+                                <input
+                                    v-bind="field"
+                                    type="number"
+                                    step="0.01"
+                                    min="0.01"
+                                    @input="(e) => { field.onChange(e); form.stock_quantity_per_unit = e.target.value; }"
+                                    class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                />
+                                <ErrorMessage name="stock_quantity_per_unit" class="mt-1 text-xs text-red-600" />
+                                <p v-if="!meta.valid && meta.touched" class="mt-1 text-xs text-red-600">Valeur requise.</p>
+                                <p v-if="errors.stock_quantity_per_unit" class="mt-1 text-xs text-red-600">{{ errors.stock_quantity_per_unit }}</p>
+                            </div>
+                        </Field>
+
+                        <Field name="default_purchase_price" rules="numeric|min:0" v-slot="{ field, meta }">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">
+                                    Prix d'achat par défaut
+                                </label>
+                                <input
+                                    v-bind="field"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    @input="(e) => { field.onChange(e); form.default_purchase_price = e.target.value; }"
+                                    class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                />
+                                <ErrorMessage name="default_purchase_price" class="mt-1 text-xs text-red-600" />
+                                <p v-if="!meta.valid && meta.touched" class="mt-1 text-xs text-red-600">Valeur requise.</p>
+                                <p v-if="errors.default_purchase_price" class="mt-1 text-xs text-red-600">{{ errors.default_purchase_price }}</p>
+                            </div>
+                        </Field>
+
+                        <Field name="stock_location_id" v-slot="{ field }">
+                            <div>
+                                <label class="text-sm font-medium text-gray-700">Emplacement (optionnel)</label>
+                                <Multiselect
+                                    :model-value="field.value ?? form.stock_location_id"
+                                    @update:modelValue="(val) => { field.onChange(val); form.stock_location_id = val; }"
+                                    :options="stockLocationOptions"
+                                    label="label"
+                                    track-by="value"
+                                    placeholder="Emplacement Bar par défaut"
+                                    :allow-empty="true"
+                                    class="mt-1"
+                                />
+                                <ErrorMessage name="stock_location_id" class="mt-1 text-xs text-red-600" />
+                                <p v-if="errors.stock_location_id" class="mt-1 text-xs text-red-600">{{ errors.stock_location_id }}</p>
+                            </div>
+                        </Field>
                     </div>
 
                     <div class="flex items-center justify-end gap-3">
@@ -228,6 +318,14 @@ export default {
             type: Array,
             required: true,
         },
+        stockItems: {
+            type: Array,
+            required: true,
+        },
+        storageLocations: {
+            type: Array,
+            required: true,
+        },
     },
     data() {
         return {
@@ -243,6 +341,11 @@ export default {
                 unit_price: '',
                 tax_id: null,
                 is_active: true,
+                manage_stock: false,
+                stock_item_id: null,
+                stock_location_id: null,
+                stock_quantity_per_unit: 1,
+                default_purchase_price: '',
             },
         };
     },
@@ -252,6 +355,18 @@ export default {
         },
         taxOptions() {
             return this.taxes.map((t) => ({ label: t.name, value: t.id }));
+        },
+        stockItemOptions() {
+            return this.stockItems.map((item) => ({
+                label: `${item.name}${item.unit ? ` (${item.unit})` : ''}`,
+                value: item.id,
+            }));
+        },
+        stockLocationOptions() {
+            return this.storageLocations.map((location) => ({
+                label: location.name,
+                value: location.id,
+            }));
         },
         errors() {
             return this.$page.props.errors || {};
@@ -264,6 +379,9 @@ export default {
         },
         canDelete() {
             return this.$page.props.auth?.can?.products_delete ?? false;
+        },
+        canManageBarStock() {
+            return this.$page.props.auth?.can?.stock_manage_bar_settings ?? false;
         },
     },
     created() {
@@ -320,6 +438,15 @@ export default {
                 unit_price: product.unit_price || '',
                 tax_id: product.tax_id ? this.taxOptions.find((t) => t.value === product.tax_id) ?? null : null,
                 is_active: !!product.is_active,
+                manage_stock: !!product.manage_stock,
+                stock_item_id: product.stock_item_id
+                    ? this.stockItemOptions.find((item) => item.value === product.stock_item_id) ?? null
+                    : null,
+                stock_location_id: product.stock_location_id
+                    ? this.stockLocationOptions.find((item) => item.value === product.stock_location_id) ?? null
+                    : null,
+                stock_quantity_per_unit: product.stock_quantity_per_unit ?? 1,
+                default_purchase_price: product.default_purchase_price ?? '',
             };
             this.formKey += 1;
             this.showModal = true;
@@ -336,6 +463,11 @@ export default {
                 unit_price: '',
                 tax_id: null,
                 is_active: true,
+                manage_stock: false,
+                stock_item_id: null,
+                stock_location_id: null,
+                stock_quantity_per_unit: 1,
+                default_purchase_price: '',
             };
         },
         handleSubmit() {
@@ -358,6 +490,11 @@ export default {
                 unit_price: this.form.unit_price,
                 tax_id: this.form.tax_id ? this.form.tax_id?.value ?? this.form.tax_id : null,
                 is_active: this.form.is_active,
+                manage_stock: this.form.manage_stock,
+                stock_item_id: this.form.stock_item_id?.value ?? this.form.stock_item_id,
+                stock_location_id: this.form.stock_location_id?.value ?? this.form.stock_location_id ?? null,
+                stock_quantity_per_unit: this.form.stock_quantity_per_unit,
+                default_purchase_price: this.form.default_purchase_price,
             };
             const url = this.isEditing ? `/settings/resources/products/${this.editId}` : '/settings/resources/products';
             const method = this.isEditing ? 'put' : 'post';

@@ -186,6 +186,129 @@ class InventoryService
         });
     }
 
+    public function consumeForPosSale(
+        string $tenantId,
+        int $hotelId,
+        StockItem $item,
+        StorageLocation $location,
+        float $quantity,
+        string $referenceType,
+        int $referenceId,
+        ?User $actor = null,
+        bool $allowNegative = false,
+        ?string $notes = null,
+    ): void {
+        if (
+            $tenantId !== $item->tenant_id
+            || $tenantId !== $location->tenant_id
+            || $hotelId !== $item->hotel_id
+            || $hotelId !== $location->hotel_id
+        ) {
+            throw new InventoryException('Les éléments d’inventaire doivent appartenir au même hôtel.');
+        }
+
+        $expandedEntries = $this->kitExpander->expand($item, $quantity);
+
+        DB::transaction(function () use (
+            $tenantId,
+            $hotelId,
+            $location,
+            $expandedEntries,
+            $actor,
+            $allowNegative,
+            $referenceType,
+            $referenceId,
+            $notes,
+        ): void {
+            $movement = StockMovement::create([
+                'tenant_id' => $tenantId,
+                'hotel_id' => $hotelId,
+                'movement_type' => StockMovement::TYPE_CONSUME,
+                'occurred_at' => now(),
+                'from_location_id' => $location->id,
+                'reference_type' => $referenceType,
+                'reference_id' => $referenceId,
+                'created_by_user_id' => $actor?->id,
+                'notes' => $notes,
+            ]);
+
+            foreach ($expandedEntries as $entry) {
+                $component = $entry['stock_item'];
+                $componentQuantity = (float) $entry['quantity'];
+                $componentUnitCost = (float) $entry['unit_cost'];
+                $componentTotal = $componentQuantity * $componentUnitCost;
+
+                $movement->lines()->create([
+                    'tenant_id' => $movement->tenant_id,
+                    'hotel_id' => $movement->hotel_id,
+                    'stock_item_id' => $component->id,
+                    'quantity' => $componentQuantity,
+                    'unit_cost' => $componentUnitCost,
+                    'total_cost' => $componentTotal,
+                    'currency' => $component->currency,
+                ]);
+
+                $this->adjustStockOnHand(
+                    $tenantId,
+                    $hotelId,
+                    $location->id,
+                    $component->id,
+                    -$componentQuantity,
+                    $allowNegative,
+                );
+            }
+        });
+    }
+
+    public function returnForPosMovement(StockMovement $movement, ?User $actor = null, ?string $notes = null): void
+    {
+        if ($movement->movement_type !== StockMovement::TYPE_CONSUME) {
+            throw new InventoryException('Seuls les mouvements de consommation peuvent être retournés.');
+        }
+
+        if (! $movement->from_location_id) {
+            throw new InventoryException('Emplacement source introuvable pour le retour.');
+        }
+
+        DB::transaction(function () use ($movement, $actor, $notes): void {
+            $returnMovement = StockMovement::create([
+                'tenant_id' => $movement->tenant_id,
+                'hotel_id' => $movement->hotel_id,
+                'movement_type' => StockMovement::TYPE_RETURN,
+                'occurred_at' => now(),
+                'to_location_id' => $movement->from_location_id,
+                'reference_type' => $movement->reference_type,
+                'reference_id' => $movement->reference_id,
+                'created_by_user_id' => $actor?->id,
+                'notes' => $notes,
+            ]);
+
+            foreach ($movement->lines as $line) {
+                $quantity = (float) $line->quantity;
+                $unitCost = (float) $line->unit_cost;
+
+                $returnMovement->lines()->create([
+                    'tenant_id' => $returnMovement->tenant_id,
+                    'hotel_id' => $returnMovement->hotel_id,
+                    'stock_item_id' => $line->stock_item_id,
+                    'quantity' => $quantity,
+                    'unit_cost' => $unitCost,
+                    'total_cost' => $quantity * $unitCost,
+                    'currency' => $line->currency,
+                ]);
+
+                $this->adjustStockOnHand(
+                    $movement->tenant_id,
+                    $movement->hotel_id,
+                    $movement->from_location_id,
+                    $line->stock_item_id,
+                    $quantity,
+                    true,
+                );
+            }
+        });
+    }
+
     public function completeTransfer(StockTransfer $transfer, User $actor): void
     {
         if ($transfer->status !== StockTransfer::STATUS_DRAFT) {

@@ -6,6 +6,8 @@ use App\Http\Controllers\Config\Concerns\ResolvesActiveHotel;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateHotelRequest;
 use App\Models\Hotel;
+use App\Models\StorageLocation;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -31,8 +33,21 @@ class HotelConfigController extends Controller
             }
         }
 
+        $storageLocations = [];
+
+        if ($hotel) {
+            $storageLocations = StorageLocation::query()
+                ->where('tenant_id', $request->user()->tenant_id)
+                ->where('hotel_id', $hotel->id)
+                ->where('is_active', true)
+                ->where('category', 'bar')
+                ->orderBy('name')
+                ->get(['id', 'name']);
+        }
+
         return Inertia::render('Config/Hotel/HotelIndex', [
             'hotel' => $hotel,
+            'barStockLocations' => $storageLocations,
             'flash' => [
                 'success' => session('success'),
             ],
@@ -75,6 +90,7 @@ class HotelConfigController extends Controller
         $hotel = $this->activeHotel($request);
         $existingDocumentSettings = $hotel?->document_settings ?? [];
         $canUpdateDocuments = $request->user()->can('hotels.documents.update');
+        $canManageBarStock = $request->user()->can('stock.manage_bar_settings');
 
         unset($existingDocumentSettings['logo_url']);
 
@@ -111,6 +127,10 @@ class HotelConfigController extends Controller
             $data['document_footer_text'],
         );
 
+        if (! $canManageBarStock && $hotel !== null) {
+            $data['default_bar_stock_location_id'] = $hotel->default_bar_stock_location_id;
+        }
+
         if ($hotel === null) {
             $hotel = Hotel::query()
                 ->where('tenant_id', $request->user()->tenant_id)
@@ -129,5 +149,45 @@ class HotelConfigController extends Controller
         return redirect()
             ->route('ressources.hotel.edit')
             ->with('success', 'Informations de l’hôtel mises à jour.');
+    }
+
+    public function createBarStockLocation(Request $request): JsonResponse
+    {
+        $this->authorize('stock.manage_bar_settings');
+
+        /** @var \App\Models\User $user */
+        $user = $request->user();
+        $hotel = $this->activeHotel($request);
+
+        abort_if($hotel === null, 404);
+
+        $location = StorageLocation::query()
+            ->where('tenant_id', $user->tenant_id)
+            ->where('hotel_id', $hotel->id)
+            ->where('category', 'bar')
+            ->orderBy('id')
+            ->first();
+
+        if (! $location) {
+            $location = StorageLocation::query()->create([
+                'tenant_id' => $user->tenant_id,
+                'hotel_id' => $hotel->id,
+                'name' => 'Bar',
+                'code' => null,
+                'category' => 'bar',
+                'is_active' => true,
+            ]);
+        }
+
+        if ($hotel->default_bar_stock_location_id === null) {
+            $hotel->forceFill([
+                'default_bar_stock_location_id' => $location->id,
+            ])->save();
+        }
+
+        return response()->json([
+            'location' => $location->only(['id', 'name']),
+            'default_bar_stock_location_id' => $hotel->default_bar_stock_location_id,
+        ]);
     }
 }

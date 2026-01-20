@@ -32,6 +32,7 @@ class Hotel extends Model
         'document_settings',
         'business_day_start_time',
         'business_day_timezone',
+        'default_bar_stock_location_id',
     ];
 
     /**
@@ -145,5 +146,10 @@ class Hotel extends Model
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class)->withTimestamps();
+    }
+
+    public function defaultBarStockLocation(): BelongsTo
+    {
+        return $this->belongsTo(StorageLocation::class, 'default_bar_stock_location_id');
     }
 }

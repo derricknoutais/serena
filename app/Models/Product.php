@@ -23,7 +23,22 @@ class Product extends Model
         'unit_price',
         'tax_id',
         'is_active',
+        'stock_item_id',
+        'manage_stock',
+        'stock_quantity_per_unit',
+        'stock_location_id',
     ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'manage_stock' => 'boolean',
+            'stock_quantity_per_unit' => 'decimal:2',
+        ];
+    }
 
     public function hotel(): BelongsTo
     {
@@ -38,6 +53,16 @@ class Product extends Model
     public function tax(): BelongsTo
     {
         return $this->belongsTo(Tax::class);
+    }
+
+    public function stockItem(): BelongsTo
+    {
+        return $this->belongsTo(StockItem::class, 'stock_item_id');
+    }
+
+    public function stockLocation(): BelongsTo
+    {
+        return $this->belongsTo(StorageLocation::class, 'stock_location_id');
     }
 
     public function folioItems(): HasMany

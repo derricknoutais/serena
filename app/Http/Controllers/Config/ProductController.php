@@ -7,9 +7,13 @@ use App\Http\Controllers\Controller;
 use App\Models\Hotel;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\StockItem;
+use App\Models\StorageLocation;
 use App\Models\Tax;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -21,9 +25,11 @@ class ProductController extends Controller
     {
         $this->authorize('products.view');
 
+        $hotelId = $this->activeHotelId($request);
+
         $products = Product::query()
-            ->with(['category'])
-            ->when($this->activeHotelId($request), fn ($q) => $q->where('hotel_id', $this->activeHotelId($request)))
+            ->with(['category', 'stockItem'])
+            ->when($hotelId, fn ($q) => $q->where('hotel_id', $hotelId))
             ->where('tenant_id', $request->user()->tenant_id)
             ->orderBy('name')
             ->paginate(15)
@@ -36,17 +42,38 @@ class ProductController extends Controller
                 'category' => $product->category?->name,
                 'tax_id' => $product->tax_id,
                 'sku' => $product->sku,
+                'manage_stock' => (bool) $product->manage_stock,
+                'stock_item_id' => $product->stock_item_id,
+                'stock_location_id' => $product->stock_location_id,
+                'stock_quantity_per_unit' => (float) ($product->stock_quantity_per_unit ?? 1),
+                'default_purchase_price' => (float) ($product->stockItem?->default_purchase_price ?? 0),
             ]);
 
         $categories = ProductCategory::query()
             ->where('tenant_id', $request->user()->tenant_id)
-            ->when($this->activeHotelId($request), fn ($q) => $q->where('hotel_id', $this->activeHotelId($request)))
+            ->when($hotelId, fn ($q) => $q->where('hotel_id', $hotelId))
             ->orderBy('name')
             ->get(['id', 'name']);
 
         $taxes = Tax::query()
             ->where('tenant_id', $request->user()->tenant_id)
-            ->when($this->activeHotelId($request), fn ($q) => $q->where('hotel_id', $this->activeHotelId($request)))
+            ->when($hotelId, fn ($q) => $q->where('hotel_id', $hotelId))
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $stockItems = StockItem::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->when($hotelId, fn ($q) => $q->where('hotel_id', $hotelId))
+            ->where('is_active', true)
+            ->where('item_category', 'bar')
+            ->orderBy('name')
+            ->get(['id', 'name', 'unit']);
+
+        $storageLocations = StorageLocation::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->when($hotelId, fn ($q) => $q->where('hotel_id', $hotelId))
+            ->where('is_active', true)
+            ->where('category', 'bar')
             ->orderBy('name')
             ->get(['id', 'name']);
 
@@ -54,6 +81,8 @@ class ProductController extends Controller
             'products' => $products,
             'categories' => $categories,
             'taxes' => $taxes,
+            'stockItems' => $stockItems,
+            'storageLocations' => $storageLocations,
         ]);
     }
 
@@ -83,6 +112,11 @@ class ProductController extends Controller
     {
         $this->authorize('products.create');
 
+        $hotel = Hotel::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->when($this->activeHotelId($request), fn ($q) => $q->where('id', $this->activeHotelId($request)))
+            ->firstOrFail();
+
         $data = $request->validate([
             'product_category_id' => ['required', 'integer', 'exists:product_categories,id'],
             'name' => ['required', 'string'],
@@ -90,12 +124,54 @@ class ProductController extends Controller
             'unit_price' => ['required', 'numeric', 'min:0'],
             'tax_id' => ['nullable', 'integer', 'exists:taxes,id'],
             'is_active' => ['sometimes', 'boolean'],
+            'manage_stock' => ['sometimes', 'boolean'],
+            'stock_item_id' => [
+                'nullable',
+                Rule::exists('stock_items', 'id')
+                    ->where('tenant_id', $request->user()->tenant_id)
+                    ->where('hotel_id', $hotel->id),
+            ],
+            'stock_location_id' => [
+                'nullable',
+                Rule::exists('storage_locations', 'id')
+                    ->where('tenant_id', $request->user()->tenant_id)
+                    ->where('hotel_id', $hotel->id),
+            ],
+            'stock_quantity_per_unit' => ['nullable', 'numeric', 'min:0.01'],
+            'default_purchase_price' => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        $hotel = Hotel::query()
-            ->where('tenant_id', $request->user()->tenant_id)
-            ->when($this->activeHotelId($request), fn ($q) => $q->where('id', $this->activeHotelId($request)))
-            ->firstOrFail();
+        $canManageBarStock = $request->user()->can('stock.manage_bar_settings');
+
+        if (! $canManageBarStock) {
+            $data['manage_stock'] = false;
+        }
+
+        if (! ($data['manage_stock'] ?? false)) {
+            $data['stock_item_id'] = null;
+            $data['stock_location_id'] = null;
+            $data['stock_quantity_per_unit'] = 1;
+        } elseif (! isset($data['stock_quantity_per_unit']) || (float) $data['stock_quantity_per_unit'] <= 0) {
+            return back()->withErrors(['stock_quantity_per_unit' => 'La quantité consommée doit être supérieure à zéro.']);
+        }
+
+        $data['stock_item_id'] = $this->normalizeStockItemId($data['stock_item_id'] ?? null);
+
+        if ($data['manage_stock'] ?? false) {
+            $data['stock_item_id'] = $data['stock_item_id']
+                ?? $this->createStockItemForProduct($hotel, $data, $request->user())->id;
+
+            if (isset($data['default_purchase_price'])) {
+                StockItem::query()
+                    ->where('tenant_id', $request->user()->tenant_id)
+                    ->where('hotel_id', $hotel->id)
+                    ->where('id', $data['stock_item_id'])
+                    ->update([
+                        'default_purchase_price' => $data['default_purchase_price'],
+                        'currency' => $hotel->currency ?? 'XAF',
+                    ]);
+            }
+        }
 
         $product = new Product([
             ...$data,
@@ -140,6 +216,15 @@ class ProductController extends Controller
     {
         $this->authorize('products.update');
 
+        $product = Product::query()
+            ->where('hotel_id', $this->activeHotelId($request))
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->findOrFail($id);
+
+        $hotel = Hotel::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->findOrFail($product->hotel_id);
+
         $data = $request->validate([
             'product_category_id' => ['required', 'integer', 'exists:product_categories,id'],
             'name' => ['required', 'string'],
@@ -147,12 +232,66 @@ class ProductController extends Controller
             'unit_price' => ['required', 'numeric', 'min:0'],
             'tax_id' => ['nullable', 'integer', 'exists:taxes,id'],
             'is_active' => ['sometimes', 'boolean'],
+            'manage_stock' => ['sometimes', 'boolean'],
+            'stock_item_id' => [
+                'nullable',
+                Rule::exists('stock_items', 'id')
+                    ->where('tenant_id', $request->user()->tenant_id)
+                    ->where('hotel_id', $product->hotel_id),
+            ],
+            'stock_location_id' => [
+                'nullable',
+                Rule::exists('storage_locations', 'id')
+                    ->where('tenant_id', $request->user()->tenant_id)
+                    ->where('hotel_id', $product->hotel_id),
+            ],
+            'stock_quantity_per_unit' => ['nullable', 'numeric', 'min:0.01'],
+            'default_purchase_price' => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        $product = Product::query()
-            ->where('hotel_id', $this->activeHotelId($request))
-            ->where('tenant_id', $request->user()->tenant_id)
-            ->findOrFail($id);
+        $canManageBarStock = $request->user()->can('stock.manage_bar_settings');
+
+        if (! $canManageBarStock) {
+            $data['manage_stock'] = $product->manage_stock;
+            $data['stock_item_id'] = $product->stock_item_id;
+            $data['stock_location_id'] = $product->stock_location_id;
+            $data['stock_quantity_per_unit'] = $product->stock_quantity_per_unit;
+        }
+
+        if (! ($data['manage_stock'] ?? false)) {
+            $data['stock_item_id'] = null;
+            $data['stock_location_id'] = null;
+            $data['stock_quantity_per_unit'] = 1;
+        } elseif (! isset($data['stock_quantity_per_unit']) || (float) $data['stock_quantity_per_unit'] <= 0) {
+            return back()->withErrors(['stock_quantity_per_unit' => 'La quantité consommée doit être supérieure à zéro.']);
+        }
+
+        $data['stock_item_id'] = $this->normalizeStockItemId($data['stock_item_id'] ?? null);
+
+        if ($data['manage_stock'] ?? false) {
+            if (! $data['stock_item_id'] && ! $product->stock_item_id) {
+                $data['stock_item_id'] = $this->createStockItemForProduct(
+                    $hotel,
+                    $data,
+                    $request->user(),
+                )->id;
+            }
+
+            if (! $data['stock_item_id'] && $product->stock_item_id) {
+                $data['stock_item_id'] = $product->stock_item_id;
+            }
+
+            if (isset($data['default_purchase_price']) && $data['stock_item_id']) {
+                StockItem::query()
+                    ->where('tenant_id', $request->user()->tenant_id)
+                    ->where('hotel_id', $product->hotel_id)
+                    ->where('id', $data['stock_item_id'])
+                    ->update([
+                        'default_purchase_price' => $data['default_purchase_price'],
+                        'currency' => $hotel->currency ?? 'XAF',
+                    ]);
+            }
+        }
 
         $product->update($data);
 
@@ -170,5 +309,29 @@ class ProductController extends Controller
         $product->delete();
 
         return redirect()->route('ressources.products.index')->with('success', 'Produit supprimé.');
+    }
+
+    private function normalizeStockItemId(mixed $value): ?int
+    {
+        $id = (int) ($value ?? 0);
+
+        return $id > 0 ? $id : null;
+    }
+
+    private function createStockItemForProduct(Hotel $hotel, array $data, ?User $user = null): StockItem
+    {
+        return StockItem::query()->create([
+            'tenant_id' => $user?->tenant_id ?? $hotel->tenant_id,
+            'hotel_id' => $hotel->id,
+            'name' => $data['name'] ?? 'Produit Bar',
+            'sku' => $data['sku'] ?? null,
+            'unit' => 'PC',
+            'item_category' => 'bar',
+            'is_active' => true,
+            'default_purchase_price' => (float) ($data['default_purchase_price'] ?? 0),
+            'currency' => $hotel->currency ?? 'XAF',
+            'reorder_point' => 0,
+            'is_kit' => false,
+        ]);
     }
 }

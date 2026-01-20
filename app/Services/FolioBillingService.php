@@ -328,53 +328,92 @@ class FolioBillingService
         Carbon $pivotDate,
         float $oldUnitPrice,
         float $newUnitPrice,
-    ): void {
+        ?string $vacatedUsage = null,
+    ): ?Carbon {
         if ($reservation->status !== Reservation::STATUS_IN_HOUSE) {
-            return;
+            return null;
         }
 
         $folio = $this->ensureMainFolioForReservation($reservation);
 
         if (! $folio->canEditItems()) {
-            return;
+            return null;
         }
 
-        $folio->items()
-            ->where('is_stay_item', true)
-            ->get()
-            ->each(static fn (FolioItem $item) => $item->delete());
+        $this->voidRoomChangeItems($folio);
 
-        $checkIn = Carbon::parse($reservation->check_in_date);
+        if (! $reservation->check_in_date || ! $reservation->check_out_date) {
+            return null;
+        }
+
+        $checkIn = $this->resolveStayStart($reservation);
         $checkOut = Carbon::parse($reservation->check_out_date);
-        $pivot = $pivotDate->copy()->startOfDay();
-        $pivot = $pivot->max($checkIn)->min($checkOut);
+        if ($checkOut->lessThanOrEqualTo($checkIn)) {
+            return null;
+        }
 
         $offer = $reservation->offer;
         $kind = $offer?->kind ?? $reservation->offer_kind ?? 'night';
         $bundleNights = $this->resolveBundleNights($offer, $kind);
+        $vacatedUsage = $vacatedUsage ?? 'used';
+        $pivot = $this->resolveRoomChangePivot($kind, $checkIn, $checkOut, $pivotDate, $bundleNights, $vacatedUsage);
 
         $segments = [];
 
-        if ($pivot->greaterThan($checkIn)) {
+        if ($vacatedUsage === 'not_used') {
             $segments[] = [
                 'start' => $checkIn->copy(),
-                'end' => $pivot->copy(),
-                'unit_price' => $oldUnitPrice,
-                'room' => $previousRoom,
-            ];
-        }
-
-        if ($pivot->lessThan($checkOut)) {
-            $segments[] = [
-                'start' => $pivot->copy(),
                 'end' => $checkOut->copy(),
                 'unit_price' => $newUnitPrice,
                 'room' => $newRoom,
             ];
+        } else {
+            if ($pivot->greaterThan($checkIn)) {
+                $segments[] = [
+                    'start' => $checkIn->copy(),
+                    'end' => $pivot->copy(),
+                    'unit_price' => $oldUnitPrice,
+                    'room' => $previousRoom,
+                ];
+            }
+
+            if ($pivot->lessThan($checkOut)) {
+                $segments[] = [
+                    'start' => $pivot->copy(),
+                    'end' => $checkOut->copy(),
+                    'unit_price' => $newUnitPrice,
+                    'room' => $newRoom,
+                ];
+            }
+        }
+
+        $totalQuantity = $offer?->billing_mode === 'fixed'
+            ? 1.0
+            : (float) $this->calculateStayQuantity($kind, $checkIn, $checkOut, $bundleNights);
+
+        if (count($segments) === 1) {
+            $segments[0]['quantity'] = $totalQuantity;
+        } elseif (count($segments) === 2) {
+            $segments[0]['quantity'] = $this->calculateSegmentQuantity(
+                $kind,
+                $segments[0]['start'],
+                $segments[0]['end'],
+                $bundleNights,
+            );
+            $segments[1]['quantity'] = $this->calculateSegmentQuantity(
+                $kind,
+                $segments[1]['start'],
+                $segments[1]['end'],
+                $bundleNights,
+            );
+
+            if (($segments[0]['quantity'] + $segments[1]['quantity']) !== $totalQuantity) {
+                $segments[1]['quantity'] = max(0.0, $totalQuantity - $segments[0]['quantity']);
+            }
         }
 
         foreach ($segments as $segment) {
-            $quantity = $this->calculateStayQuantity($kind, $segment['start'], $segment['end'], $bundleNights);
+            $quantity = (float) ($segment['quantity'] ?? 0.0);
 
             if ($quantity <= 0) {
                 continue;
@@ -391,6 +430,7 @@ class FolioBillingService
                 'tenant_id' => $folio->tenant_id,
                 'hotel_id' => $folio->hotel_id,
                 'is_stay_item' => true,
+                'type' => 'stay',
                 'description' => $description,
                 'quantity' => $quantity,
                 'unit_price' => $segment['unit_price'],
@@ -402,6 +442,10 @@ class FolioBillingService
                     'segment_start' => $segment['start']->toDateString(),
                     'segment_end' => $segment['end']->toDateString(),
                     'room_id' => $segment['room']?->id,
+                    'room_number' => $segment['room']?->number,
+                    'offer_id' => $reservation->offer_id,
+                    'unit_price_snapshot' => $segment['unit_price'],
+                    'source' => 'room_change',
                 ],
             ]);
 
@@ -410,6 +454,8 @@ class FolioBillingService
         }
 
         $folio->recalculateTotals();
+
+        return $pivot;
     }
 
     private function roomLabel(?Room $room): string
@@ -476,5 +522,98 @@ class FolioBillingService
         }
 
         return $bundle;
+    }
+
+    private function resolveStayStart(Reservation $reservation): Carbon
+    {
+        if ($reservation->actual_check_in_at) {
+            return Carbon::parse($reservation->actual_check_in_at);
+        }
+
+        return Carbon::parse($reservation->check_in_date);
+    }
+
+    private function resolveRoomChangePivot(
+        string $kind,
+        Carbon $checkIn,
+        Carbon $checkOut,
+        Carbon $pivot,
+        int $bundleNights,
+        string $vacatedUsage,
+    ): Carbon {
+        if ($vacatedUsage === 'not_used') {
+            return $checkIn->copy();
+        }
+
+        $bounded = $pivot->copy()->max($checkIn)->min($checkOut);
+
+        if ($bounded->equalTo($checkIn) || $bounded->equalTo($checkOut)) {
+            return $bounded;
+        }
+
+        if ($kind === 'short_stay') {
+            return $bounded->greaterThan($checkIn) ? $checkOut->copy() : $checkIn->copy();
+        }
+
+        $unitMinutes = $this->resolveBillingUnitMinutes($kind, $bundleNights);
+        if ($unitMinutes <= 0) {
+            return $bounded;
+        }
+
+        $elapsedMinutes = $checkIn->diffInMinutes($bounded);
+        $elapsedUnits = (int) floor($elapsedMinutes / $unitMinutes);
+
+        return $checkIn->copy()->addMinutes($elapsedUnits * $unitMinutes)->max($checkIn)->min($checkOut);
+    }
+
+    private function resolveBillingUnitMinutes(string $kind, int $bundleNights): int
+    {
+        if (in_array($kind, ['weekend', 'package'], true)) {
+            return 1440 * max(1, $bundleNights);
+        }
+
+        if (in_array($kind, ['night', 'full_day'], true)) {
+            return 1440;
+        }
+
+        return 0;
+    }
+
+    private function calculateSegmentQuantity(
+        string $kind,
+        Carbon $segmentStart,
+        Carbon $segmentEnd,
+        int $bundleNights,
+    ): float {
+        if ($segmentEnd->lessThanOrEqualTo($segmentStart)) {
+            return 0.0;
+        }
+
+        $minutes = $segmentStart->diffInMinutes($segmentEnd);
+        $nights = (int) ceil($minutes / 1440);
+
+        return match ($kind) {
+            'short_stay' => 1.0,
+            'weekend', 'package' => (float) max(1, (int) ceil($nights / max(1, $bundleNights))),
+            'full_day' => (float) max(1, $nights),
+            default => (float) max(1, $nights),
+        };
+    }
+
+    private function voidRoomChangeItems(Folio $folio): void
+    {
+        $folio->items()
+            ->where('is_stay_item', true)
+            ->get()
+            ->each(static fn (FolioItem $item) => $item->delete());
+
+        $folio->items()
+            ->where('type', 'stay_adjustment')
+            ->where(function ($query): void {
+                $query->where('meta->action', 'room_change_adjustment')
+                    ->orWhere('description', 'like', 'Changement de chambre%');
+            })
+            ->get()
+            ->each(static fn (FolioItem $item) => $item->delete());
     }
 }

@@ -131,6 +131,9 @@ class PermissionsCatalog
             // POS
             'pos.view',
             'pos.create',
+            'pos.stock.consume',
+            'pos.stock.return',
+            'stock.manage_bar_settings',
             // Night Audit
             'night_audit.view',
             'night_audit.export',
@@ -149,13 +152,17 @@ class PermissionsCatalog
             'payments.override_closed_day',
             'payments.override_refund_limit',
             'hotels.documents.update',
+            'pos.stock.return',
+            'stock.manage_bar_settings',
         ];
         $defaultPermissions = array_values(array_diff($allPermissions, $overridePermissions));
 
+        $managerOverrides = ['hotels.documents.update', 'pos.stock.return', 'stock.manage_bar_settings'];
+
         return [
-            'owner' => array_values(array_merge($defaultPermissions, ['hotels.documents.update'])),
-            'manager' => array_values(array_merge($defaultPermissions, ['hotels.documents.update'])),
-            'superadmin' => array_values(array_merge($defaultPermissions, ['hotels.documents.update'])),
+            'owner' => array_values(array_merge($defaultPermissions, $managerOverrides)),
+            'manager' => array_values(array_merge($defaultPermissions, $managerOverrides)),
+            'superadmin' => array_values(array_merge($defaultPermissions, $managerOverrides)),
             'receptionist' => [
                 'dashboard.view',
                 'frontdesk.view',
