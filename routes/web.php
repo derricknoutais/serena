@@ -220,6 +220,8 @@ Route::middleware([
                 ->name('housekeeping.rooms.tasks.join');
             Route::post('/hk/rooms/{room}/tasks/finish', [HousekeepingController::class, 'finishTask'])
                 ->name('housekeeping.rooms.tasks.finish');
+            Route::delete('/hk/rooms/{room}/tasks', [HousekeepingController::class, 'destroyTask'])
+                ->name('housekeeping.rooms.tasks.destroy');
             Route::post('/hk/rooms/{room}/inspections/start', [HousekeepingController::class, 'startInspection'])
                 ->name('housekeeping.rooms.inspections.start');
             Route::post('/hk/rooms/{room}/inspections/finish', [HousekeepingController::class, 'finishInspection'])

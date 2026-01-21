@@ -256,6 +256,41 @@ class HousekeepingService
         return $task;
     }
 
+    public function deletePendingCleaningTask(HousekeepingTask $task, User $user): void
+    {
+        if ($task->type !== HousekeepingTask::TYPE_CLEANING || $task->status !== HousekeepingTask::STATUS_PENDING) {
+            throw ValidationException::withMessages([
+                'task' => 'Seules les tâches à nettoyer peuvent être supprimées.',
+            ]);
+        }
+
+        $room = $task->room()->first();
+
+        if ($room && $room->hk_status !== Room::HK_STATUS_DIRTY && $room->hk_status !== Room::HK_STATUS_IN_USE) {
+            $this->forceRoomStatus($room, Room::HK_STATUS_DIRTY, $user);
+        }
+
+        activity('housekeeping')
+            ->performedOn($task)
+            ->causedBy($user)
+            ->withProperties([
+                'room_id' => $task->room_id,
+                'task_id' => $task->id,
+                'status' => $task->status,
+                'type' => $task->type,
+            ])
+            ->event('task_deleted')
+            ->log('task_deleted');
+
+        $task->participants()->detach();
+        $task->checklistItems()->delete();
+        $task->delete();
+
+        if ($room) {
+            $this->priorityService->syncRoomTasks($room, $user);
+        }
+    }
+
     private function attachParticipant(HousekeepingTask $task, User $user): bool
     {
         $participant = $task->participants()

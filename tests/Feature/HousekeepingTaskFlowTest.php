@@ -157,3 +157,78 @@ it('starts joins and finishes housekeeping tasks from the housekeeping flow', fu
     expect($task->fresh()->ended_at)->not->toBeNull();
     expect($room->fresh()->hk_status)->toBe(Room::HK_STATUS_AWAITING_INSPECTION);
 });
+
+it('allows deleting a pending cleaning task and keeps room in dirty flow', function (): void {
+    $this->seed([
+        RoleSeeder::class,
+        PermissionSeeder::class,
+    ]);
+
+    [
+        'tenant' => $tenant,
+        'hotel' => $hotel,
+        'room' => $room,
+        'user' => $user,
+    ] = setupReservationEnvironment('hk-delete-task');
+
+    $user->assignRole('housekeeping');
+
+    $room->update([
+        'hk_status' => Room::HK_STATUS_INSPECTED,
+    ]);
+
+    $task = HousekeepingTask::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'room_id' => $room->id,
+        'type' => HousekeepingTask::TYPE_CLEANING,
+        'status' => HousekeepingTask::STATUS_PENDING,
+        'priority' => HousekeepingTask::PRIORITY_NORMAL,
+        'created_from' => HousekeepingTask::SOURCE_RECEPTION,
+    ]);
+
+    $response = $this->actingAs($user)->delete(sprintf(
+        'http://%s/hk/rooms/%s/tasks',
+        tenantDomain($tenant),
+        $room->id,
+    ));
+
+    $response->assertOk();
+    expect(HousekeepingTask::withTrashed()->find($task->id)?->trashed())->toBeTrue();
+    expect($room->fresh()->hk_status)->toBe(Room::HK_STATUS_DIRTY);
+});
+
+it('rejects deleting a cleaning task once it is in progress', function (): void {
+    $this->seed([
+        RoleSeeder::class,
+        PermissionSeeder::class,
+    ]);
+
+    [
+        'tenant' => $tenant,
+        'hotel' => $hotel,
+        'room' => $room,
+        'user' => $user,
+    ] = setupReservationEnvironment('hk-delete-task-in-progress');
+
+    $user->assignRole('housekeeping');
+
+    $task = HousekeepingTask::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'room_id' => $room->id,
+        'type' => HousekeepingTask::TYPE_CLEANING,
+        'status' => HousekeepingTask::STATUS_IN_PROGRESS,
+        'priority' => HousekeepingTask::PRIORITY_NORMAL,
+        'created_from' => HousekeepingTask::SOURCE_RECEPTION,
+    ]);
+
+    $response = $this->actingAs($user)->delete(sprintf(
+        'http://%s/hk/rooms/%s/tasks',
+        tenantDomain($tenant),
+        $room->id,
+    ));
+
+    $response->assertUnprocessable();
+    expect(HousekeepingTask::withTrashed()->find($task->id)?->trashed())->toBeFalse();
+});

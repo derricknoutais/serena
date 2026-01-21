@@ -201,6 +201,29 @@ class HousekeepingController extends Controller
         ]);
     }
 
+    public function destroyTask(Request $request, Room $room): JsonResponse
+    {
+        $this->authorizeAccess($request);
+        $this->authorizeRoomAccess($request, $room);
+
+        $task = $this->currentCleaningTask($room);
+
+        if (! $task || $task->status !== HousekeepingTask::STATUS_PENDING || $task->type !== HousekeepingTask::TYPE_CLEANING) {
+            return response()->json([
+                'message' => 'Seules les tâches à nettoyer peuvent être supprimées.',
+            ], 422);
+        }
+
+        /** @var \App\Models\User $user */
+        $user = $request->user();
+
+        $this->housekeepingService->deletePendingCleaningTask($task, $user);
+
+        return response()->json([
+            'room' => $this->roomPayload($room->fresh()),
+        ]);
+    }
+
     public function startInspection(Request $request, Room $room): JsonResponse
     {
         $this->authorizeAccess($request);

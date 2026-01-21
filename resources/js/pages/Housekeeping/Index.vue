@@ -202,6 +202,15 @@
                     >
                         Signaler un problème
                     </button>
+                    <button
+                        v-if="canDeleteCurrentTask"
+                        type="button"
+                        class="w-full rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+                        @click="deleteCurrentTask"
+                        :disabled="loading"
+                    >
+                        Supprimer la tâche
+                    </button>
                 </div>
 
                 <div
@@ -445,14 +454,27 @@
                             <span v-if="task.created_at">Créée : {{ formatDateTime(task.created_at) }}</span>
                             <span v-if="task.started_at">Démarrée : {{ formatDateTime(task.started_at) }}</span>
                         </div>
-                        <div v-if="task.participants?.length" class="mt-2 flex flex-wrap gap-2">
-                            <span
-                                v-for="participant in task.participants"
-                                :key="participant.id"
-                                class="rounded-full bg-gray-50 px-2 py-1 text-xs font-semibold text-gray-600 ring-1 ring-gray-200"
+                        <div
+                            v-if="task.participants?.length || canDeleteTask(task)"
+                            class="mt-3 flex items-center justify-between gap-2"
+                        >
+                            <div v-if="task.participants?.length" class="flex flex-wrap gap-2">
+                                <span
+                                    v-for="participant in task.participants"
+                                    :key="participant.id"
+                                    class="rounded-full bg-gray-50 px-2 py-1 text-xs font-semibold text-gray-600 ring-1 ring-gray-200"
+                                >
+                                    {{ participant.name }}
+                                </span>
+                            </div>
+                            <button
+                                v-if="canDeleteTask(task)"
+                                type="button"
+                                class="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-[10px] font-semibold text-rose-700 transition hover:bg-rose-100"
+                                @click="deleteTask(task)"
                             >
-                                {{ participant.name }}
-                            </span>
+                                Supprimer
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -622,6 +644,9 @@
             },
             canReportIssue() {
                 return this.permissionFlags.maintenance_tickets_create ?? false;
+            },
+            canDeleteCurrentTask() {
+                return this.canDeleteTask(this.currentTask);
             },
             sortedTasks() {
                 return this.sortTasks(this.taskList);
@@ -978,6 +1003,52 @@
                     this.loading = false;
                 }
             },
+            async deleteCurrentTask() {
+                if (!this.currentRoom || !this.currentTask) {
+                    return;
+                }
+
+                await this.deleteTask({
+                    ...this.currentTask,
+                    room: this.currentRoom,
+                });
+            },
+            async deleteTask(task) {
+                if (!task?.room?.id || this.loading || !this.canDeleteTask(task)) {
+                    return;
+                }
+
+                const confirmation = await Swal.fire({
+                    icon: 'warning',
+                    title: 'Supprimer la tâche ?',
+                    text: 'Cette tâche "A Nettoyer" sera supprimée.',
+                    showCancelButton: true,
+                    confirmButtonText: 'Supprimer',
+                    cancelButtonText: 'Annuler',
+                });
+
+                if (!confirmation.isConfirmed) {
+                    return;
+                }
+
+                this.loading = true;
+
+                try {
+                    const response = await axios.delete(`/hk/rooms/${task.room.id}/tasks`);
+
+                    if (this.currentRoom?.id === task.room.id) {
+                        this.currentRoom = response.data?.room ?? this.currentRoom;
+                    }
+
+                    await this.reloadTasks();
+                    this.notifySuccess('Tâche supprimée.');
+                } catch (error) {
+                    const message = error?.response?.data?.message || 'Impossible de supprimer la tâche.';
+                    this.notifyError(message);
+                } finally {
+                    this.loading = false;
+                }
+            },
             openIncidentModal() {
                 if (!this.currentRoom) {
                     return;
@@ -1187,6 +1258,9 @@
                     default:
                         return type;
                 }
+            },
+            canDeleteTask(task) {
+                return task?.type === 'cleaning' && task?.status === 'pending';
             },
             formatDuration(seconds) {
                 const minutes = Math.floor(seconds / 60);
