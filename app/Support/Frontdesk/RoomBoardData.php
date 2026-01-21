@@ -206,7 +206,7 @@ class RoomBoardData
                     'status' => $currentReservation->status,
                     'offer_id' => $currentReservation->offer_id,
                     'offer_name' => $currentReservation->offer_name,
-                    'guest_name' => $currentReservation->guest?->name,
+                    'guest_name' => $currentReservation->guest?->full_name,
                     'check_in_date' => optional($currentReservation->check_in_date)->toDateString(),
                     'check_out_date' => optional($currentReservation->check_out_date)->toDateString(),
                     'check_in_at' => self::formatDateTimeLocal($currentReservation->check_in_date),

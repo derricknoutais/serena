@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Builder;
+
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 
 class Guest extends Model
 {
@@ -28,9 +30,11 @@ class Guest extends Model
         'full_name',
     ];
 
-    public function getFullNameAttribute(): string
+    public function fullName(): Attribute
     {
-        return trim($this->first_name.' '.$this->last_name);
+        return Attribute::make(
+            get: fn () => $this->first_name . ' ' . $this->last_name,
+        );
     }
 
     /**
