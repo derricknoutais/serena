@@ -252,6 +252,7 @@ class ReservationStateMachine
                 'to_status' => $updated->status,
                 'reservation_code' => $updated->code,
                 'room_id' => $updated->room_id,
+                'room_number' => $updated->room?->number,
                 'offer_id' => $updated->offer_id,
                 'check_in_date' => $updated->check_in_date,
                 'check_out_date' => $updated->check_out_date,

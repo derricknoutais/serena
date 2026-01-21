@@ -5,6 +5,8 @@ require_once __DIR__.'/FolioTestHelpers.php';
 use App\Models\Activity;
 use App\Models\Reservation;
 use App\Models\Room;
+use App\Services\ReservationStateMachine;
+use App\Support\ActivityFormatter;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Carbon;
@@ -134,4 +136,42 @@ it('logs activity when a reservation is updated', function (): void {
     expect($activity->properties['reservation_code'])->toBe($reservation->code);
     expect((float) $activity->properties['changes']['total_amount']['to'])->toBe((float) $newTotal);
     expect($activity->properties['room_number'] ?? null)->not->toBeNull();
+});
+
+it('adds the room number to the checkout activity summary', function (): void {
+    [
+        'reservation' => $reservation,
+        'user' => $user,
+        'room' => $room,
+    ] = setupReservationEnvironment('reservation-checkout-log');
+
+    $user->assignRole('owner');
+
+    $reservation->update([
+        'status' => Reservation::STATUS_IN_HOUSE,
+        'actual_check_in_at' => Carbon::parse('2025-05-01 15:00:00'),
+        'check_in_date' => Carbon::parse('2025-05-01 15:00:00'),
+        'check_out_date' => Carbon::parse('2025-05-02 12:00:00'),
+    ]);
+
+    actingAs($user);
+
+    $stateMachine = app(ReservationStateMachine::class);
+    $stateMachine->checkOut($reservation->fresh(), Carbon::parse('2025-05-02 12:00:00'));
+
+    $activity = Activity::query()
+        ->where('log_name', 'reservation')
+        ->where('subject_id', (string) $reservation->id)
+        ->where('event', 'checked_out')
+        ->latest('id')
+        ->first();
+
+    expect($activity)->not->toBeNull();
+    expect($activity->properties['room_number'] ?? null)->toBe($room->number);
+
+    $formatted = ActivityFormatter::format($activity);
+
+    expect($formatted['sentence_fr'] ?? '')
+        ->toContain('check-out')
+        ->toContain($room->number);
 });

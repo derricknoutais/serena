@@ -247,6 +247,7 @@ class ActivityFormatter
     ): string {
         $user = $activity->causer?->name ?? 'Quelqu’un';
         $module = $activity->log_name ?? '';
+        $properties = $activity->properties?->toArray() ?? [];
         $isBilling = in_array($module, ['payment', 'billing', 'folio'], true)
             || $activity->subject instanceof Payment
             || $activity->subject instanceof Folio;
@@ -262,10 +263,15 @@ class ActivityFormatter
         }
 
         if ($module === 'reservation' || $activity->subject instanceof Reservation) {
+            $roomNumber = $properties['room_number'] ?? null;
+            $roomLabel = $roomNumber ? sprintf('Chambre %s', $roomNumber) : null;
+
             return match ($actionKey) {
                 'confirmed' => sprintf('%s a confirmé %s.', $user, $subjectLabel),
                 'checked_in' => sprintf('%s a fait le check-in de %s.', $user, $subjectLabel),
-                'checked_out' => sprintf('%s a fait le check-out de %s.', $user, $subjectLabel),
+                'checked_out' => $roomLabel
+                    ? sprintf('%s a fait le check-out de %s (%s).', $user, $subjectLabel, $roomLabel)
+                    : sprintf('%s a fait le check-out de %s.', $user, $subjectLabel),
                 'cancelled' => sprintf('%s a annulé %s.', $user, $subjectLabel),
                 'no_show' => sprintf('%s a marqué %s en no-show.', $user, $subjectLabel),
                 'guest_changed' => sprintf('%s a changé le client de %s.', $user, $subjectLabel),
