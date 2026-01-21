@@ -43,6 +43,10 @@ class BadgeLoginController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
+        if ($user->hasRole('housekeeping')) {
+            return redirect()->route('housekeeping.index');
+        }
+
         return redirect()->route('dashboard');
     }
 }

@@ -12,7 +12,7 @@ import { register } from '@/routes';
 import { store } from '@/routes/login';
 import { request } from '@/routes/password';
 import { Form, Head } from '@inertiajs/vue3';
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 
 defineProps<{
     status?: string;
@@ -63,10 +63,30 @@ const parseBadgePayload = (value: string) => {
     return raw.trim().toUpperCase();
 };
 
+const focusBadgePin = () => {
+    nextTick(() => {
+        const pinInput = document.getElementById('badge_pin');
+        if (pinInput instanceof HTMLInputElement) {
+            pinInput.focus();
+        }
+    });
+};
+
 const handleBadgeDetected = (value: string) => {
     badgeCode.value = parseBadgePayload(value);
     badgeScannerOpen.value = false;
+    focusBadgePin();
 };
+
+onMounted(() => {
+    if (typeof window === 'undefined') {
+        return;
+    }
+
+    if (window.matchMedia('(max-width: 640px)').matches) {
+        showBadgeLogin.value = true;
+    }
+});
 </script>
 
 <template>
@@ -184,20 +204,23 @@ const handleBadgeDetected = (value: string) => {
         </Form>
 
         <div v-else class="rounded-xl border border-border/60 bg-muted/40 p-4">
-            <div class="flex items-center justify-between gap-4">
-                <div>
-                    <h3 class="text-sm font-semibold text-foreground">Connexion par badge</h3>
-                    <p class="text-xs text-muted-foreground">
-                        Scannez le QR du badge et entrez le PIN court.
-                    </p>
-                </div>
-                <SecondaryButton type="button" class="px-4 py-2 text-xs" @click="badgeScannerOpen = true">
-                    Scanner le badge
-                </SecondaryButton>
+            <div class="grid gap-2">
+                <h3 class="text-sm font-semibold text-foreground">Connexion par badge</h3>
+                <p class="text-xs text-muted-foreground">
+                    Scannez le QR du badge puis saisissez le PIN.
+                </p>
             </div>
 
             <Form action="/login/badge" method="post" v-slot="{ errors, processing }" class="mt-4 space-y-4">
-                <div class="grid gap-2 sm:grid-cols-2">
+                <SecondaryButton
+                    type="button"
+                    class="w-full justify-center py-3 text-sm font-semibold sm:text-base"
+                    @click="badgeScannerOpen = true"
+                >
+                    Scanner le badge
+                </SecondaryButton>
+
+                <div class="grid gap-3 sm:grid-cols-2">
                     <div class="grid gap-2">
                         <TextInput
                             id="badge_code"
@@ -228,7 +251,7 @@ const handleBadgeDetected = (value: string) => {
 
                 <PrimaryButton
                     type="submit"
-                    class="w-full justify-center"
+                    class="w-full justify-center py-3 text-sm sm:text-base"
                     :disabled="processing || isBadgeInvalid"
                 >
                     <Spinner v-if="processing" />
