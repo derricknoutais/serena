@@ -784,6 +784,16 @@ class HousekeepingService
      */
     private function resolvePushRecipientIds(Room $room): array
     {
+        $channels = $this->recipientResolver->resolveChannelsForEvent(
+            'room.hk_status_updated',
+            (string) $room->tenant_id,
+            (int) $room->hotel_id,
+        );
+
+        if (! in_array('push', $channels, true)) {
+            return [];
+        }
+
         return $this->recipientResolver
             ->resolve('room.hk_status_updated', (string) $room->tenant_id, (int) $room->hotel_id)
             ->pluck('id')

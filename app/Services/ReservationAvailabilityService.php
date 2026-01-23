@@ -5,10 +5,15 @@ namespace App\Services;
 use App\Models\MaintenanceTicket;
 use App\Models\Reservation;
 use App\Models\Room;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 
 class ReservationAvailabilityService
 {
+    public function __construct(
+        private readonly ReservationConflictService $conflictService,
+    ) {}
+
     public function ensureAvailable(array $data, ?int $ignoreReservationId = null): void
     {
         if (! $this->isActiveStatus($data['status'] ?? null)) {
@@ -44,16 +49,11 @@ class ReservationAvailabilityService
             return false;
         }
 
-        return Reservation::query()
-            ->where('room_id', $roomId)
-            ->where('tenant_id', $tenantId)
-            ->where('hotel_id', $hotelId)
-            ->whereIn('status', Reservation::activeStatusForAvailability())
-            ->when($ignoreReservationId, fn ($query) => $query->where('id', '!=', $ignoreReservationId))
-            ->where(function ($query) use ($data) {
-                $query->where('check_in_date', '<', $data['check_out_date'])
-                    ->where('check_out_date', '>', $data['check_in_date']);
-            })
+        $checkIn = Carbon::parse($data['check_in_date']);
+        $checkOut = Carbon::parse($data['check_out_date']);
+
+        return $this->conflictService
+            ->getBlockingReservationsQuery($hotelId, $roomId, $checkIn, $checkOut, $tenantId, $ignoreReservationId)
             ->exists();
     }
 

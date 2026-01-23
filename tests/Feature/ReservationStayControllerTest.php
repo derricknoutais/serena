@@ -6,11 +6,13 @@ use App\Models\Folio;
 use App\Models\Offer;
 use App\Models\OfferRoomTypePrice;
 use App\Models\Reservation;
+use App\Notifications\GenericPushNotification;
 use App\Services\FolioBillingService;
 use App\Services\ReservationAvailabilityService;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Notification;
 use Spatie\Permission\Models\Permission;
 
 beforeEach(function (): void {
@@ -160,6 +162,7 @@ it('charges weekend offers per configured night bundle when extending a stay', f
     ] = setupReservationEnvironment('stay-weekend-pack');
 
     $user->assignRole('owner');
+    Notification::fake();
 
     $offer = Offer::query()->create([
         'tenant_id' => $tenant->id,
@@ -217,6 +220,14 @@ it('charges weekend offers per configured night bundle when extending a stay', f
     $response->assertOk();
 
     expect($reservation->fresh()->base_amount)->toBe(30000);
+
+    $reservation->loadMissing('room');
+
+    Notification::assertSentTo($user, GenericPushNotification::class, function (GenericPushNotification $notification) use ($reservation): bool {
+        return $notification->title === 'Prolongation de séjour'
+            && str_contains($notification->body, $reservation->code ?? '')
+            && str_contains($notification->body, $reservation->room?->number ?? '');
+    });
 });
 
 it('charges package offers per configured night bundle when extending a stay', function (): void {

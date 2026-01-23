@@ -134,6 +134,7 @@ class PermissionsCatalog
             'pos.stock.consume',
             'pos.stock.return',
             'stock.manage_bar_settings',
+            'loyalty.settings.manage',
             // Night Audit
             'night_audit.view',
             'night_audit.export',
@@ -154,10 +155,16 @@ class PermissionsCatalog
             'hotels.documents.update',
             'pos.stock.return',
             'stock.manage_bar_settings',
+            'loyalty.settings.manage',
         ];
         $defaultPermissions = array_values(array_diff($allPermissions, $overridePermissions));
 
-        $managerOverrides = ['hotels.documents.update', 'pos.stock.return', 'stock.manage_bar_settings'];
+        $managerOverrides = [
+            'hotels.documents.update',
+            'pos.stock.return',
+            'stock.manage_bar_settings',
+            'loyalty.settings.manage',
+        ];
 
         return [
             'owner' => array_values(array_merge($defaultPermissions, $managerOverrides)),

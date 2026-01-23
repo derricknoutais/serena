@@ -42,6 +42,8 @@ class ReservationStateMachine
         private readonly Notifier $notifier,
         private readonly HousekeepingService $housekeepingService,
         private readonly HousekeepingPriorityService $housekeepingPriorityService,
+        private readonly LoyaltyEarningService $loyaltyEarningService,
+        private readonly VapidEventNotifier $vapidEventNotifier,
     ) {}
 
     public function canTransition(string $from, string $to): bool
@@ -241,6 +243,8 @@ class ReservationStateMachine
             $canOverrideFees,
         );
 
+        $this->recordLoyaltyPoints($updated);
+
         $remainingBalance = $mainFolio?->balance ?? 0;
         $remainingCurrency = $mainFolio?->currency;
 
@@ -287,6 +291,21 @@ class ReservationStateMachine
         ], [
             'cta_route' => 'reservations.index',
         ]);
+
+        $this->vapidEventNotifier->notifyOwnersAndManagers(
+            eventKey: 'reservation.checked_out',
+            tenantId: (string) $updated->tenant_id,
+            hotelId: $updated->hotel_id,
+            title: 'Check-out effectué',
+            body: sprintf(
+                '%s est parti (réservation %s, chambre %s).',
+                $updated->guest?->full_name ?? $updated->guest?->name ?? 'Client',
+                $updated->code ?? '—',
+                $updated->room?->number ?? '—',
+            ),
+            url: route('frontdesk.reservations.details', ['reservation' => $updated->id]),
+            tag: 'reservation-checked-out',
+        );
 
         return $updated;
     }
@@ -394,5 +413,36 @@ class ReservationStateMachine
                 'status' => 'Transition de statut non autorisée.',
             ]);
         }
+    }
+
+    private function recordLoyaltyPoints(Reservation $reservation): void
+    {
+        if (! $reservation->guest_id) {
+            return;
+        }
+
+        $points = $this->loyaltyEarningService->computeEarnedPoints($reservation);
+
+        if ($points <= 0) {
+            return;
+        }
+
+        $alreadyEarned = \App\Models\LoyaltyPoint::query()
+            ->where('reservation_id', $reservation->id)
+            ->where('type', 'earn')
+            ->exists();
+
+        if ($alreadyEarned) {
+            return;
+        }
+
+        \App\Models\LoyaltyPoint::query()->create([
+            'tenant_id' => $reservation->tenant_id,
+            'hotel_id' => $reservation->hotel_id,
+            'reservation_id' => $reservation->id,
+            'guest_id' => $reservation->guest_id,
+            'type' => 'earn',
+            'points' => $points,
+        ]);
     }
 }

@@ -9,6 +9,7 @@ use App\Models\Payment;
 use App\Services\BusinessDayService;
 use App\Services\FolioPayloadService;
 use App\Services\NightAuditLockService;
+use App\Services\VapidEventNotifier;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Http\JsonResponse;
@@ -25,6 +26,7 @@ class FolioController extends Controller
         private readonly FolioPayloadService $folioPayloads,
         private readonly NightAuditLockService $lockService,
         private readonly BusinessDayService $businessDayService,
+        private readonly VapidEventNotifier $vapidEventNotifier,
     ) {}
 
     public function show(Request $request, Folio $folio): Response|JsonResponse
@@ -191,6 +193,20 @@ class FolioController extends Controller
             'cash_session_id' => $cashSessionId,
         ]);
 
+        $amountLabel = number_format((float) $data['amount'], 0, ',', ' ');
+        $paymentUrl = $folio->reservation_id
+            ? route('reservations.folio.show', ['reservation' => $folio->reservation_id])
+            : route('folios.show', ['folio' => $folio->id]);
+        $this->vapidEventNotifier->notifyOwnersAndManagers(
+            eventKey: 'payment.recorded',
+            tenantId: (string) $folio->tenant_id,
+            hotelId: $folio->hotel_id,
+            title: 'Paiement enregistré',
+            body: sprintf('Paiement de %s %s enregistré.', $amountLabel, $folio->currency ?? 'XAF'),
+            url: $paymentUrl,
+            tag: 'payment-recorded',
+        );
+
         if (! $request->wantsJson()) {
             return back()->with('success', 'Paiement enregistré.');
         }
@@ -261,6 +277,20 @@ class FolioController extends Controller
         $folio->recalculateTotals();
         $folio->refresh()->loadMissing('payments.paymentMethod');
 
+        $amountLabel = number_format((float) $data['amount'], 0, ',', ' ');
+        $paymentUrl = $folio->reservation_id
+            ? route('reservations.folio.show', ['reservation' => $folio->reservation_id])
+            : route('folios.show', ['folio' => $folio->id]);
+        $this->vapidEventNotifier->notifyOwnersAndManagers(
+            eventKey: 'payment.updated',
+            tenantId: (string) $folio->tenant_id,
+            hotelId: $folio->hotel_id,
+            title: 'Paiement mis à jour',
+            body: sprintf('Paiement mis à jour : %s %s.', $amountLabel, $folio->currency ?? 'XAF'),
+            url: $paymentUrl,
+            tag: 'payment-updated',
+        );
+
         return response()->json($this->paymentResponsePayload($folio, 'Paiement mis à jour.'));
     }
 
@@ -281,6 +311,19 @@ class FolioController extends Controller
 
         $payment->delete();
         $folio->recalculateTotals();
+
+        $paymentUrl = $folio->reservation_id
+            ? route('reservations.folio.show', ['reservation' => $folio->reservation_id])
+            : route('folios.show', ['folio' => $folio->id]);
+        $this->vapidEventNotifier->notifyOwnersAndManagers(
+            eventKey: 'payment.deleted',
+            tenantId: (string) $folio->tenant_id,
+            hotelId: $folio->hotel_id,
+            title: 'Paiement supprimé',
+            body: 'Un paiement a été supprimé.',
+            url: $paymentUrl,
+            tag: 'payment-deleted',
+        );
 
         if (! $request->wantsJson()) {
             return back()->with('success', 'Paiement supprimé.');

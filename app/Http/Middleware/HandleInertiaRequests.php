@@ -150,6 +150,7 @@ class HandleInertiaRequests extends Middleware
             'stock.inventories.post',
             'stock.override_negative',
             'stock.manage_bar_settings',
+            'loyalty.settings.manage',
             'hotels.documents.update',
             'invoices.view', 'invoices.create', 'invoices.generate', 'invoices.update', 'invoices.delete',
             'pos.view', 'pos.create',

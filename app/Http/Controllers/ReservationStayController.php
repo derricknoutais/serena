@@ -15,9 +15,11 @@ use App\Services\HousekeepingService;
 use App\Services\ReservationAvailabilityService;
 use App\Services\ReservationConflictService;
 use App\Services\RoomStateMachine;
+use App\Services\VapidEventNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -31,6 +33,7 @@ class ReservationStayController extends Controller
         private readonly ReservationConflictService $conflictService,
         private readonly HousekeepingPriorityService $priorityService,
         private readonly HousekeepingService $housekeepingService,
+        private readonly VapidEventNotifier $vapidEventNotifier,
     ) {}
 
     public function updateDates(Request $request, Reservation $reservation): JsonResponse
@@ -202,6 +205,22 @@ class ReservationStayController extends Controller
                 }
             }
 
+            $reservation->loadMissing('room');
+            $this->vapidEventNotifier->notifyOwnersAndManagers(
+                eventKey: 'reservation.extended',
+                tenantId: (string) $reservation->tenant_id,
+                hotelId: $reservation->hotel_id,
+                title: 'Prolongation de séjour',
+                body: sprintf(
+                    'Réservation %s prolongée jusqu’au %s (Chambre %s).',
+                    $reservation->code ?? '—',
+                    $newCheckOut->toDateString(),
+                    $reservation->room?->number ?? '—',
+                ),
+                url: route('frontdesk.reservations.details', ['reservation' => $reservation->id]),
+                tag: 'reservation-extended',
+            );
+
             return response()->json([
                 'reservation' => $reservation->fresh(['room']),
                 'base_amount' => $oldBaseAmount,
@@ -331,6 +350,24 @@ class ReservationStayController extends Controller
             }
         }
 
+        if ($action === 'extend') {
+            $reservation->loadMissing('room');
+            $this->vapidEventNotifier->notifyOwnersAndManagers(
+                eventKey: 'reservation.extended',
+                tenantId: (string) $reservation->tenant_id,
+                hotelId: $reservation->hotel_id,
+                title: 'Prolongation de séjour',
+                body: sprintf(
+                    'Réservation %s prolongée jusqu’au %s (Chambre %s).',
+                    $reservation->code ?? '—',
+                    $newCheckOut->toDateString(),
+                    $reservation->room?->number ?? '—',
+                ),
+                url: route('frontdesk.reservations.details', ['reservation' => $reservation->id]),
+                tag: 'reservation-extended',
+            );
+        }
+
         return response()->json([
             'reservation' => $reservation->fresh(['room']),
             'base_amount' => $oldBaseAmount,
@@ -386,6 +423,7 @@ class ReservationStayController extends Controller
 
         $checkIn = Carbon::parse($reservation->check_in_date);
         $checkOut = Carbon::parse($reservation->check_out_date);
+        $availabilityStart = $movedAt->copy()->min($checkOut);
 
         $payload = [
             'tenant_id' => $reservation->tenant_id,
@@ -393,143 +431,214 @@ class ReservationStayController extends Controller
             'room_type_id' => $newRoom->room_type_id,
             'room_id' => $newRoom->id,
             'status' => $reservation->status,
-            'check_in_date' => $checkIn->toDateString(),
-            'check_out_date' => $checkOut->toDateString(),
+            'check_in_date' => $availabilityStart->toDateTimeString(),
+            'check_out_date' => $checkOut->toDateTimeString(),
         ];
 
         $this->availability->ensureAvailable($payload, $reservation->id);
         $this->conflictService->validateOrThrowRoomConflict(
             $reservation->hotel_id,
             $newRoom->id,
-            $checkIn,
+            $availabilityStart,
             $checkOut,
             $reservation->id,
             $reservation->tenant_id,
         );
 
-        $oldBaseAmount = (float) $reservation->base_amount;
-        $oldUnitPrice = (float) $reservation->unit_price;
-
-        $newUnitPrice = $this->determineUnitPrice($reservation, $newRoom->room_type_id) ?? $oldUnitPrice;
-        $currentOfferKind = $reservation->offer?->kind ?? $reservation->offer_kind ?? 'night';
-        $quantity = $this->calculateStayQuantity(
-            $checkIn,
-            $checkOut,
-            $currentOfferKind,
-            $this->resolveBundleNights($reservation->offer, $currentOfferKind),
-        );
-        $newBaseAmount = $quantity * $newUnitPrice;
-
-        $pivotDate = $movedAt;
-
-        $reservation->room_id = $newRoom->id;
-        $reservation->room_type_id = $newRoom->room_type_id;
-        $reservation->unit_price = $newUnitPrice;
-        $reservation->base_amount = $newBaseAmount;
-        $reservation->total_amount = $newBaseAmount + (float) $reservation->tax_amount;
-        $reservation->save();
-
-        $freshReservation = $reservation->fresh(['room']);
-
-        $pivotUsed = $this->billingService->resegmentStayForRoomChange(
-            $freshReservation,
+        return DB::transaction(function () use (
+            $reservation,
             $previousRoom,
             $newRoom,
-            $pivotDate,
-            $oldUnitPrice,
-            $newUnitPrice,
             $vacatedUsage,
-        );
+            $checkIn,
+            $checkOut,
+            $movedAt,
+            $request,
+        ): JsonResponse {
+            $oldBaseAmount = (float) $reservation->base_amount;
+            $oldUnitPrice = (float) $reservation->unit_price;
 
-        $previousRoomStatus = $previousRoom?->status;
-        $previousRoomHkStatus = $previousRoom?->hk_status;
+            $newUnitPrice = $this->determineUnitPrice($reservation, $newRoom->room_type_id) ?? $oldUnitPrice;
+            $currentOfferKind = $reservation->offer?->kind ?? $reservation->offer_kind ?? 'night';
+            $quantity = $this->calculateStayQuantity(
+                $checkIn,
+                $checkOut,
+                $currentOfferKind,
+                $this->resolveBundleNights($reservation->offer, $currentOfferKind),
+            );
+            $newBaseAmount = $quantity * $newUnitPrice;
 
-        if ($previousRoom) {
-            $this->roomStateMachine->markAvailable($previousRoom);
+            $pivotDate = $movedAt;
 
-            if ($vacatedUsage === 'used') {
-                $this->housekeepingService->forceRoomStatus($previousRoom, Room::HK_STATUS_DIRTY, $request->user());
-            } elseif ($vacatedUsage === 'unknown') {
-                $this->housekeepingService->forceRoomStatus(
-                    $previousRoom,
-                    Room::HK_STATUS_AWAITING_INSPECTION,
-                    $request->user(),
-                );
+            $reservation->room_id = $newRoom->id;
+            $reservation->room_type_id = $newRoom->room_type_id;
+            $reservation->unit_price = $newUnitPrice;
+            $reservation->base_amount = $newBaseAmount;
+            $reservation->total_amount = $newBaseAmount + (float) $reservation->tax_amount;
+            $reservation->save();
+
+            $freshReservation = $reservation->fresh(['room', 'offer']);
+
+            $pivotUsed = $this->billingService->resegmentStayForRoomChange(
+                $freshReservation,
+                $previousRoom,
+                $newRoom,
+                $pivotDate,
+                $oldUnitPrice,
+                $newUnitPrice,
+                $vacatedUsage,
+            ) ?? $pivotDate;
+
+            $roomMoveDelta = $this->billingService->calculateRoomMoveDeltaAfterPivot(
+                $freshReservation,
+                $pivotUsed,
+                $oldUnitPrice,
+                $newUnitPrice,
+            );
+
+            $deltaAmount = (float) $roomMoveDelta['amount'];
+            if (abs($deltaAmount) >= 0.01) {
+                $folio = $this->billingService->ensureMainFolioForReservation($freshReservation);
+                $adjustmentMeta = [
+                    'kind' => 'room_move_delta',
+                    'moved_at' => $pivotUsed->toDateTimeString(),
+                    'old_room_id' => $previousRoom?->id,
+                    'new_room_id' => $newRoom->id,
+                    'from_price' => $oldUnitPrice,
+                    'to_price' => $newUnitPrice,
+                    'nights_after_pivot' => $roomMoveDelta['quantity'],
+                ];
+
+                $existingAdjustment = $folio->items()
+                    ->where('type', 'stay_adjustment')
+                    ->where('meta->kind', 'room_move_delta')
+                    ->where('meta->moved_at', $adjustmentMeta['moved_at'])
+                    ->where('meta->old_room_id', $adjustmentMeta['old_room_id'])
+                    ->where('meta->new_room_id', $adjustmentMeta['new_room_id'])
+                    ->exists();
+
+                if (! $existingAdjustment) {
+                    $description = sprintf(
+                        'Ajustement changement de chambre (%s → %s) à partir du %s',
+                        $previousRoom?->number ?? '—',
+                        $newRoom->number ?? '—',
+                        $pivotUsed->format('d/m H:i'),
+                    );
+
+                    $this->billingService->addStayAdjustment($freshReservation, $deltaAmount, 'Changement de chambre', [
+                        'line_description' => $description,
+                        'quantity' => 1,
+                        'unit_price' => $deltaAmount,
+                        'meta' => $adjustmentMeta,
+                    ]);
+                }
             }
-        }
 
-        $assignedRoom = $freshReservation->room;
+            $previousRoomStatus = $previousRoom?->status;
+            $previousRoomHkStatus = $previousRoom?->hk_status;
 
-        if ($assignedRoom) {
-            $this->roomStateMachine->markInUse($assignedRoom, $freshReservation);
-        }
+            if ($previousRoom) {
+                $this->roomStateMachine->markAvailable($previousRoom);
 
-        $delta = $newBaseAmount - $oldBaseAmount;
+                if ($vacatedUsage === 'used') {
+                    $this->housekeepingService->forceRoomStatus($previousRoom, Room::HK_STATUS_DIRTY, $request->user());
+                } elseif ($vacatedUsage === 'unknown') {
+                    $this->housekeepingService->forceRoomStatus(
+                        $previousRoom,
+                        Room::HK_STATUS_AWAITING_INSPECTION,
+                        $request->user(),
+                    );
+                }
+            }
 
-        if ($previousRoom) {
-            $this->priorityService->syncRoomTasks($previousRoom, $request->user());
-        }
+            $assignedRoom = $freshReservation->room;
 
-        $reservation->loadMissing('room');
-        if ($reservation->room) {
-            $this->priorityService->syncRoomTasks($reservation->room, $request->user());
-        }
+            if ($assignedRoom) {
+                $this->roomStateMachine->markInUse($assignedRoom, $freshReservation);
+            }
 
-        activity('reservation')
-            ->performedOn($reservation)
-            ->causedBy($request->user())
-            ->withProperties([
-                'reservation_code' => $reservation->code,
-                'old_room_id' => $previousRoom?->id,
-                'old_room_number' => $previousRoom?->number,
-                'new_room_id' => $newRoom->id,
-                'new_room_number' => $newRoom->number,
-                'vacated_usage' => $vacatedUsage,
-                'moved_at' => $pivotDate->toDateTimeString(),
-                'pivot_used' => ($pivotUsed ?? $pivotDate)->toDateTimeString(),
-            ])
-            ->event('room_moved')
-            ->log('room_moved');
+            $delta = $newBaseAmount - $oldBaseAmount;
 
-        if ($previousRoom) {
-            activity('room')
-                ->performedOn($previousRoom)
+            if ($previousRoom) {
+                $this->priorityService->syncRoomTasks($previousRoom, $request->user());
+            }
+
+            $reservation->loadMissing('room');
+            if ($reservation->room) {
+                $this->priorityService->syncRoomTasks($reservation->room, $request->user());
+            }
+
+            activity('reservation')
+                ->performedOn($reservation)
                 ->causedBy($request->user())
                 ->withProperties([
-                    'room_number' => $previousRoom->number,
-                    'from_status' => $previousRoomStatus,
-                    'to_status' => $previousRoom->status,
-                    'from_hk_status' => $previousRoomHkStatus,
-                    'to_hk_status' => $previousRoom->hk_status,
+                    'reservation_code' => $reservation->code,
+                    'old_room_id' => $previousRoom?->id,
+                    'old_room_number' => $previousRoom?->number,
+                    'new_room_id' => $newRoom->id,
+                    'new_room_number' => $newRoom->number,
                     'vacated_usage' => $vacatedUsage,
+                    'moved_at' => $pivotDate->toDateTimeString(),
+                    'pivot_used' => $pivotUsed->toDateTimeString(),
                 ])
-                ->event('room_move_vacated')
-                ->log('room_move_vacated');
-        }
+                ->event('room_moved')
+                ->log('room_moved');
 
-        activity('room')
-            ->performedOn($assignedRoom ?? $newRoom)
-            ->causedBy($request->user())
-            ->withProperties([
-                'room_number' => $assignedRoom?->number ?? $newRoom->number,
-                'from_status' => $newRoom->getOriginal('status'),
-                'to_status' => $assignedRoom?->status ?? $newRoom->status,
-            ])
-            ->event('room_move_assigned')
-            ->log('room_move_assigned');
+            if ($previousRoom) {
+                activity('room')
+                    ->performedOn($previousRoom)
+                    ->causedBy($request->user())
+                    ->withProperties([
+                        'room_number' => $previousRoom->number,
+                        'from_status' => $previousRoomStatus,
+                        'to_status' => $previousRoom->status,
+                        'from_hk_status' => $previousRoomHkStatus,
+                        'to_hk_status' => $previousRoom->hk_status,
+                        'vacated_usage' => $vacatedUsage,
+                    ])
+                    ->event('room_move_vacated')
+                    ->log('room_move_vacated');
+            }
 
-        return response()->json([
-            'reservation' => $reservation->fresh(['room']),
-            'delta' => $delta,
-            'room_move' => [
-                'old_room_id' => $previousRoom?->id,
-                'new_room_id' => $newRoom->id,
-                'vacated_usage' => $vacatedUsage,
-                'old_room_status' => $previousRoom?->status,
-                'old_room_hk_status' => $previousRoom?->hk_status,
-                'new_room_status' => $assignedRoom?->status ?? $newRoom->status,
-            ],
-        ]);
+            activity('room')
+                ->performedOn($assignedRoom ?? $newRoom)
+                ->causedBy($request->user())
+                ->withProperties([
+                    'room_number' => $assignedRoom?->number ?? $newRoom->number,
+                    'from_status' => $newRoom->getOriginal('status'),
+                    'to_status' => $assignedRoom?->status ?? $newRoom->status,
+                ])
+                ->event('room_move_assigned')
+                ->log('room_move_assigned');
+
+            $this->vapidEventNotifier->notifyOwnersAndManagers(
+                eventKey: 'reservation.room_moved',
+                tenantId: (string) $reservation->tenant_id,
+                hotelId: $reservation->hotel_id,
+                title: 'Changement de chambre',
+                body: sprintf(
+                    'Réservation %s déplacée de %s vers %s.',
+                    $reservation->code ?? '—',
+                    $previousRoom?->number ?? '—',
+                    $newRoom->number ?? '—',
+                ),
+                url: route('frontdesk.reservations.details', ['reservation' => $reservation->id]),
+                tag: 'reservation-room-moved',
+            );
+
+            return response()->json([
+                'reservation' => $reservation->fresh(['room']),
+                'delta' => $delta,
+                'room_move' => [
+                    'old_room_id' => $previousRoom?->id,
+                    'new_room_id' => $newRoom->id,
+                    'vacated_usage' => $vacatedUsage,
+                    'old_room_status' => $previousRoom?->status,
+                    'old_room_hk_status' => $previousRoom?->hk_status,
+                    'new_room_status' => $assignedRoom?->status ?? $newRoom->status,
+                ],
+            ]);
+        });
     }
 
     private function ensureAuthorized(Request $request, Reservation $reservation): void

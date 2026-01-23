@@ -7,6 +7,7 @@ use App\Http\Requests\VoidPaymentRequest;
 use App\Models\Payment;
 use App\Services\FolioPayloadService;
 use App\Services\PaymentAdjustmentService;
+use App\Services\VapidEventNotifier;
 use Illuminate\Http\JsonResponse;
 
 class PaymentAdjustmentController extends Controller
@@ -16,6 +17,7 @@ class PaymentAdjustmentController extends Controller
         Payment $payment,
         PaymentAdjustmentService $service,
         FolioPayloadService $payloads,
+        VapidEventNotifier $vapidEventNotifier,
     ): JsonResponse {
         $this->authorize('void', $payment);
 
@@ -28,6 +30,19 @@ class PaymentAdjustmentController extends Controller
 
         $folio = $payment->folio ?? $payment->folio()->firstOrFail();
 
+        $paymentUrl = $folio->reservation_id
+            ? route('reservations.folio.show', ['reservation' => $folio->reservation_id])
+            : route('folios.show', ['folio' => $folio->id]);
+        $vapidEventNotifier->notifyOwnersAndManagers(
+            eventKey: 'payment.voided',
+            tenantId: (string) $folio->tenant_id,
+            hotelId: $folio->hotel_id,
+            title: 'Paiement annulé',
+            body: 'Un paiement a été annulé.',
+            url: $paymentUrl,
+            tag: 'payment-voided',
+        );
+
         return response()->json($payloads->make($folio, $folio->reservation, $user));
     }
 
@@ -36,6 +51,7 @@ class PaymentAdjustmentController extends Controller
         Payment $payment,
         PaymentAdjustmentService $service,
         FolioPayloadService $payloads,
+        VapidEventNotifier $vapidEventNotifier,
     ): JsonResponse {
         $this->authorize('refund', $payment);
 
@@ -55,6 +71,20 @@ class PaymentAdjustmentController extends Controller
         );
 
         $folio = $payment->folio ?? $payment->folio()->firstOrFail();
+
+        $amountLabel = number_format((float) $data['amount'], 0, ',', ' ');
+        $paymentUrl = $folio->reservation_id
+            ? route('reservations.folio.show', ['reservation' => $folio->reservation_id])
+            : route('folios.show', ['folio' => $folio->id]);
+        $vapidEventNotifier->notifyOwnersAndManagers(
+            eventKey: 'payment.refunded',
+            tenantId: (string) $folio->tenant_id,
+            hotelId: $folio->hotel_id,
+            title: 'Paiement remboursé',
+            body: sprintf('Remboursement de %s %s effectué.', $amountLabel, $folio->currency ?? 'XAF'),
+            url: $paymentUrl,
+            tag: 'payment-refunded',
+        );
 
         return response()->json($payloads->make($folio, $folio->reservation, $user));
     }

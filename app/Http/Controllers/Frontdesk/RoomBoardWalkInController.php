@@ -17,6 +17,7 @@ use App\Services\FolioBillingService;
 use App\Services\OfferTimeEngine;
 use App\Services\ReservationConflictService;
 use App\Services\ReservationStateMachine;
+use App\Services\VapidEventNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,6 +33,7 @@ class RoomBoardWalkInController extends Controller
         private readonly FolioBillingService $billingService,
         private readonly OfferTimeEngine $offerTimeEngine,
         private readonly ReservationConflictService $conflictService,
+        private readonly VapidEventNotifier $vapidEventNotifier,
     ) {}
 
     public function store(Request $request): JsonResponse|RedirectResponse
@@ -224,6 +226,22 @@ class RoomBoardWalkInController extends Controller
 
             return $reservation;
         });
+
+        $reservation->loadMissing('guest', 'room');
+        $this->vapidEventNotifier->notifyOwnersAndManagers(
+            eventKey: 'reservation.created',
+            tenantId: (string) $reservation->tenant_id,
+            hotelId: $reservation->hotel_id,
+            title: 'Nouvelle réservation',
+            body: sprintf(
+                'Réservation %s créée pour %s (Chambre %s).',
+                $reservation->code ?? '—',
+                $reservation->guest?->full_name ?? $reservation->guest?->name ?? 'client',
+                $reservation->room?->number ?? '—',
+            ),
+            url: route('frontdesk.reservations.details', ['reservation' => $reservation->id]),
+            tag: 'reservation-created',
+        );
 
         $payload = [
             'reservation_id' => $reservation->id,

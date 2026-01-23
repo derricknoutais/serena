@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\NotificationPreference;
 use App\Models\User;
+use App\Support\NotificationEventCatalog;
 use Illuminate\Database\Eloquent\Collection;
 
 class NotificationRecipientResolver
@@ -12,8 +14,17 @@ class NotificationRecipientResolver
      */
     public function resolve(string $eventKey, string $tenantId, ?int $hotelId = null): Collection
     {
-        $roles = $this->rolesForEvent($eventKey);
+        $roles = $this->resolveRolesForEvent($eventKey, $tenantId, $hotelId);
 
+        return $this->resolveByRoles($roles, $tenantId, $hotelId);
+    }
+
+    /**
+     * @param  list<string>  $roles
+     * @return Collection<int, User>
+     */
+    public function resolveByRoles(array $roles, string $tenantId, ?int $hotelId = null): Collection
+    {
         $query = User::query()
             ->where('tenant_id', $tenantId)
             ->whereHas('roles', function ($q) use ($roles): void {
@@ -33,26 +44,61 @@ class NotificationRecipientResolver
     /**
      * @return list<string>
      */
+    public function resolveRolesForEvent(string $eventKey, string $tenantId, ?int $hotelId = null): array
+    {
+        $preference = $this->preferenceForEvent($eventKey, $tenantId, $hotelId);
+        $roles = $preference?->roles ?? null;
+
+        if (is_array($roles) && $roles !== []) {
+            return $roles;
+        }
+
+        return NotificationEventCatalog::defaultRoles($eventKey);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function resolveChannelsForEvent(string $eventKey, string $tenantId, ?int $hotelId = null): array
+    {
+        $preference = $this->preferenceForEvent($eventKey, $tenantId, $hotelId);
+        $channels = $preference?->channels ?? null;
+
+        if (is_array($channels) && $channels !== []) {
+            return $channels;
+        }
+
+        return NotificationEventCatalog::defaultChannels($eventKey);
+    }
+
+    /**
+     * @return list<string>
+     */
     private function rolesForEvent(string $eventKey): array
     {
         $ownerManager = ['owner', 'manager'];
         $receptionOps = ['receptionist'];
         $housekeeping = ['housekeeping'];
 
-        return match ($eventKey) {
-            'cash_session.opened',
-            'cash_session.closed',
-            'business_day.closed',
-            'business_day.reopened',
-            'folio.balance_remaining_on_checkout' => $ownerManager,
-            'reservation.created',
-            'reservation.updated' => array_merge($ownerManager, $receptionOps),
-            'reservation.checked_in',
-            'reservation.checked_out',
-            'reservation.conflict_detected' => array_merge($ownerManager, $receptionOps),
-            'room.sold_but_dirty' => array_merge($ownerManager, $receptionOps, $housekeeping),
-            'room.hk_status_updated' => array_merge($ownerManager, $receptionOps, $housekeeping),
-            default => $ownerManager,
-        };
+        return NotificationEventCatalog::defaultRoles($eventKey);
+    }
+
+    private function preferenceForEvent(
+        string $eventKey,
+        string $tenantId,
+        ?int $hotelId,
+    ): ?NotificationPreference {
+        $query = NotificationPreference::query()
+            ->where('tenant_id', $tenantId)
+            ->where('event_key', $eventKey);
+
+        if ($hotelId !== null) {
+            $preference = (clone $query)->where('hotel_id', $hotelId)->first();
+            if ($preference) {
+                return $preference;
+            }
+        }
+
+        return $query->whereNull('hotel_id')->first();
     }
 }

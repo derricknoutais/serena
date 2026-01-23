@@ -36,6 +36,12 @@ class Notifier
         ];
 
         $formatted = $this->format($eventKey, $payload);
+        $channels = $this->recipientResolver->resolveChannelsForEvent($eventKey, $tenantId, $hotelId);
+
+        if (! in_array('in_app', $channels, true)) {
+            return;
+        }
+
         $recipients = $this->recipientResolver->resolve($eventKey, $tenantId, $hotelId);
 
         /** @var User $recipient */

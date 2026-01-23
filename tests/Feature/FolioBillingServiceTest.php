@@ -329,8 +329,437 @@ it('soft deletes stay items and recreates segments on room change', function ():
     $allItems = $folio->items()->withTrashed()->where('is_stay_item', true)->get();
 
     expect($activeItems)->toHaveCount(2)
-        ->and($allItems)->toHaveCount(3)
-        ->and($allItems->firstWhere('id', $stayItem->id)?->trashed())->toBeTrue();
+        ->and($allItems)->toHaveCount(2)
+        ->and($allItems->firstWhere('id', $stayItem->id)?->trashed())->toBeFalse();
+});
+
+it('preserves stay items before the pivot when resegmenting a room change', function (): void {
+    $service = app(FolioBillingService::class);
+    $this->reservation->update([
+        'status' => Reservation::STATUS_IN_HOUSE,
+        'check_in_date' => '2025-05-01 00:00:00',
+        'check_out_date' => '2025-05-05 00:00:00',
+        'unit_price' => 80000,
+    ]);
+
+    $folio = $service->ensureMainFolioForReservation($this->reservation);
+
+    $pastItem = FolioItem::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'hotel_id' => $this->hotel->id,
+        'folio_id' => $folio->id,
+        'is_stay_item' => true,
+        'date' => '2025-05-01',
+        'description' => 'Séjour du 2025-05-01 au 2025-05-03',
+        'type' => 'stay',
+        'quantity' => 2,
+        'unit_price' => 80000,
+        'base_amount' => 160000,
+        'tax_amount' => 0,
+        'total_amount' => 160000,
+        'meta' => [
+            'segment_start' => '2025-05-01',
+            'segment_end' => '2025-05-03',
+        ],
+    ]);
+
+    $futureItem = FolioItem::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'hotel_id' => $this->hotel->id,
+        'folio_id' => $folio->id,
+        'is_stay_item' => true,
+        'date' => '2025-05-03',
+        'description' => 'Séjour du 2025-05-03 au 2025-05-05',
+        'type' => 'stay',
+        'quantity' => 2,
+        'unit_price' => 80000,
+        'base_amount' => 160000,
+        'tax_amount' => 0,
+        'total_amount' => 160000,
+        'meta' => [
+            'segment_start' => '2025-05-03',
+            'segment_end' => '2025-05-05',
+        ],
+    ]);
+
+    $newRoom = Room::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'hotel_id' => $this->hotel->id,
+        'room_type_id' => $this->roomType->id,
+        'number' => '202',
+        'floor' => '2',
+        'status' => 'active',
+        'hk_status' => Room::HK_STATUS_INSPECTED,
+    ]);
+
+    $service->resegmentStayForRoomChange(
+        $this->reservation->fresh(),
+        $this->room,
+        $newRoom,
+        Carbon::parse('2025-05-03 00:00:00'),
+        80000,
+        120000,
+        'used',
+    );
+
+    $pastItem = FolioItem::withTrashed()->find($pastItem->id);
+    $futureItem = FolioItem::withTrashed()->find($futureItem->id);
+    $activeItems = $folio->items()->where('is_stay_item', true)->get();
+    $newSegment = $activeItems->firstWhere('meta.segment_start', '2025-05-03');
+
+    expect($pastItem?->trashed())->toBeFalse()
+        ->and($futureItem?->trashed())->toBeTrue()
+        ->and($activeItems)->toHaveCount(2)
+        ->and($newSegment)->not->toBeNull()
+        ->and($newSegment->meta['segment_end'])->toBe('2025-05-05');
+});
+
+it('only updates stay items after the pivot and keeps earlier segments intact', function (): void {
+    $service = app(FolioBillingService::class);
+    $this->reservation->update([
+        'status' => Reservation::STATUS_IN_HOUSE,
+        'check_in_date' => '2025-01-01 00:00:00',
+        'check_out_date' => '2025-01-25 00:00:00',
+        'unit_price' => 10000,
+    ]);
+
+    $folio = $service->ensureMainFolioForReservation($this->reservation);
+
+    $segmentA = FolioItem::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'hotel_id' => $this->hotel->id,
+        'folio_id' => $folio->id,
+        'is_stay_item' => true,
+        'date' => '2025-01-01',
+        'description' => 'Séjour du 2025-01-01 au 2025-01-15',
+        'type' => 'stay',
+        'quantity' => 14,
+        'unit_price' => 10000,
+        'base_amount' => 140000,
+        'tax_amount' => 0,
+        'total_amount' => 140000,
+        'meta' => [
+            'segment_start' => '2025-01-01',
+            'segment_end' => '2025-01-15',
+        ],
+    ]);
+
+    $segmentB = FolioItem::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'hotel_id' => $this->hotel->id,
+        'folio_id' => $folio->id,
+        'is_stay_item' => true,
+        'date' => '2025-01-15',
+        'description' => 'Séjour du 2025-01-15 au 2025-01-20',
+        'type' => 'stay',
+        'quantity' => 5,
+        'unit_price' => 10000,
+        'base_amount' => 50000,
+        'tax_amount' => 0,
+        'total_amount' => 50000,
+        'meta' => [
+            'segment_start' => '2025-01-15',
+            'segment_end' => '2025-01-20',
+        ],
+    ]);
+
+    $segmentC = FolioItem::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'hotel_id' => $this->hotel->id,
+        'folio_id' => $folio->id,
+        'is_stay_item' => true,
+        'date' => '2025-01-20',
+        'description' => 'Séjour du 2025-01-20 au 2025-01-25',
+        'type' => 'stay',
+        'quantity' => 5,
+        'unit_price' => 10000,
+        'base_amount' => 50000,
+        'tax_amount' => 0,
+        'total_amount' => 50000,
+        'meta' => [
+            'segment_start' => '2025-01-20',
+            'segment_end' => '2025-01-25',
+        ],
+    ]);
+
+    $newRoom = Room::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'hotel_id' => $this->hotel->id,
+        'room_type_id' => $this->roomType->id,
+        'number' => '205',
+        'floor' => '2',
+        'status' => 'active',
+        'hk_status' => Room::HK_STATUS_INSPECTED,
+    ]);
+
+    $service->resegmentStayForRoomChange(
+        $this->reservation->fresh(),
+        $this->room,
+        $newRoom,
+        Carbon::parse('2025-01-22 10:00:00'),
+        10000,
+        15000,
+        'used',
+    );
+
+    $segmentA = FolioItem::withTrashed()->find($segmentA->id);
+    $segmentB = FolioItem::withTrashed()->find($segmentB->id);
+    $segmentC = FolioItem::withTrashed()->find($segmentC->id);
+    $activeItems = $folio->items()->where('is_stay_item', true)->get();
+    $afterPivot = $activeItems->firstWhere('meta.segment_start', '2025-01-22');
+
+    expect($segmentA?->trashed())->toBeFalse()
+        ->and($segmentB?->trashed())->toBeFalse()
+        ->and($segmentC?->trashed())->toBeFalse()
+        ->and($segmentC?->meta['segment_end'])->toBe('2025-01-22')
+        ->and($afterPivot)->not->toBeNull()
+        ->and($afterPivot->meta['segment_end'])->toBe('2025-01-25')
+        ->and($activeItems)->toHaveCount(4);
+});
+
+it('keeps stay extension segments intact when description uses day month year format', function (): void {
+    $service = app(FolioBillingService::class);
+    $this->reservation->update([
+        'status' => Reservation::STATUS_IN_HOUSE,
+        'check_in_date' => '2025-01-01 00:00:00',
+        'check_out_date' => '2025-01-25 00:00:00',
+        'unit_price' => 20000,
+    ]);
+
+    $folio = $service->ensureMainFolioForReservation($this->reservation);
+
+    $extensionItem = FolioItem::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'hotel_id' => $this->hotel->id,
+        'folio_id' => $folio->id,
+        'is_stay_item' => true,
+        'date' => '2025-01-15',
+        'description' => 'Prolongation de séjour - Nuitée · Séjour du 15/01/2025 - 20/01/2025',
+        'type' => 'stay_extension',
+        'quantity' => 5,
+        'unit_price' => 20000,
+        'base_amount' => 100000,
+        'tax_amount' => 0,
+        'total_amount' => 100000,
+        'meta' => [
+            'previous_check_out' => '2025-01-15',
+            'new_check_out' => '2025-01-20',
+        ],
+    ]);
+
+    $newRoom = Room::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'hotel_id' => $this->hotel->id,
+        'room_type_id' => $this->roomType->id,
+        'number' => '206',
+        'floor' => '2',
+        'status' => 'active',
+        'hk_status' => Room::HK_STATUS_INSPECTED,
+    ]);
+
+    $service->resegmentStayForRoomChange(
+        $this->reservation->fresh(),
+        $this->room,
+        $newRoom,
+        Carbon::parse('2025-01-22 10:00:00'),
+        20000,
+        25000,
+        'used',
+    );
+
+    $extensionItem = FolioItem::withTrashed()->find($extensionItem->id);
+
+    expect($extensionItem?->trashed())->toBeFalse()
+        ->and($extensionItem?->quantity)->toBe(5.0)
+        ->and($extensionItem?->description)->toBe('Prolongation de séjour - Nuitée · Séjour du 15/01/2025 - 20/01/2025');
+});
+
+it('keeps stay extensions bounded and creates a transfer segment on room move', function (): void {
+    $service = app(FolioBillingService::class);
+    $this->room->update(['number' => '105']);
+    $this->reservation->update([
+        'status' => Reservation::STATUS_IN_HOUSE,
+        'check_in_date' => '2026-01-01 00:00:00',
+        'check_out_date' => '2026-01-28 00:00:00',
+        'unit_price' => 20000,
+    ]);
+
+    $folio = $service->ensureMainFolioForReservation($this->reservation);
+
+    FolioItem::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'hotel_id' => $this->hotel->id,
+        'folio_id' => $folio->id,
+        'is_stay_item' => true,
+        'date' => '2026-01-01',
+        'description' => 'Nuitée · Séjour du 2026-01-01 - 2026-01-10 (Chambre 105)',
+        'type' => 'stay',
+        'quantity' => 9,
+        'unit_price' => 20000,
+        'base_amount' => 180000,
+        'tax_amount' => 0,
+        'total_amount' => 180000,
+        'meta' => [
+            'segment_start' => '2026-01-01',
+            'segment_end' => '2026-01-10',
+            'segment_version' => 1,
+            'room_id' => $this->room->id,
+            'room_number' => '105',
+            'offer_kind' => 'night',
+            'offer_name' => 'Nuitée',
+        ],
+    ]);
+
+    $extensions = [
+        ['start' => '2026-01-10', 'end' => '2026-01-17', 'qty' => 7],
+        ['start' => '2026-01-17', 'end' => '2026-01-21', 'qty' => 4],
+        ['start' => '2026-01-21', 'end' => '2026-01-28', 'qty' => 7],
+    ];
+
+    foreach ($extensions as $extension) {
+        FolioItem::query()->create([
+            'tenant_id' => $this->tenant->id,
+            'hotel_id' => $this->hotel->id,
+            'folio_id' => $folio->id,
+            'is_stay_item' => true,
+            'date' => $extension['start'],
+            'description' => sprintf(
+                'Prolongation de séjour - Nuitée · Séjour du %s - %s (Chambre 105)',
+                $extension['start'],
+                $extension['end'],
+            ),
+            'type' => 'stay_extension',
+            'quantity' => $extension['qty'],
+            'unit_price' => 20000,
+            'base_amount' => $extension['qty'] * 20000,
+            'tax_amount' => 0,
+            'total_amount' => $extension['qty'] * 20000,
+            'meta' => [
+                'segment_start' => $extension['start'],
+                'segment_end' => $extension['end'],
+                'segment_version' => 1,
+                'room_id' => $this->room->id,
+                'room_number' => '105',
+                'offer_kind' => 'night',
+                'offer_name' => 'Nuitée',
+            ],
+        ]);
+    }
+
+    $newRoom = Room::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'hotel_id' => $this->hotel->id,
+        'room_type_id' => $this->roomType->id,
+        'number' => '107',
+        'floor' => '1',
+        'status' => 'active',
+        'hk_status' => Room::HK_STATUS_INSPECTED,
+    ]);
+
+    $service->resegmentStayForRoomChange(
+        $this->reservation->fresh(),
+        $this->room->fresh(),
+        $newRoom,
+        Carbon::parse('2026-01-23 10:00:00'),
+        20000,
+        25000,
+        'used',
+    );
+
+    $folio->refresh();
+
+    $extensionSegment = $folio->items()
+        ->where('type', 'stay_extension')
+        ->where('meta->segment_start', '2026-01-21')
+        ->first();
+
+    $transferSegment = $folio->items()
+        ->where('type', 'stay')
+        ->where('meta->segment_start', '2026-01-23')
+        ->where('meta->room_number', '107')
+        ->first();
+
+    expect($extensionSegment)->not->toBeNull()
+        ->and($extensionSegment?->quantity)->toBe(2.0)
+        ->and($extensionSegment?->meta['segment_end'])->toBe('2026-01-23')
+        ->and($extensionSegment?->description)->toBe(
+            'Prolongation de séjour - Nuitée · Séjour du 2026-01-21 - 2026-01-23 (Chambre 105)',
+        );
+
+    expect($transferSegment)->not->toBeNull()
+        ->and($transferSegment?->quantity)->toBe(5.0)
+        ->and($transferSegment?->description)->toBe(
+            'Transfert de séjour - Nuitée · Séjour du 2026-01-23 - 2026-01-28 (Chambre 107)',
+        );
+
+    $unchangedExtension = $folio->items()
+        ->where('type', 'stay_extension')
+        ->where('meta->segment_start', '2026-01-17')
+        ->first();
+
+    expect($unchangedExtension)->not->toBeNull()
+        ->and($unchangedExtension?->quantity)->toBe(4.0)
+        ->and($unchangedExtension?->meta['segment_end'])->toBe('2026-01-21');
+});
+
+it('replaces all stay items when pivot is at check in for not used rooms', function (): void {
+    $service = app(FolioBillingService::class);
+    $this->reservation->update([
+        'status' => Reservation::STATUS_IN_HOUSE,
+        'check_in_date' => '2025-02-01 00:00:00',
+        'check_out_date' => '2025-02-05 00:00:00',
+        'unit_price' => 12000,
+    ]);
+
+    $folio = $service->ensureMainFolioForReservation($this->reservation);
+
+    FolioItem::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'hotel_id' => $this->hotel->id,
+        'folio_id' => $folio->id,
+        'is_stay_item' => true,
+        'date' => '2025-02-01',
+        'description' => 'Séjour du 2025-02-01 au 2025-02-05',
+        'type' => 'stay',
+        'quantity' => 4,
+        'unit_price' => 12000,
+        'base_amount' => 48000,
+        'tax_amount' => 0,
+        'total_amount' => 48000,
+        'meta' => [
+            'segment_start' => '2025-02-01',
+            'segment_end' => '2025-02-05',
+        ],
+    ]);
+
+    $newRoom = Room::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'hotel_id' => $this->hotel->id,
+        'room_type_id' => $this->roomType->id,
+        'number' => '210',
+        'floor' => '2',
+        'status' => 'active',
+        'hk_status' => Room::HK_STATUS_INSPECTED,
+    ]);
+
+    $service->resegmentStayForRoomChange(
+        $this->reservation->fresh(),
+        $this->room,
+        $newRoom,
+        Carbon::parse('2025-02-03 10:00:00'),
+        12000,
+        15000,
+        'not_used',
+    );
+
+    $activeItems = $folio->items()->where('is_stay_item', true)->get();
+    $allItems = $folio->items()->withTrashed()->where('is_stay_item', true)->get();
+
+    expect($activeItems)->toHaveCount(1)
+        ->and($allItems)->toHaveCount(2)
+        ->and($activeItems->first()->meta['segment_start'])->toBe('2025-02-01')
+        ->and($activeItems->first()->meta['segment_end'])->toBe('2025-02-05')
+        ->and($activeItems->first()->meta['room_id'])->toBe($newRoom->id);
 });
 
 it('does not allow stay item soft deletes once an invoice is issued', function (): void {

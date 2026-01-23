@@ -12,6 +12,7 @@ use App\Services\HousekeepingPriorityService;
 use App\Services\Offers\OfferReservationService;
 use App\Services\ReservationAvailabilityService;
 use App\Services\ReservationConflictService;
+use App\Services\VapidEventNotifier;
 use App\Support\Frontdesk\ReservationsIndexData;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -53,6 +54,7 @@ class ReservationController extends Controller
         ReservationConflictService $conflictService,
         \App\Services\Notifier $notifier,
         HousekeepingPriorityService $priorityService,
+        VapidEventNotifier $vapidEventNotifier,
     ) {
         $tenantId = $request->user()->tenant_id;
         $hotelId = $request->user()->active_hotel_id ?? $request->session()->get('active_hotel_id');
@@ -178,6 +180,20 @@ class ReservationController extends Controller
             'cta_params' => ['reservation' => $reservation->id],
         ]);
 
+        $vapidEventNotifier->notifyOwnersAndManagers(
+            eventKey: 'reservation.created',
+            tenantId: (string) $reservation->tenant_id,
+            hotelId: $reservation->hotel_id,
+            title: 'Nouvelle réservation',
+            body: sprintf(
+                'Réservation %s créée pour %s.',
+                $reservation->code ?? '—',
+                $reservation->guest?->full_name ?? $reservation->guest?->name ?? 'client',
+            ),
+            url: route('frontdesk.reservations.details', ['reservation' => $reservation->id]),
+            tag: 'reservation-created',
+        );
+
         return redirect()
             ->route('reservations.index')
             ->with('success', 'Réservation créée.')
@@ -193,6 +209,7 @@ class ReservationController extends Controller
         ReservationConflictService $conflictService,
         \App\Services\Notifier $notifier,
         HousekeepingPriorityService $priorityService,
+        VapidEventNotifier $vapidEventNotifier,
     ) {
         $tenantId = $request->user()->tenant_id;
 
@@ -335,6 +352,16 @@ class ReservationController extends Controller
             'cta_route' => 'reservations.show',
             'cta_params' => ['reservation' => $reservation->id],
         ]);
+
+        $vapidEventNotifier->notifyOwnersAndManagers(
+            eventKey: 'reservation.updated',
+            tenantId: (string) $reservation->tenant_id,
+            hotelId: $reservation->hotel_id,
+            title: 'Réservation mise à jour',
+            body: sprintf('Réservation %s mise à jour.', $reservation->code ?? '—'),
+            url: route('frontdesk.reservations.details', ['reservation' => $reservation->id]),
+            tag: 'reservation-updated',
+        );
 
         return redirect()
             ->route('reservations.index')

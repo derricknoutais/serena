@@ -2,11 +2,14 @@
 
 require_once __DIR__.'/FolioTestHelpers.php';
 
+use App\Models\CashSession;
 use App\Models\FolioItem;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PaymentMethod;
 use App\Services\FolioBillingService;
+use App\Services\NotificationRecipientResolver;
+use App\Services\VapidEventNotifier;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Facades\Config;
@@ -32,6 +35,40 @@ it('stores a payment via json and returns updated totals', function (): void {
     ] = setupReservationEnvironment('cashflow');
 
     $user->assignRole('owner');
+
+    CashSession::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'type' => 'frontdesk',
+        'opened_by_user_id' => $user->id,
+        'started_at' => now(),
+        'starting_amount' => 0,
+        'currency' => $hotel->currency ?? 'XAF',
+        'status' => 'open',
+        'business_date' => now()->toDateString(),
+    ]);
+
+    $this->mock(VapidEventNotifier::class)
+        ->shouldReceive('notifyOwnersAndManagers')
+        ->once()
+        ->withArgs(function (
+            string $eventKey,
+            string $tenantId,
+            ?int $hotelId,
+            string $title,
+            string $body,
+            string $url,
+            ?string $tag,
+        ) use ($tenant, $hotel, $reservation): bool {
+            return $eventKey === 'payment.recorded'
+                && $tenantId === (string) $tenant->id
+                && $hotelId === $hotel->id
+                && $title === 'Paiement enregistré'
+                && str_contains($body, '4 000')
+                && str_contains($body, $hotel->currency ?? 'XAF')
+                && str_contains($url, "/reservations/{$reservation->id}/folio")
+                && $tag === 'payment-recorded';
+        });
 
     $billingService = app(FolioBillingService::class);
     $folio = $billingService->ensureMainFolioForReservation($reservation);
@@ -74,6 +111,11 @@ it('stores a payment via json and returns updated totals', function (): void {
     expect($payload['totals']['payments'])->toBe(4000);
     expect($payload['payments'])->toHaveCount(1);
     expect(Payment::query()->count())->toBe(1);
+
+    $recipients = app(NotificationRecipientResolver::class)
+        ->resolveByRoles(['owner', 'manager'], (string) $tenant->id, $hotel->id);
+
+    expect($recipients)->not->toBeEmpty();
 });
 
 it('soft deletes a payment and refreshes totals', function (): void {
@@ -126,6 +168,18 @@ it('updates a payment via json when permitted', function (): void {
     ] = setupReservationEnvironment('updatepay');
 
     $user->assignRole('owner');
+
+    CashSession::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'type' => 'frontdesk',
+        'opened_by_user_id' => $user->id,
+        'started_at' => now(),
+        'starting_amount' => 0,
+        'currency' => $hotel->currency ?? 'XAF',
+        'status' => 'open',
+        'business_date' => now()->toDateString(),
+    ]);
 
     $billingService = app(FolioBillingService::class);
     $folio = $billingService->ensureMainFolioForReservation($reservation);

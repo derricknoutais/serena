@@ -130,13 +130,16 @@ class FolioBillingService
 
         $offer = $reservation->offer;
         $offerKind = $offer?->kind ?? $reservation->offer_kind ?? 'night';
-        $offerName = $offer?->name ?? $reservation->offer_name ?? 'Séjour';
+        $offerName = $offer?->name ?? $reservation->offer_name;
         $bundleNights = $this->resolveBundleNights($offer, $offerKind);
         $quantity = $offer?->billing_mode === 'fixed'
             ? 1
             : $this->calculateStayQuantity($offerKind, $checkIn, $checkOut, $bundleNights);
 
-        $description = $this->buildStayDescription($offerKind, $offerName, $checkIn, $checkOut);
+        $reservation->loadMissing('room');
+        $roomNumber = $reservation->room?->number;
+        $kindLabel = $this->resolveStayKindLabel($offerName, $offerKind);
+        $description = $this->formatStayDescription($kindLabel, $checkIn, $checkOut, $roomNumber);
         $unitPrice = (float) $reservation->unit_price;
         $offerPrice = null;
 
@@ -157,6 +160,11 @@ class FolioBillingService
             'offer_id' => $reservation->offer_id,
             'offer_name' => $offerName,
             'offer_kind' => $offerKind,
+            'segment_start' => $checkIn->toDateString(),
+            'segment_end' => $checkOut->toDateString(),
+            'segment_version' => 1,
+            'room_id' => $reservation->room_id,
+            'room_number' => $roomNumber,
         ];
 
         $stayItem = $folio->items()->where('is_stay_item', true)->first();
@@ -216,16 +224,38 @@ class FolioBillingService
         };
     }
 
-    private function buildStayDescription(string $kind, string $offerName, Carbon $checkIn, Carbon $checkOut): string
+    private function formatStayDescription(
+        string $kindLabel,
+        Carbon $segmentStart,
+        Carbon $segmentEnd,
+        ?string $roomNumber,
+        ?string $prefix = null,
+    ): string {
+        $base = sprintf(
+            '%s · Séjour du %s - %s',
+            $kindLabel,
+            $segmentStart->toDateString(),
+            $segmentEnd->toDateString(),
+        );
+
+        $withRoom = sprintf('%s (Chambre %s)', $base, $roomNumber ?? '—');
+
+        return $prefix ? sprintf('%s - %s', $prefix, $withRoom) : $withRoom;
+    }
+
+    private function resolveStayKindLabel(?string $offerName, ?string $kind): string
     {
-        $start = $checkIn->toDateString();
-        $end = $checkOut->toDateString();
+        if (is_string($offerName) && $offerName !== '') {
+            return $offerName;
+        }
 
         return match ($kind) {
-            'short_stay' => sprintf('%s · Séjour court (~3h) le %s', $offerName, $start),
-            'weekend' => sprintf('%s · Séjour week-end du %s au %s', $offerName, $start, $end),
-            'full_day' => sprintf('%s · Séjour 24h du %s au %s', $offerName, $start, $end),
-            default => sprintf('%s · Séjour du %s au %s', $offerName, $start, $end),
+            'night' => 'Nuitée',
+            'weekend' => 'Week-end',
+            'package' => 'Forfait',
+            'full_day' => 'Séjour 24h',
+            'short_stay' => 'Séjour court',
+            default => 'Séjour',
         };
     }
 
@@ -280,20 +310,17 @@ class FolioBillingService
 
         $folio = $this->ensureMainFolioForReservation($reservation);
 
+        $reservation->loadMissing('room');
+        $roomNumber = $reservation->room?->number;
         $offerLabel = $context['offer_label']
             ?? $context['offer_name']
             ?? $reservation->offer?->name
-            ?? $reservation->offer_name
-            ?? 'Séjour';
+            ?? $reservation->offer_name;
 
+        $kindLabel = $this->resolveStayKindLabel($offerLabel, $reservation->offer?->kind ?? $reservation->offer_kind);
         $description = $context['description'] ?? 'Prolongation de séjour';
-        $lineDescription = $context['line_description'] ?? sprintf(
-            '%s - %s · Séjour du %s au %s',
-            $description,
-            $offerLabel,
-            $previousCheckOut->format('d/m/Y'),
-            $newCheckOut->format('d/m/Y'),
-        );
+        $lineDescription = $context['line_description']
+            ?? $this->formatStayDescription($kindLabel, $previousCheckOut, $newCheckOut, $roomNumber, $description);
 
         $quantity = max(1.0, (float) ($context['quantity'] ?? 1));
         $unitPrice = (float) ($context['unit_price'] ?? ($quantity > 0 ? $amount / $quantity : $amount));
@@ -303,8 +330,14 @@ class FolioBillingService
             'reason' => $description,
             'offer_id' => $context['offer_id'] ?? $reservation->offer_id,
             'offer_kind' => $context['offer_kind'] ?? $reservation->offer?->kind ?? $reservation->offer_kind,
+            'offer_name' => $offerLabel,
             'previous_check_out' => $previousCheckOut->toDateString(),
             'new_check_out' => $newCheckOut->toDateString(),
+            'segment_start' => $previousCheckOut->toDateString(),
+            'segment_end' => $newCheckOut->toDateString(),
+            'segment_version' => 1,
+            'room_id' => $reservation->room_id,
+            'room_number' => $roomNumber,
         ], $context['meta'] ?? []);
 
         return $folio->addCharge([
@@ -340,11 +373,11 @@ class FolioBillingService
             return null;
         }
 
-        $this->voidRoomChangeItems($folio);
-
         if (! $reservation->check_in_date || ! $reservation->check_out_date) {
             return null;
         }
+
+        $reservation->loadMissing('room');
 
         $checkIn = $this->resolveStayStart($reservation);
         $checkOut = Carbon::parse($reservation->check_out_date);
@@ -355,102 +388,86 @@ class FolioBillingService
         $offer = $reservation->offer;
         $kind = $offer?->kind ?? $reservation->offer_kind ?? 'night';
         $bundleNights = $this->resolveBundleNights($offer, $kind);
-        $vacatedUsage = $vacatedUsage ?? 'used';
-        $pivot = $this->resolveRoomChangePivot($kind, $checkIn, $checkOut, $pivotDate, $bundleNights, $vacatedUsage);
-
-        $segments = [];
-
+        $pivot = $pivotDate->copy();
         if ($vacatedUsage === 'not_used') {
-            $segments[] = [
-                'start' => $checkIn->copy(),
-                'end' => $checkOut->copy(),
-                'unit_price' => $newUnitPrice,
-                'room' => $newRoom,
-            ];
-        } else {
-            if ($pivot->greaterThan($checkIn)) {
-                $segments[] = [
-                    'start' => $checkIn->copy(),
-                    'end' => $pivot->copy(),
-                    'unit_price' => $oldUnitPrice,
-                    'room' => $previousRoom,
-                ];
-            }
-
-            if ($pivot->lessThan($checkOut)) {
-                $segments[] = [
-                    'start' => $pivot->copy(),
-                    'end' => $checkOut->copy(),
-                    'unit_price' => $newUnitPrice,
-                    'room' => $newRoom,
-                ];
-            }
+            $pivot = $checkIn->copy();
         }
 
-        $totalQuantity = $offer?->billing_mode === 'fixed'
-            ? 1.0
-            : (float) $this->calculateStayQuantity($kind, $checkIn, $checkOut, $bundleNights);
+        $pivot = $pivot->max($checkIn)->min($checkOut);
+        $pivotDateOnly = $pivot->copy()->startOfDay();
+        $checkOutDateOnly = $checkOut->copy()->startOfDay();
 
-        if (count($segments) === 1) {
-            $segments[0]['quantity'] = $totalQuantity;
-        } elseif (count($segments) === 2) {
-            $segments[0]['quantity'] = $this->calculateSegmentQuantity(
-                $kind,
-                $segments[0]['start'],
-                $segments[0]['end'],
-                $bundleNights,
-            );
-            $segments[1]['quantity'] = $this->calculateSegmentQuantity(
-                $kind,
-                $segments[1]['start'],
-                $segments[1]['end'],
-                $bundleNights,
-            );
+        $activeStayItems = $folio->items()
+            ->where('is_stay_item', true)
+            ->get();
 
-            if (($segments[0]['quantity'] + $segments[1]['quantity']) !== $totalQuantity) {
-                $segments[1]['quantity'] = max(0.0, $totalQuantity - $segments[0]['quantity']);
-            }
+        if ($pivotDateOnly->greaterThanOrEqualTo($checkOutDateOnly)) {
+            return $pivot;
         }
 
-        foreach ($segments as $segment) {
-            $quantity = (float) ($segment['quantity'] ?? 0.0);
+        foreach ($activeStayItems as $item) {
+            $meta = is_array($item->meta) ? $item->meta : [];
+            $itemKind = $meta['offer_kind'] ?? $offer?->kind ?? $reservation->offer_kind ?? 'night';
+            $itemKindLabel = $this->resolveStayKindLabel($meta['offer_name'] ?? $offer?->name ?? $reservation->offer_name, $itemKind);
+            $itemBundleNights = $this->resolveBundleNights($offer, $itemKind);
+            [$segmentStart, $segmentEnd] = $this->resolveStayItemSegment($item, $checkIn, $checkOut);
 
-            if ($quantity <= 0) {
+            if (! $segmentStart || ! $segmentEnd) {
                 continue;
             }
 
-            $description = sprintf(
-                'Séjour %s (%s – %s)',
-                $this->roomLabel($segment['room']),
-                $segment['start']->format('d/m'),
-                $segment['end']->format('d/m'),
+            if ($segmentEnd->lessThanOrEqualTo($pivotDateOnly)) {
+                continue;
+            }
+
+            if ($segmentStart->greaterThanOrEqualTo($checkOutDateOnly)) {
+                continue;
+            }
+
+            if ($segmentStart->lessThan($pivotDateOnly) && $segmentEnd->greaterThan($pivotDateOnly)) {
+                $roomNumber = $meta['room_number'] ?? $previousRoom?->number ?? $reservation->room?->number;
+                $meta = array_merge($meta, [
+                    'segment_end' => $pivotDateOnly->toDateString(),
+                    'segment_version' => $meta['segment_version'] ?? 1,
+                    'room_id' => $meta['room_id'] ?? $previousRoom?->id ?? $reservation->room_id,
+                    'room_number' => $roomNumber,
+                ]);
+                $item->meta = $meta;
+                $item->description = $this->formatStayDescription(
+                    $itemKindLabel,
+                    $segmentStart,
+                    $pivotDateOnly,
+                    $roomNumber,
+                    $this->resolveStayItemPrefix($item, $meta),
+                );
+                $item->quantity = $this->calculateSegmentQuantity($itemKind, $segmentStart, $pivotDateOnly, $itemBundleNights);
+                $item->recalculateAmounts();
+                $item->save();
+
+                continue;
+            }
+
+            if ($segmentStart->greaterThanOrEqualTo($pivotDateOnly)) {
+                $item->meta = array_merge($meta, [
+                    'void_reason' => 'room_move_resegment',
+                    'void_at' => $pivot->toDateTimeString(),
+                ]);
+                $item->save();
+                $item->delete();
+            }
+        }
+
+        if ($pivotDateOnly->lessThan($checkOutDateOnly)) {
+            $this->createStaySegmentAfterPivot(
+                $folio,
+                $reservation,
+                $pivotDateOnly->copy(),
+                $checkOutDateOnly->copy(),
+                $newUnitPrice,
+                $newRoom,
+                $pivot,
+                $previousRoom,
             );
-
-            $item = $folio->items()->make([
-                'tenant_id' => $folio->tenant_id,
-                'hotel_id' => $folio->hotel_id,
-                'is_stay_item' => true,
-                'type' => 'stay',
-                'description' => $description,
-                'quantity' => $quantity,
-                'unit_price' => $segment['unit_price'],
-                'tax_amount' => 0,
-                'discount_percent' => 0,
-                'discount_amount' => 0,
-                'date' => $segment['start']->toDateString(),
-                'meta' => [
-                    'segment_start' => $segment['start']->toDateString(),
-                    'segment_end' => $segment['end']->toDateString(),
-                    'room_id' => $segment['room']?->id,
-                    'room_number' => $segment['room']?->number,
-                    'offer_id' => $reservation->offer_id,
-                    'unit_price_snapshot' => $segment['unit_price'],
-                    'source' => 'room_change',
-                ],
-            ]);
-
-            $item->recalculateAmounts();
-            $item->save();
         }
 
         $folio->recalculateTotals();
@@ -600,20 +617,237 @@ class FolioBillingService
         };
     }
 
-    private function voidRoomChangeItems(Folio $folio): void
-    {
-        $folio->items()
-            ->where('is_stay_item', true)
-            ->get()
-            ->each(static fn (FolioItem $item) => $item->delete());
+    public function calculateRoomMoveDeltaAfterPivot(
+        Reservation $reservation,
+        Carbon $pivot,
+        float $oldUnitPrice,
+        float $newUnitPrice,
+    ): array {
+        if (! $reservation->check_out_date) {
+            return ['amount' => 0.0, 'quantity' => 0.0];
+        }
 
-        $folio->items()
-            ->where('type', 'stay_adjustment')
-            ->where(function ($query): void {
-                $query->where('meta->action', 'room_change_adjustment')
-                    ->orWhere('description', 'like', 'Changement de chambre%');
-            })
-            ->get()
-            ->each(static fn (FolioItem $item) => $item->delete());
+        $checkOut = Carbon::parse($reservation->check_out_date);
+        if ($checkOut->lessThanOrEqualTo($pivot)) {
+            return ['amount' => 0.0, 'quantity' => 0.0];
+        }
+
+        $offer = $reservation->offer;
+        $kind = $offer?->kind ?? $reservation->offer_kind ?? 'night';
+        $bundleNights = $this->resolveBundleNights($offer, $kind);
+        $quantity = $offer?->billing_mode === 'fixed'
+            ? 1.0
+            : (float) $this->calculateStayQuantity($kind, $pivot, $checkOut, $bundleNights);
+
+        $amount = ($newUnitPrice - $oldUnitPrice) * $quantity;
+
+        return [
+            'amount' => $amount,
+            'quantity' => $quantity,
+        ];
+    }
+
+    private function createStaySegmentAfterPivot(
+        Folio $folio,
+        Reservation $reservation,
+        Carbon $start,
+        Carbon $end,
+        float $unitPrice,
+        ?Room $room,
+        ?Carbon $movedAt = null,
+        ?Room $previousRoom = null,
+    ): void {
+        $existing = $folio->items()
+            ->where('is_stay_item', true)
+            ->where('meta->segment_start', $start->toDateString())
+            ->where('meta->segment_end', $end->toDateString())
+            ->where('meta->room_id', $room?->id)
+            ->exists();
+
+        if ($existing) {
+            return;
+        }
+
+        $this->createStaySegment(
+            $folio,
+            $reservation,
+            $start,
+            $end,
+            $unitPrice,
+            $room,
+            'room_change',
+            [
+                'moved_at' => $movedAt?->toDateTimeString(),
+                'old_room_id' => $previousRoom?->id,
+                'new_room_id' => $room?->id,
+            ],
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $meta
+     */
+    private function createStaySegment(
+        Folio $folio,
+        Reservation $reservation,
+        Carbon $start,
+        Carbon $end,
+        float $unitPrice,
+        ?Room $room,
+        string $source,
+        array $meta = [],
+    ): void {
+        $offer = $reservation->offer;
+        $kind = $offer?->kind ?? $reservation->offer_kind ?? 'night';
+        $bundleNights = $this->resolveBundleNights($offer, $kind);
+        $quantity = $this->calculateSegmentQuantity($kind, $start, $end, $bundleNights);
+
+        if ($quantity <= 0) {
+            return;
+        }
+
+        $kindLabel = $this->resolveStayKindLabel($offer?->name ?? $reservation->offer_name, $kind);
+        $description = $this->formatStayDescription(
+            $kindLabel,
+            $start,
+            $end,
+            $room?->number,
+            $source === 'room_change' ? 'Transfert de séjour' : null,
+        );
+
+        $item = $folio->items()->make([
+            'tenant_id' => $folio->tenant_id,
+            'hotel_id' => $folio->hotel_id,
+            'is_stay_item' => true,
+            'type' => 'stay',
+            'description' => $description,
+            'quantity' => $quantity,
+            'unit_price' => $unitPrice,
+            'tax_amount' => 0,
+            'discount_percent' => 0,
+            'discount_amount' => 0,
+            'date' => $start->toDateString(),
+            'meta' => [
+                'segment_start' => $start->toDateString(),
+                'segment_end' => $end->toDateString(),
+                'segment_version' => 1,
+                'room_id' => $room?->id,
+                'room_number' => $room?->number,
+                'offer_id' => $reservation->offer_id,
+                'offer_kind' => $kind,
+                'offer_name' => $offer?->name ?? $reservation->offer_name,
+                'unit_price_snapshot' => $unitPrice,
+                'source' => $source,
+                'is_transfer' => $source === 'room_change' ? true : null,
+                ...array_filter($meta, fn ($value) => $value !== null),
+            ],
+        ]);
+
+        $item->recalculateAmounts();
+        $item->save();
+    }
+
+    /**
+     * @return array{0:?Carbon,1:?Carbon}
+     */
+    private function resolveStayItemSegment(FolioItem $item, Carbon $checkIn, Carbon $checkOut): array
+    {
+        $meta = is_array($item->meta) ? $item->meta : [];
+        $segmentStart = $meta['segment_start'] ?? null;
+        $segmentEnd = $meta['segment_end'] ?? null;
+
+        if (is_string($segmentStart) && is_string($segmentEnd)) {
+            return [Carbon::parse($segmentStart)->startOfDay(), Carbon::parse($segmentEnd)->startOfDay()];
+        }
+
+        $parsed = $this->parseSegmentFromDescription($item->description);
+        if ($parsed) {
+            return $parsed;
+        }
+
+        return [$checkIn->copy()->startOfDay(), $checkOut->copy()->startOfDay()];
+    }
+
+    /**
+     * @param  array<string, mixed>  $meta
+     */
+    private function resolveStayItemPrefix(FolioItem $item, array $meta): ?string
+    {
+        if (($meta['is_transfer'] ?? false) === true) {
+            return 'Transfert de séjour';
+        }
+
+        if ($item->type === 'stay_extension') {
+            return 'Prolongation de séjour';
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{0:Carbon,1:Carbon}|null
+     */
+    private function parseSegmentFromDescription(?string $description): ?array
+    {
+        if (! is_string($description)) {
+            return null;
+        }
+
+        if (preg_match('/Séjour du (\d{4}-\d{2}-\d{2}) au (\d{4}-\d{2}-\d{2})/', $description, $matches)) {
+            return [
+                Carbon::parse($matches[1])->startOfDay(),
+                Carbon::parse($matches[2])->startOfDay(),
+            ];
+        }
+
+        if (preg_match('/Séjour du (\d{2}\/\d{2}\/\d{4})\s*(?:au|[–-])\s*(\d{2}\/\d{2}\/\d{4})/', $description, $matches)) {
+            return [
+                Carbon::createFromFormat('d/m/Y', $matches[1])->startOfDay(),
+                Carbon::createFromFormat('d/m/Y', $matches[2])->startOfDay(),
+            ];
+        }
+
+        if (preg_match('/\\((\\d{2}\\/\\d{2})\\s*[–-]\\s*(\\d{2}\\/\\d{2})\\)/', $description, $matches)) {
+            $start = Carbon::parse($matches[1])->startOfDay();
+            $end = Carbon::parse($matches[2])->startOfDay();
+            if ($end->lessThanOrEqualTo($start)) {
+                $end = $end->copy()->addYear();
+            }
+
+            return [$start, $end];
+        }
+
+        return null;
+    }
+
+    private function replaceStayDescriptionDates(?string $description, Carbon $start, Carbon $end): ?string
+    {
+        if (! is_string($description)) {
+            return $description;
+        }
+
+        $updated = $description;
+
+        if (preg_match('/Séjour du (\d{4}-\d{2}-\d{2}) au (\d{4}-\d{2}-\d{2})/', $updated)) {
+            $replaced = preg_replace(
+                '/Séjour du (\d{4}-\d{2}-\d{2}) au (\d{4}-\d{2}-\d{2})/',
+                sprintf('Séjour du %s au %s', $start->toDateString(), $end->toDateString()),
+                $updated,
+            );
+
+            return $replaced ?? $updated;
+        }
+
+        if (preg_match('/\\((\\d{2}\\/\\d{2})\\s*[–-]\\s*(\\d{2}\\/\\d{2})\\)/', $updated)) {
+            $replaced = preg_replace(
+                '/\\((\\d{2}\\/\\d{2})\\s*[–-]\\s*(\\d{2}\\/\\d{2})\\)/',
+                sprintf('(%s – %s)', $start->format('d/m'), $end->format('d/m')),
+                $updated,
+            );
+
+            return $replaced ?? $updated;
+        }
+
+        return $updated;
     }
 }

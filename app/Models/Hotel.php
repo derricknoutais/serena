@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
 use Stancl\Tenancy\Database\Concerns\BelongsToTenant;
 
@@ -151,5 +152,10 @@ class Hotel extends Model
     public function defaultBarStockLocation(): BelongsTo
     {
         return $this->belongsTo(StorageLocation::class, 'default_bar_stock_location_id');
+    }
+
+    public function loyaltySetting(): HasOne
+    {
+        return $this->hasOne(HotelLoyaltySetting::class);
     }
 }

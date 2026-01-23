@@ -9,10 +9,12 @@ use App\Models\Room;
 use App\Models\RoomType;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Notifications\GenericPushNotification;
 use App\Services\FolioBillingService;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 
 /**
@@ -136,6 +138,7 @@ beforeEach(function (): void {
 
 it('moves room and keeps hk status when not used', function (): void {
     $setup = makeRoomMoveSetup('move-not-used.serena.test');
+    Notification::fake();
     $offer = Offer::query()->create([
         'tenant_id' => $setup['tenant']->getKey(),
         'hotel_id' => $setup['hotel']->getKey(),
@@ -180,9 +183,9 @@ it('moves room and keeps hk status when not used', function (): void {
         'offer_id' => $offer->getKey(),
         'offer_name' => $offer->name,
         'offer_kind' => $offer->kind,
-        'check_in_date' => '2025-05-01 15:00:00',
-        'check_out_date' => '2025-05-04 11:00:00',
-        'actual_check_in_at' => '2025-05-01 15:00:00',
+        'check_in_date' => '2025-05-01 00:00:00',
+        'check_out_date' => '2025-05-04 00:00:00',
+        'actual_check_in_at' => '2025-05-01 00:00:00',
         'unit_price' => 15000,
         'base_amount' => 45000,
         'total_amount' => 45000,
@@ -195,6 +198,7 @@ it('moves room and keeps hk status when not used', function (): void {
             [
                 'room_id' => $setup['newRoom']->id,
                 'vacated_usage' => 'not_used',
+                'moved_at' => '2025-05-01 00:00:00',
             ],
         )
         ->assertOk();
@@ -207,7 +211,7 @@ it('moves room and keeps hk status when not used', function (): void {
     $stayItems = $folio->items()->where('is_stay_item', true)->get();
     $adjustments = $folio->items()
         ->where('type', 'stay_adjustment')
-        ->where('description', 'like', 'Changement de chambre%')
+        ->where('meta->kind', 'room_move_delta')
         ->count();
 
     expect($setup['oldRoom']->status)->toBe(Room::STATUS_AVAILABLE)
@@ -219,8 +223,14 @@ it('moves room and keeps hk status when not used', function (): void {
         ->and($stayItems->first()->quantity)->toBe(3.0)
         ->and($stayItems->first()->meta['room_id'])->toBe($setup['newRoom']->getKey())
         ->and($stayItems->first()->meta['source'])->toBe('room_change')
-        ->and($folio->balance)->toBe(75000.0)
-        ->and($adjustments)->toBe(0);
+        ->and($folio->balance)->toBe(105000.0)
+        ->and($adjustments)->toBe(1);
+
+    Notification::assertSentTo($setup['user'], GenericPushNotification::class, function (GenericPushNotification $notification) use ($setup): bool {
+        return $notification->title === 'Changement de chambre'
+            && str_contains($notification->body, $setup['oldRoom']->number)
+            && str_contains($notification->body, $setup['newRoom']->number);
+    });
 });
 
 it('moves room and marks old room dirty when used', function (): void {
@@ -269,9 +279,9 @@ it('moves room and marks old room dirty when used', function (): void {
         'offer_id' => $offer->getKey(),
         'offer_name' => $offer->name,
         'offer_kind' => $offer->kind,
-        'check_in_date' => '2025-05-01 15:00:00',
-        'check_out_date' => '2025-05-04 11:00:00',
-        'actual_check_in_at' => '2025-05-01 15:00:00',
+        'check_in_date' => '2025-05-01 00:00:00',
+        'check_out_date' => '2025-05-04 00:00:00',
+        'actual_check_in_at' => '2025-05-01 00:00:00',
         'unit_price' => 15000,
         'base_amount' => 45000,
         'total_amount' => 45000,
@@ -284,7 +294,7 @@ it('moves room and marks old room dirty when used', function (): void {
             [
                 'room_id' => $setup['newRoom']->id,
                 'vacated_usage' => 'used',
-                'moved_at' => '2025-05-03 10:00:00',
+                'moved_at' => '2025-05-03 00:00:00',
             ],
         )
         ->assertOk();
@@ -297,22 +307,54 @@ it('moves room and marks old room dirty when used', function (): void {
     $stayItems = $folio->items()->where('is_stay_item', true)->orderBy('date')->get();
     $adjustments = $folio->items()
         ->where('type', 'stay_adjustment')
-        ->where('description', 'like', 'Changement de chambre%')
+        ->where('meta->kind', 'room_move_delta')
         ->count();
 
     expect($setup['oldRoom']->status)->toBe(Room::STATUS_AVAILABLE)
         ->and($setup['oldRoom']->hk_status)->toBe(Room::HK_STATUS_DIRTY)
         ->and($setup['newRoom']->status)->toBe(Room::STATUS_IN_USE);
 
-    expect($stayItems)->toHaveCount(2)
+    expect($stayItems)->toHaveCount(1)
         ->and($stayItems[0]->quantity)->toBe(1.0)
-        ->and($stayItems[0]->unit_price)->toBe(15000.0)
-        ->and($stayItems[0]->meta['room_id'])->toBe($setup['oldRoom']->getKey())
-        ->and($stayItems[1]->quantity)->toBe(2.0)
-        ->and($stayItems[1]->unit_price)->toBe(25000.0)
-        ->and($stayItems[1]->meta['room_id'])->toBe($setup['newRoom']->getKey())
-        ->and($folio->balance)->toBe(65000.0)
-        ->and($adjustments)->toBe(0);
+        ->and($stayItems[0]->unit_price)->toBe(25000.0)
+        ->and($stayItems[0]->meta['room_id'])->toBe($setup['newRoom']->getKey())
+        ->and($folio->balance)->toBe(35000.0)
+        ->and($adjustments)->toBe(1);
+});
+
+it('does not add a room move adjustment when prices match', function (): void {
+    $setup = makeRoomMoveSetup('move-no-delta.serena.test');
+
+    $setup['reservation']->update([
+        'check_in_date' => '2025-05-01 00:00:00',
+        'check_out_date' => '2025-05-04 00:00:00',
+        'actual_check_in_at' => '2025-05-01 00:00:00',
+        'unit_price' => 15000,
+        'base_amount' => 45000,
+        'total_amount' => 45000,
+    ]);
+
+    $this->actingAs($setup['user'])
+        ->withHeaders(['Accept' => 'application/json'])
+        ->patch(
+            "http://{$setup['domain']}/reservations/{$setup['reservation']->id}/stay/room",
+            [
+                'room_id' => $setup['newRoom']->id,
+                'vacated_usage' => 'used',
+                'moved_at' => '2025-05-01 00:00:00',
+            ],
+        )
+        ->assertOk();
+
+    $folio = app(FolioBillingService::class)
+        ->ensureMainFolioForReservation($setup['reservation']->fresh());
+    $adjustments = $folio->items()
+        ->where('type', 'stay_adjustment')
+        ->where('meta->kind', 'room_move_delta')
+        ->count();
+
+    expect($adjustments)->toBe(0)
+        ->and($folio->balance)->toBe(45000.0);
 });
 
 it('moves room and marks old room to inspect when usage is unknown', function (): void {
@@ -410,9 +452,9 @@ it('cleans up old stay segments after multiple room changes', function (): void 
         'offer_id' => $offer->getKey(),
         'offer_name' => $offer->name,
         'offer_kind' => $offer->kind,
-        'check_in_date' => '2025-05-01 15:00:00',
-        'check_out_date' => '2025-05-04 11:00:00',
-        'actual_check_in_at' => '2025-05-01 15:00:00',
+        'check_in_date' => '2025-05-01 00:00:00',
+        'check_out_date' => '2025-05-04 00:00:00',
+        'actual_check_in_at' => '2025-05-01 00:00:00',
         'unit_price' => 15000,
         'base_amount' => 45000,
         'total_amount' => 45000,
@@ -425,7 +467,7 @@ it('cleans up old stay segments after multiple room changes', function (): void 
             [
                 'room_id' => $setup['newRoom']->id,
                 'vacated_usage' => 'used',
-                'moved_at' => '2025-05-02 16:00:00',
+                'moved_at' => '2025-05-02 00:00:00',
             ],
         )
         ->assertOk();
@@ -437,7 +479,7 @@ it('cleans up old stay segments after multiple room changes', function (): void 
             [
                 'room_id' => $thirdRoom->id,
                 'vacated_usage' => 'used',
-                'moved_at' => '2025-05-03 16:00:00',
+                'moved_at' => '2025-05-03 00:00:00',
             ],
         )
         ->assertOk();
@@ -448,12 +490,172 @@ it('cleans up old stay segments after multiple room changes', function (): void 
     $allStayItems = $folio->items()->withTrashed()->where('is_stay_item', true)->get();
     $adjustments = $folio->items()
         ->where('type', 'stay_adjustment')
-        ->where('description', 'like', 'Changement de chambre%')
+        ->where('meta->kind', 'room_move_delta')
         ->count();
 
     expect($activeStayItems)->toHaveCount(2)
-        ->and($allStayItems)->toHaveCount(4)
-        ->and($adjustments)->toBe(0);
+        ->and($allStayItems)->toHaveCount(2)
+        ->and($adjustments)->toBe(2);
+});
+
+it('ignores past checked out reservations when moving rooms', function (): void {
+    Carbon::setTestNow('2026-01-21 10:00:00');
+
+    $setup = makeRoomMoveSetup('move-past-checked-out.serena.test');
+
+    $setup['reservation']->update([
+        'check_in_date' => '2026-01-01 12:00:00',
+        'check_out_date' => '2026-01-23 11:00:00',
+        'actual_check_in_at' => '2026-01-01 12:00:00',
+        'status' => Reservation::STATUS_IN_HOUSE,
+    ]);
+
+    Reservation::query()->create([
+        'tenant_id' => $setup['tenant']->getKey(),
+        'hotel_id' => $setup['hotel']->getKey(),
+        'guest_id' => $setup['reservation']->guest_id,
+        'room_type_id' => $setup['roomType']->getKey(),
+        'room_id' => $setup['newRoom']->getKey(),
+        'code' => 'RES-PAST',
+        'status' => Reservation::STATUS_CHECKED_OUT,
+        'source' => 'direct',
+        'offer_name' => null,
+        'offer_kind' => 'night',
+        'adults' => 1,
+        'children' => 0,
+        'check_in_date' => '2026-01-03 12:00:00',
+        'check_out_date' => '2026-01-04 11:00:00',
+        'expected_arrival_time' => '12:00',
+        'actual_check_in_at' => '2026-01-03 12:00:00',
+        'actual_check_out_at' => '2026-01-04 11:00:00',
+        'currency' => 'XAF',
+        'unit_price' => 15000,
+        'base_amount' => 15000,
+        'tax_amount' => 0,
+        'total_amount' => 15000,
+    ]);
+
+    $response = $this->actingAs($setup['user'])
+        ->withHeaders(['Accept' => 'application/json'])
+        ->patch(
+            "http://{$setup['domain']}/reservations/{$setup['reservation']->id}/stay/room",
+            [
+                'room_id' => $setup['newRoom']->id,
+                'vacated_usage' => 'used',
+                'moved_at' => '2026-01-21 10:00:00',
+            ],
+        );
+
+    $response->assertOk();
+
+    Carbon::setTestNow();
+});
+
+it('blocks room move when a future reservation overlaps the remaining stay', function (): void {
+    Carbon::setTestNow('2026-01-21 10:00:00');
+
+    $setup = makeRoomMoveSetup('move-future-conflict.serena.test');
+
+    $setup['reservation']->update([
+        'check_in_date' => '2026-01-01 12:00:00',
+        'check_out_date' => '2026-01-23 11:00:00',
+        'actual_check_in_at' => '2026-01-01 12:00:00',
+        'status' => Reservation::STATUS_IN_HOUSE,
+    ]);
+
+    Reservation::query()->create([
+        'tenant_id' => $setup['tenant']->getKey(),
+        'hotel_id' => $setup['hotel']->getKey(),
+        'guest_id' => $setup['reservation']->guest_id,
+        'room_type_id' => $setup['roomType']->getKey(),
+        'room_id' => $setup['newRoom']->getKey(),
+        'code' => 'RES-FUTURE',
+        'status' => Reservation::STATUS_CONFIRMED,
+        'source' => 'direct',
+        'offer_name' => null,
+        'offer_kind' => 'night',
+        'adults' => 1,
+        'children' => 0,
+        'check_in_date' => '2026-01-22 14:00:00',
+        'check_out_date' => '2026-01-24 11:00:00',
+        'expected_arrival_time' => '14:00',
+        'actual_check_in_at' => null,
+        'actual_check_out_at' => null,
+        'currency' => 'XAF',
+        'unit_price' => 15000,
+        'base_amount' => 30000,
+        'tax_amount' => 0,
+        'total_amount' => 30000,
+    ]);
+
+    $response = $this->actingAs($setup['user'])
+        ->withHeaders(['Accept' => 'application/json'])
+        ->patch(
+            "http://{$setup['domain']}/reservations/{$setup['reservation']->id}/stay/room",
+            [
+                'room_id' => $setup['newRoom']->id,
+                'vacated_usage' => 'used',
+                'moved_at' => '2026-01-21 10:00:00',
+            ],
+        );
+
+    $response->assertUnprocessable();
+    $response->assertJsonValidationErrors('room_id');
+
+    Carbon::setTestNow();
+});
+
+it('ignores active reservations outside the remaining window when moving rooms', function (): void {
+    Carbon::setTestNow('2026-01-21 10:00:00');
+
+    $setup = makeRoomMoveSetup('move-past-active.serena.test');
+
+    $setup['reservation']->update([
+        'check_in_date' => '2026-01-01 12:00:00',
+        'check_out_date' => '2026-01-23 11:00:00',
+        'actual_check_in_at' => '2026-01-01 12:00:00',
+        'status' => Reservation::STATUS_IN_HOUSE,
+    ]);
+
+    Reservation::query()->create([
+        'tenant_id' => $setup['tenant']->getKey(),
+        'hotel_id' => $setup['hotel']->getKey(),
+        'guest_id' => $setup['reservation']->guest_id,
+        'room_type_id' => $setup['roomType']->getKey(),
+        'room_id' => $setup['newRoom']->getKey(),
+        'code' => 'RES-PAST-ACTIVE',
+        'status' => Reservation::STATUS_CONFIRMED,
+        'source' => 'direct',
+        'offer_name' => null,
+        'offer_kind' => 'night',
+        'adults' => 1,
+        'children' => 0,
+        'check_in_date' => '2026-01-03 12:00:00',
+        'check_out_date' => '2026-01-04 11:00:00',
+        'expected_arrival_time' => '12:00',
+        'actual_check_in_at' => null,
+        'actual_check_out_at' => null,
+        'currency' => 'XAF',
+        'unit_price' => 15000,
+        'base_amount' => 15000,
+        'tax_amount' => 0,
+        'total_amount' => 15000,
+    ]);
+
+    $response = $this->actingAs($setup['user'])
+        ->withHeaders(['Accept' => 'application/json'])
+        ->patch(
+            "http://{$setup['domain']}/reservations/{$setup['reservation']->id}/stay/room",
+            [
+                'room_id' => $setup['newRoom']->id,
+                'vacated_usage' => 'used',
+                'moved_at' => '2026-01-21 10:00:00',
+            ],
+        );
+
+    $response->assertOk();
+
+    Carbon::setTestNow();
 });
 
 it('cannot move to a room from another hotel', function (): void {

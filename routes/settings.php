@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Settings\AppearanceController;
 use App\Http\Controllers\Settings\BadgeAccessController;
+use App\Http\Controllers\Settings\LoyaltyController;
+use App\Http\Controllers\Settings\NotificationsController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\RolesController;
@@ -46,6 +48,20 @@ Route::middleware(['web', InitializeTenancyByDomain::class, PreventAccessFromCen
     Route::get('settings/badges/{user}/download', [BadgeAccessController::class, 'download'])
         ->middleware('role:owner|manager|superadmin')
         ->name('settings.badges.download');
+
+    Route::get('settings/loyalty', [LoyaltyController::class, 'edit'])
+        ->middleware('can:loyalty.settings.manage')
+        ->name('settings.loyalty.edit');
+    Route::put('settings/loyalty', [LoyaltyController::class, 'update'])
+        ->middleware('can:loyalty.settings.manage')
+        ->name('settings.loyalty.update');
+
+    Route::get('settings/notifications', [NotificationsController::class, 'edit'])
+        ->middleware('role:owner|manager|superadmin')
+        ->name('settings.notifications.edit');
+    Route::put('settings/notifications', [NotificationsController::class, 'update'])
+        ->middleware('role:owner|manager|superadmin')
+        ->name('settings.notifications.update');
 
     Route::redirect('settings/resources', '/settings/resources/hotel');
 

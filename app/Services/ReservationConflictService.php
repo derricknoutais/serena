@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Reservation;
 use App\Models\Room;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 
@@ -22,15 +23,17 @@ class ReservationConflictService
         Carbon $checkIn,
         Carbon $checkOut,
         ?int $excludeReservationId = null,
+        ?string $tenantId = null,
     ): ?array {
-        $conflict = Reservation::query()
+        $conflict = $this->getBlockingReservationsQuery(
+            $hotelId,
+            $roomId,
+            $checkIn,
+            $checkOut,
+            $tenantId,
+            $excludeReservationId,
+        )
             ->select('id', 'code', 'guest_id', 'room_id', 'check_in_date', 'check_out_date')
-            ->where('hotel_id', $hotelId)
-            ->where('room_id', $roomId)
-            ->whereNotIn('status', [Reservation::STATUS_CANCELLED, Reservation::STATUS_NO_SHOW])
-            ->where('check_in_date', '<', $checkOut)
-            ->where('check_out_date', '>', $checkIn)
-            ->when($excludeReservationId, fn ($q) => $q->where('id', '!=', $excludeReservationId))
             ->with(['guest:id,first_name,last_name', 'room:id,number'])
             ->first();
 
@@ -112,7 +115,14 @@ class ReservationConflictService
         ?int $excludeReservationId = null,
         ?string $tenantId = null,
     ): void {
-        $conflict = $this->detectRoomConflict($hotelId, $roomId, $checkIn, $checkOut, $excludeReservationId);
+        $conflict = $this->detectRoomConflict(
+            $hotelId,
+            $roomId,
+            $checkIn,
+            $checkOut,
+            $excludeReservationId,
+            $tenantId,
+        );
 
         if ($conflict) {
             $message = sprintf(
@@ -134,6 +144,25 @@ class ReservationConflictService
                 'room_id' => $message,
             ]);
         }
+    }
+
+    public function getBlockingReservationsQuery(
+        int $hotelId,
+        string $roomId,
+        Carbon $rangeStart,
+        Carbon $rangeEnd,
+        ?string $tenantId = null,
+        ?int $excludeReservationId = null,
+    ): Builder {
+        return Reservation::query()
+            ->where('hotel_id', $hotelId)
+            ->when($tenantId, fn (Builder $query) => $query->where('tenant_id', $tenantId))
+            ->where('room_id', $roomId)
+            ->whereIn('status', Reservation::activeStatusForAvailability())
+            ->whereNull('actual_check_out_at')
+            ->where('check_in_date', '<', $rangeEnd)
+            ->where('check_out_date', '>', $rangeStart)
+            ->when($excludeReservationId, fn (Builder $query) => $query->where('id', '!=', $excludeReservationId));
     }
 
     public function validateOrThrowOverbooking(

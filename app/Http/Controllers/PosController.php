@@ -19,6 +19,7 @@ use App\Models\StorageLocation;
 use App\Models\User;
 use App\Services\FolioBillingService;
 use App\Services\InventoryService;
+use App\Services\VapidEventNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -35,6 +36,7 @@ class PosController extends Controller
     public function __construct(
         private readonly FolioBillingService $folioBilling,
         private readonly InventoryService $inventoryService,
+        private readonly VapidEventNotifier $vapidEventNotifier,
     ) {}
 
     public function index(Request $request): Response
@@ -212,6 +214,18 @@ class PosController extends Controller
             ]);
         }
 
+        $amountLabel = number_format((float) $totalAmount, 0, ',', ' ');
+        $label = $data['client_label'] ?? 'Vente comptoir';
+        $this->vapidEventNotifier->notifyOwnersAndManagers(
+            eventKey: 'pos.sale',
+            tenantId: (string) $tenantId,
+            hotelId: $hotel->id,
+            title: 'Vente POS',
+            body: sprintf('%s : %s %s.', $label, $amountLabel, $hotel->currency ?? 'XAF'),
+            url: route('pos.index'),
+            tag: 'pos-sale',
+        );
+
         return response()->json([
             'success' => true,
             'folio_id' => $folio->id,
@@ -273,6 +287,24 @@ class PosController extends Controller
         }
 
         $folio->refresh();
+
+        $reservation->loadMissing('room');
+        $amountLabel = number_format((float) $addedTotal, 0, ',', ' ');
+        $this->vapidEventNotifier->notifyOwnersAndManagers(
+            eventKey: 'pos.room_sale',
+            tenantId: (string) $tenantId,
+            hotelId: $hotel->id,
+            title: 'Vente POS',
+            body: sprintf(
+                'Vente chambre %s (%s) : %s %s.',
+                $reservation->room?->number ?? '—',
+                $reservation->code ?? '—',
+                $amountLabel,
+                $hotel->currency ?? 'XAF',
+            ),
+            url: route('reservations.folio.show', ['reservation' => $reservation->id]),
+            tag: 'pos-room-sale',
+        );
 
         return response()->json([
             'success' => true,

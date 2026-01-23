@@ -289,6 +289,12 @@ export default defineComponent({
         activeHotel() {
             return (this.$page?.props as any)?.auth?.activeHotel ?? null;
         },
+        legalNif(): string {
+            return this.activeHotel?.document_settings?.legal?.nif ?? '—';
+        },
+        legalRccm(): string {
+            return this.activeHotel?.document_settings?.legal?.rccm ?? '—';
+        },
     },
 });
 </script>
@@ -643,6 +649,13 @@ export default defineComponent({
                 <slot />
             </div>
         </main>
+
+        <footer class="border-t border-serena-border bg-serena-card">
+            <div class="page-container flex flex-col gap-2 py-4 text-xs text-serena-text-muted sm:flex-row sm:items-center sm:justify-between">
+                <span>NIF : {{ legalNif }}</span>
+                <span>RCCM : {{ legalRccm }}</span>
+            </div>
+        </footer>
 
         <div
             v-if="outboxOpen"

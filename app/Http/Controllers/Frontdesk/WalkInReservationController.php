@@ -12,6 +12,7 @@ use App\Models\Reservation;
 use App\Models\Room;
 use App\Models\RoomType;
 use App\Services\HousekeepingPriorityService;
+use App\Services\VapidEventNotifier;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -94,8 +95,11 @@ class WalkInReservationController extends Controller
         ]);
     }
 
-    public function store(Request $request, HousekeepingPriorityService $priorityService): RedirectResponse
-    {
+    public function store(
+        Request $request,
+        HousekeepingPriorityService $priorityService,
+        VapidEventNotifier $vapidEventNotifier,
+    ): RedirectResponse {
         $user = $request->user();
         $tenantId = (string) $user->tenant_id;
         $hotelId = (int) ($user->active_hotel_id ?? $user->hotel_id ?? 0);
@@ -222,6 +226,21 @@ class WalkInReservationController extends Controller
                 $priorityService->syncRoomTasks($reservation->room, $request->user());
             }
         }
+
+        $reservation->loadMissing('guest');
+        $vapidEventNotifier->notifyOwnersAndManagers(
+            eventKey: 'reservation.created',
+            tenantId: (string) $reservation->tenant_id,
+            hotelId: $reservation->hotel_id,
+            title: 'Nouvelle réservation',
+            body: sprintf(
+                'Réservation %s créée pour %s.',
+                $reservation->code ?? '—',
+                $reservation->guest?->full_name ?? $reservation->guest?->name ?? 'client',
+            ),
+            url: route('frontdesk.reservations.details', ['reservation' => $reservation->id]),
+            tag: 'reservation-created',
+        );
 
         return redirect()
             ->route('rooms.board', ['date' => $checkInDate])

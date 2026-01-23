@@ -18,8 +18,12 @@ const canManageRoles = computed(() =>
 const canManageBadges = computed(() =>
     (page.props.auth.user?.roles ?? []).some((role) => ['owner', 'manager', 'admin', 'superadmin'].includes(role.name)),
 );
+const canManageNotifications = computed(() =>
+    (page.props.auth.user?.roles ?? []).some((role) => ['owner', 'manager', 'admin', 'superadmin'].includes(role.name)),
+);
 const canViewResources = computed(() => Boolean(page.props.auth?.can?.resources_view ?? false));
 const permissions = computed(() => page.props.auth?.can ?? {});
+const canManageLoyalty = computed(() => Boolean(page.props.auth?.can?.loyalty_settings_manage ?? false));
 
 const sidebarNavItems = computed<NavItem[]>(() => [
     {
@@ -51,6 +55,22 @@ const sidebarNavItems = computed<NavItem[]>(() => [
             {
                 title: 'Badges & QR',
                 href: '/settings/badges',
+            } satisfies NavItem,
+        ]
+        : []),
+    ...(canManageNotifications.value
+        ? [
+            {
+                title: 'Notifications',
+                href: '/settings/notifications',
+            } satisfies NavItem,
+        ]
+        : []),
+    ...(canManageLoyalty.value
+        ? [
+            {
+                title: 'Programme de fidélité',
+                href: '/settings/loyalty',
             } satisfies NavItem,
         ]
         : []),
