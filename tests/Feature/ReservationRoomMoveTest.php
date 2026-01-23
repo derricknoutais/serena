@@ -216,7 +216,8 @@ it('moves room and keeps hk status when not used', function (): void {
 
     expect($setup['oldRoom']->status)->toBe(Room::STATUS_AVAILABLE)
         ->and($setup['oldRoom']->hk_status)->toBe(Room::HK_STATUS_INSPECTED)
-        ->and($setup['newRoom']->status)->toBe(Room::STATUS_IN_USE);
+        ->and($setup['newRoom']->status)->toBe(Room::STATUS_IN_USE)
+        ->and($setup['newRoom']->hk_status)->toBe(Room::HK_STATUS_IN_USE);
 
     expect($stayItems)->toHaveCount(1)
         ->and($stayItems->first()->unit_price)->toBe(25000.0)

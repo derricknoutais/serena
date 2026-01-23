@@ -542,6 +542,12 @@ class ReservationStayController extends Controller
 
                 if ($vacatedUsage === 'used') {
                     $this->housekeepingService->forceRoomStatus($previousRoom, Room::HK_STATUS_DIRTY, $request->user());
+                } elseif ($vacatedUsage === 'not_used') {
+                    $this->housekeepingService->forceRoomStatus(
+                        $previousRoom,
+                        Room::HK_STATUS_INSPECTED,
+                        $request->user(),
+                    );
                 } elseif ($vacatedUsage === 'unknown') {
                     $this->housekeepingService->forceRoomStatus(
                         $previousRoom,
@@ -555,6 +561,11 @@ class ReservationStayController extends Controller
 
             if ($assignedRoom) {
                 $this->roomStateMachine->markInUse($assignedRoom, $freshReservation);
+                $this->housekeepingService->forceRoomStatus(
+                    $assignedRoom,
+                    Room::HK_STATUS_IN_USE,
+                    $request->user(),
+                );
             }
 
             $delta = $newBaseAmount - $oldBaseAmount;
