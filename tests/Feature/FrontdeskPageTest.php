@@ -34,5 +34,8 @@ it('renders the frontdesk dashboard page', function (): void {
     ));
 
     $response->assertOk()
-        ->assertInertia(fn (Assert $page) => $page->component('FrontDesk'));
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('FrontDesk')
+            ->has('reservationsData')
+            ->has('roomBoardData'));
 });

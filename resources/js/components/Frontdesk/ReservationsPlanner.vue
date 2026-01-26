@@ -12,182 +12,31 @@
                 <FullCalendar :options="calendarOptions" />
             </div>
 
-            <div class="rounded-xl bg-white p-4 shadow-sm">
-                <h3 class="text-base font-semibold text-gray-800">Détails</h3>
-                <p class="text-sm text-gray-500">Cliquez sur un événement pour voir le détail.</p>
-
-            <div v-if="selectedEvent" class="mt-4 space-y-4 rounded-lg border border-gray-200 p-3">
-                <div class="flex items-center justify-between">
-                    <span class="text-sm font-semibold text-gray-800">{{ selectedEvent.title }}</span>
-                    <span
-                        class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium"
-                        :class="statusClass(selectedEvent.status)"
-                    >
-                        {{ statusLabel(selectedEvent.status) }}
-                    </span>
-                    <span
-                        v-if="selectedEvent?.pending_sync"
-                        class="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
-                    >
-                        Sync en attente
-                    </span>
-                </div>
-                <p class="text-xs text-gray-600">
-                    Arrivée :
-                    <span class="font-medium text-gray-800">
-                        {{ formatDateTime(selectedEvent.checkInDate || selectedEvent.check_in) }}
-                    </span>
-                </p>
-                <p class="text-xs text-gray-600">
-                    Départ :
-                    <span class="font-medium text-gray-800">
-                        {{ formatDateTime(selectedEvent.checkOutDate || selectedEvent.check_out) }}
-                    </span>
-                </p>
-                <p class="text-xs text-gray-600" v-if="selectedEvent.id">ID: {{ selectedEvent.id }}</p>
-
-                <div class="mt-3 space-y-2">
-                    <label class="text-xs font-semibold text-gray-700">Actions</label>
-                    <div class="flex flex-wrap items-center gap-2">
-                        <button
-                            v-if="selectedEvent?.status === 'pending'"
-                            type="button"
-                            class="rounded-lg bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                            :disabled="statusSubmitting"
-                            @click="changeStatus('confirm')"
-                        >
-                            Confirmer
-                        </button>
-                        <button
-                            v-if="selectedEvent?.status === 'pending'"
-                            type="button"
-                            class="rounded-lg bg-red-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                            :disabled="statusSubmitting"
-                            @click="changeStatus('cancel')"
-                        >
-                            Annuler
-                        </button>
-                        <button
-                            v-if="selectedEvent?.status === 'confirmed'"
-                            type="button"
-                            class="rounded-lg bg-green-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
-                            :disabled="statusSubmitting"
-                            @click="changeStatus('check_in')"
-                        >
-                            Check-in
-                        </button>
-                        <button
-                            v-if="selectedEvent?.status === 'confirmed'"
-                            type="button"
-                            class="rounded-lg bg-red-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                            :disabled="statusSubmitting"
-                            @click="changeStatus('cancel')"
-                        >
-                            Annuler
-                        </button>
-                        <button
-                            v-if="selectedEvent?.status === 'confirmed'"
-                            type="button"
-                            class="rounded-lg bg-amber-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
-                            :disabled="statusSubmitting"
-                            @click="changeStatus('no_show')"
-                            >
-                                No-show
-                            </button>
-                            <button
-                                v-if="selectedEvent?.status === 'in_house'"
-                            type="button"
-                            class="rounded-lg bg-gray-800 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
-                            :disabled="statusSubmitting"
-                            @click="changeStatus('check_out')"
-                        >
-                            Check-out
-                            </button>
-                    </div>
-                    <button
-                        type="button"
-                        class="mt-2 w-full rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-70"
-                        :disabled="!selectedEvent?.id || folioLoading"
-                        @click="openFolioForSelectedReservation('payments')"
-                    >
-                        {{ folioLoading ? 'Ouverture du folio...' : 'Encaisser / Folio' }}
-                    </button>
-                </div>
-
-                <div
-                    v-if="selectedEvent?.status === 'in_house' && canManageStayActions"
-                    class="mt-3 space-y-2 rounded-lg border border-dashed border-gray-200 p-3"
-                >
-                    <label class="text-xs font-semibold text-gray-700">Gestion du séjour</label>
-                    <div class="flex flex-wrap gap-2">
-                        <button
-                            v-if="canExtendStayAction"
-                            type="button"
-                            class="rounded-lg border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                            @click="openStayModal('extend')"
-                        >
-                            Prolonger
-                        </button>
-                        <button
-                            v-if="canShortenStayAction"
-                            type="button"
-                            class="rounded-lg border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                            @click="openStayModal('shorten')"
-                        >
-                            Raccourcir
-                        </button>
-                        <button
-                            v-if="canChangeRoomAction"
-                            type="button"
-                            class="rounded-lg border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                            @click="openChangeRoomModal"
-                        >
-                            Changer de chambre
-                        </button>
-                    </div>
-                </div>
-
-                <div class="mt-3 border-t border-gray-100 pt-3">
-                    <div class="mb-2 flex items-center justify-between">
-                        <span class="text-xs font-semibold text-gray-700">Historique</span>
-                        <button
-                            type="button"
-                            class="text-[11px] font-medium text-indigo-600 hover:text-indigo-700"
-                            @click="loadReservationActivity"
-                        >
-                            Actualiser
-                        </button>
-                    </div>
-                    <div v-if="activityLoading" class="text-[11px] text-gray-500">
-                        Chargement de l’historique…
-                    </div>
-                    <div v-else-if="reservationActivity.length === 0" class="text-[11px] text-gray-400">
-                        Aucune activité récente.
-                    </div>
-                    <ul v-else class="max-h-40 space-y-1 overflow-y-auto text-[11px] text-gray-600">
-                        <li
-                            v-for="entry in reservationActivity"
-                            :key="entry.id"
-                            class="flex items-start justify-between gap-2"
-                        >
-                            <div>
-                                <p class="font-medium text-gray-800">
-                                    {{ activityLabel(entry) }}
-                                </p>
-                                <p
-                                    v-if="entry.properties?.reservation_code"
-                                    class="text-[10px] text-gray-500"
-                                >
-                                    Réservation {{ entry.properties.reservation_code }}
-                                </p>
-                            </div>
-                            <span class="whitespace-nowrap text-[10px] text-gray-400">
-                                {{ entry.created_at }}
-                            </span>
-                        </li>
-                    </ul>
-                </div>
-            </div>
+            <RoomDetailsPanel
+                :selected-room="selectedRoomForDetails"
+                :is-loading="false"
+                :folio-loading="folioLoading"
+                :status-submitting="statusSubmitting"
+                :can-manage-housekeeping-actions="canManageHousekeepingActions"
+                :can-mark-dirty="canMarkDirty"
+                :can-report-maintenance="canReportMaintenance"
+                :can-extend-stay-action="canExtendStayAction"
+                :can-shorten-stay-action="canShortenStayAction"
+                :can-change-room-action="canChangeRoomAction"
+                :room-activity="roomActivity"
+                :room-activity-loading="roomActivityLoading"
+                :format-date-time="formatDateTime"
+                :on-open-walk-in="openWalkInForRoom"
+                :on-open-folio="openFolioFromRoom"
+                :on-view-reservation="viewCurrentReservation"
+                :on-update-room-hk-status="updateRoomHkStatus"
+                :on-change-status="changeStatus"
+                :on-open-stay-modal="openStayModal"
+                :on-open-change-room-modal="openChangeRoomModal"
+                :on-open-maintenance-modal="openMaintenanceModal"
+                :on-go-to-maintenance="goToMaintenance"
+                :on-load-room-activity="loadRoomActivity"
+            />
         </div>
     </div>
 
@@ -662,7 +511,7 @@
                 </div>
             </div>
         </div>
-    </div>
+
 </template>
 
 <script>
@@ -672,12 +521,13 @@
     import FullCalendar from '@fullcalendar/vue3';
     import dayGridPlugin from '@fullcalendar/daygrid';
     import FolioModal from '@/components/Frontdesk/FolioModal.vue';
+    import RoomDetailsPanel from '@/components/Frontdesk/RoomDetailsPanel.vue';
     import Multiselect from 'vue-multiselect';
     import { enqueue } from '@/offline/outbox';
 
     export default {
         name: 'ReservationsPlanner',
-        components: { FullCalendar, FolioModal, Multiselect },
+        components: { FullCalendar, FolioModal, RoomDetailsPanel, Multiselect },
         props: {
             events: {
                 type: Array,
@@ -803,6 +653,8 @@
                 activityLoading: false,
                 activityRequestKey: null,
                 reservationActivity: [],
+                roomActivity: [],
+                roomActivityLoading: false,
                 lastWarnedGuestId: null,
                 pendingFeeOverrides: {
                     early: null,
@@ -998,6 +850,21 @@
             permissionFlags() {
                 return this.$page?.props?.auth?.can ?? {};
             },
+            canMarkClean() {
+                return this.permissionFlags.housekeeping_mark_clean ?? false;
+            },
+            canMarkDirty() {
+                return this.permissionFlags.housekeeping_mark_dirty ?? false;
+            },
+            canMarkInspected() {
+                return this.permissionFlags.housekeeping_mark_inspected ?? false;
+            },
+            canManageHousekeepingActions() {
+                return Boolean(this.selectedRoomForDetails);
+            },
+            canReportMaintenance() {
+                return this.permissionFlags.maintenance_tickets_create ?? false;
+            },
             canOverrideTimes() {
                 return this.permissionFlags.reservations_override_datetime ?? this.canManageTimes;
             },
@@ -1025,6 +892,38 @@
             },
             canManageStayActions() {
                 return this.canExtendStayAction || this.canShortenStayAction || this.canChangeRoomAction;
+            },
+            selectedRoomForDetails() {
+                if (!this.selectedEvent) {
+                    return null;
+                }
+
+                const roomId = this.selectedEvent.room_id ?? null;
+                const room = roomId ? this.rooms.find((item) => item.id === roomId) : null;
+
+                const currentReservation = {
+                    id: this.selectedEvent.id,
+                    code: this.selectedEvent.code || this.selectedEvent.title || '',
+                    status: this.selectedEvent.status || 'pending',
+                    guest_name: this.selectedEvent.guest_name ?? null,
+                    check_in_at: this.selectedEvent.actualCheckInAt ?? null,
+                    check_in_date: this.selectedEvent.check_in ?? this.selectedEvent.checkInDate,
+                    check_out_at: null,
+                    check_out_date: this.selectedEvent.check_out ?? this.selectedEvent.checkOutDate,
+                    is_overstay: this.selectedEvent.is_overstay ?? false,
+                };
+
+                return {
+                    ...room,
+                    id: room?.id ?? roomId ?? null,
+                    number: room?.number ?? this.selectedEvent.room_number ?? null,
+                    room_type_id: room?.room_type_id ?? this.selectedEvent.room_type_id ?? null,
+                    room_type_name: room?.room_type_name ?? this.selectedEvent.room_type_name ?? null,
+                    status: room?.status ?? 'active',
+                    hk_status: this.selectedEvent.room_hk_status ?? room?.hk_status ?? null,
+                    pending_sync: this.selectedEvent.pending_sync ?? false,
+                    current_reservation: currentReservation,
+                };
             },
             canOverrideFees() {
                 const roles = this.$page?.props?.auth?.user?.roles || [];
@@ -1135,6 +1034,118 @@
                     title: 'Action non autorisée',
                     text: 'Vous ne disposez pas des droits suffisants.',
                 });
+            },
+            openWalkInForRoom(room) {
+                if (!room) {
+                    return;
+                }
+
+                const today = new Date();
+                const dateStr = this.formatDate(today);
+
+                this.handleDateClick(dateStr);
+
+                this.selectedRoom = room;
+                this.form.room_id = room.id ?? null;
+                this.form.room_type_id = room.room_type_id ?? '';
+                this.selectedRoomType = this.roomTypes.find((type) => type.id === room.room_type_id) ?? null;
+            },
+            openFolioFromRoom(tab = 'payments') {
+                if (!this.selectedEvent?.id) {
+                    return;
+                }
+
+                this.openFolioForSelectedReservation(tab);
+            },
+            viewCurrentReservation() {
+                const reservationId = this.selectedEvent?.id ?? null;
+
+                if (!reservationId) {
+                    return;
+                }
+
+                router.visit(`/frontdesk/reservations/${reservationId}/details`);
+            },
+            async updateRoomHkStatus(roomId, hkStatus) {
+                if (!roomId) {
+                    return;
+                }
+
+                const permissionMap = {
+                    dirty: this.canMarkDirty,
+                    redo: this.canMarkDirty,
+                    cleaning: this.canMarkClean,
+                    awaiting_inspection: this.canMarkClean,
+                    inspected: this.canMarkInspected,
+                };
+
+                if (permissionMap[hkStatus] === false) {
+                    this.showUnauthorizedAlert();
+
+                    return;
+                }
+
+                try {
+                    const http = window.axios ?? axios;
+                    const response = await http.patch(`/frontdesk/rooms/${roomId}/hk-status`, {
+                        hk_status: hkStatus,
+                    });
+
+                    if (response.data?.room?.hk_status) {
+                        this.selectedEvent = {
+                            ...this.selectedEvent,
+                            room_hk_status: response.data.room.hk_status,
+                        };
+                    }
+                } catch (error) {
+                    if (error?.response?.status === 403) {
+                        this.showUnauthorizedAlert();
+
+                        return;
+                    }
+
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erreur',
+                        text: "Impossible de mettre à jour le statut ménage.",
+                    });
+                }
+            },
+            openMaintenanceModal(room) {
+                if (!room) {
+                    return;
+                }
+
+                this.goToMaintenance(room);
+            },
+            goToMaintenance(room) {
+                const roomId = room?.id ?? null;
+                const params = roomId ? { room_id: roomId, tab: 'tickets' } : { tab: 'tickets' };
+
+                router.get('/maintenance', params);
+            },
+            async loadRoomActivity() {
+                const roomId = this.selectedRoomForDetails?.id ?? null;
+
+                if (!roomId) {
+                    this.roomActivity = [];
+
+                    return;
+                }
+
+                this.roomActivityLoading = true;
+
+                try {
+                    const response = await axios.get(`/rooms/${roomId}/activity`, {
+                        headers: { Accept: 'application/json' },
+                    });
+
+                    this.roomActivity = Array.isArray(response.data) ? response.data : [];
+                } catch {
+                    this.roomActivity = [];
+                } finally {
+                    this.roomActivityLoading = false;
+                }
             },
             async loadReservationActivity() {
                 if (!this.selectedEvent?.id) {
@@ -1934,7 +1945,7 @@
                 const rawActualCheckIn = event.actual_check_in_at ?? null;
                 const checkIn = rawActualCheckIn || rawPlannedCheckIn;
                 const checkOut = event.check_out_date ?? event.end;
-                
+
                 this.selectedEvent = {
                     id: event.id,
                     title: event.title,

@@ -164,432 +164,31 @@
             </div>
 
             <div class="lg:w-1/3">
-                <div class="relative rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:sticky lg:top-6 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
-                    <div
-                        v-if="selectedRoom && loadingRoomId === selectedRoom.id"
-                        class="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80"
-                    >
-                        <svg class="h-6 w-6 animate-spin text-serena-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-                        </svg>
-                    </div>
-                    <h3 class="text-base font-semibold text-gray-800">
-                        Détails de la chambre
-                    </h3>
-                    <p class="text-sm text-gray-500">
-                        Sélectionnez une chambre dans le board pour voir les détails.
-                    </p>
-
-                    <div v-if="selectedRoom" class="mt-4 space-y-4">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <div class="text-xl font-bold text-serena-text-main">
-                                    Chambre {{ selectedRoom.number }}
-                                </div>
-                                <div class="text-xs text-gray-500">
-                                    {{ selectedRoom.room_type_name || 'Type inconnu' }} ·
-                                    Étage {{ selectedRoom.floor ?? '-' }}
-                                </div>
-                            </div>
-                            <div class="flex flex-col items-end gap-1 text-[10px]">
-                                <span
-                                    v-if="availabilityBadge(selectedRoom)"
-                                    class="rounded-full border px-2 py-0.5 font-semibold"
-                                    :class="availabilityBadge(selectedRoom).classes"
-                                >
-                                    {{ availabilityBadge(selectedRoom).label }}
-                                </span>
-                                <span
-                                    v-if="selectedRoom.maintenance_blocking_count > 0"
-                                    class="rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 font-semibold text-rose-700"
-                                >
-                                    Bloque vente
-                                </span>
-                                <span
-                                    v-if="hkBadge(selectedRoom)"
-                                    class="rounded-full border px-2 py-0.5 font-semibold"
-                                    :class="hkBadge(selectedRoom).classes"
-                                >
-                                    <component
-                                        v-if="hkBadge(selectedRoom).icon"
-                                        :is="hkBadge(selectedRoom).icon"
-                                        class="mr-1 inline-block h-3 w-3"
-                                        :class="hkBadge(selectedRoom).iconClass"
-                                    />
-                                    {{ hkBadge(selectedRoom).label }}
-                                </span>
-                                <span
-                                    v-if="selectedRoom.maintenance_ticket"
-                                    class="rounded-full border px-2 py-0.5 font-semibold"
-                                    :class="maintenanceBadge(selectedRoom.maintenance_ticket).classes"
-                                >
-                                    {{ maintenanceBadge(selectedRoom.maintenance_ticket).label }}
-                                </span>
-                                <span
-                                    v-if="selectedRoom.pending_sync"
-                                    class="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
-                                >
-                                    Sync en attente
-                                </span>
-                            </div>
-                        </div>
-
-                        <div
-                            v-if="selectedRoom.current_reservation"
-                            class="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs"
-                        >
-                            <div class="mb-1 flex items-center justify-between">
-                                <span class="font-semibold text-gray-800">Réservation en cours</span>
-                                <span class="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold">
-                                    {{ selectedRoom.current_reservation.status }}
-                                </span>
-                            </div>
-                            <div
-                                v-if="selectedRoom.current_reservation.is_overstay"
-                                class="mb-2 rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
-                            >
-                                Séjour dépassé
-                            </div>
-                            <div class="space-y-1">
-                                <div>
-                                    <span class="font-semibold text-gray-700">Code :</span>
-                                    <span class="ml-1">{{ selectedRoom.current_reservation.code }}</span>
-                                </div>
-                                <div v-if="selectedRoom.current_reservation.guest_name">
-                                    <span class="font-semibold text-gray-700">Client :</span>
-                                    <span class="ml-1">
-                                        {{ selectedRoom.current_reservation.guest_name }}
-                                    </span>
-                                </div>
-                                <div>
-                                    <span class="font-semibold text-gray-700">Séjour :</span>
-                                    <span class="ml-1">
-                                        {{ formatDateTime(selectedRoom.current_reservation.check_in_at || selectedRoom.current_reservation.check_in_date) }} →
-                                        {{ formatDateTime(selectedRoom.current_reservation.check_out_at || selectedRoom.current_reservation.check_out_date) }}
-                                    </span>
-                                </div>
-                            </div>
-                            <button
-                                type="button"
-                                class="mt-3 w-full rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
-                                @click="viewCurrentReservation(selectedRoom)"
-                            >
-                                Voir la réservation
-                            </button>
-                        </div>
-
-                        <div
-                            v-if="canManageHousekeepingActions"
-                            class="space-y-2"
-                        >
-                            <h4 class="text-xs font-semibold text-gray-700">
-                                Actions
-                            </h4>
-
-                            <div class="flex flex-wrap gap-2">
-                                <button
-                                    type="button"
-                                    class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700"
-                                    @click="openWalkInForRoom(selectedRoom)"
-                                >
-                                    Nouvelle réservation / Check-in rapide
-                                </button>
-
-                                <button
-                                    v-if="selectedRoom && selectedRoom.current_reservation"
-                                    type="button"
-                                    class="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-70"
-                                    :disabled="folioLoading"
-                                    @click="openFolioFromRoom('payments')"
-                                >
-                                    {{ folioLoading ? 'Ouverture du folio...' : 'Encaisser / Folio' }}
-                                </button>
-                            </div>
-
-                            <div class="mt-2 flex flex-wrap gap-2">
-                                <!-- <button
-                                    v-if="canMarkInspected"
-                                    type="button"
-                                    class="rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100"
-                                    @click="updateRoomHkStatus(selectedRoom.id, 'inspected')"
-                                >
-                                    Marquer comme inspectée
-                                </button> -->
-
-                                <button
-                                    v-if="canMarkDirty"
-                                    type="button"
-                                    class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100"
-                                    @click="updateRoomHkStatus(selectedRoom.id, 'dirty')"
-                                >
-                                    Marquer comme sale
-                                </button>
-                                <!-- <button
-                                    v-if="canMarkClean"
-                                    type="button"
-                                    class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
-                                    @click="updateRoomHkStatus(selectedRoom.id, 'cleaning')"
-                                >
-                                    Marquer en cours
-                                </button>
-                                <button
-                                    v-if="canMarkClean"
-                                    type="button"
-                                    class="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
-                                    @click="updateRoomHkStatus(selectedRoom.id, 'awaiting_inspection')"
-                                >
-                                    En attente d’inspection
-                                </button>
-                                <button
-                                    v-if="canMarkDirty"
-                                    type="button"
-                                    class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"
-                                    @click="updateRoomHkStatus(selectedRoom.id, 'redo')"
-                                >
-                                    Marquer à refaire
-                                </button> -->
-                            </div>
-
-                        </div>
-
-                        <div
-                            v-if="selectedRoom.current_reservation"
-                            class="space-y-2"
-                        >
-                            <h4 class="text-xs font-semibold text-gray-700">
-                                Statut & séjour
-                            </h4>
-
-                            <div class="flex flex-wrap gap-2">
-                                <button
-                                    v-if="selectedRoom.current_reservation.status === 'pending'"
-                                    type="button"
-                                    class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
-                                    :disabled="statusSubmitting"
-                                    @click="changeStatus('confirm')"
-                                >
-                                    Confirmer
-                                </button>
-                                <button
-                                    v-if="selectedRoom.current_reservation.status === 'pending'"
-                                    type="button"
-                                    class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
-                                    :disabled="statusSubmitting"
-                                    @click="changeStatus('cancel')"
-                                >
-                                    Annuler
-                                </button>
-                                <button
-                                    v-if="selectedRoom.current_reservation.status === 'confirmed'"
-                                    type="button"
-                                    class="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-green-700 disabled:opacity-60"
-                                    :disabled="statusSubmitting"
-                                    @click="changeStatus('check_in')"
-                                >
-                                    Check-in
-                                </button>
-                                <button
-                                    v-if="selectedRoom.current_reservation.status === 'confirmed'"
-                                    type="button"
-                                    class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60"
-                                    :disabled="statusSubmitting"
-                                    @click="changeStatus('cancel')"
-                                >
-                                    Annuler
-                                </button>
-                                <button
-                                    v-if="selectedRoom.current_reservation.status === 'confirmed'"
-                                    type="button"
-                                    class="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-amber-700 disabled:opacity-60"
-                                    :disabled="statusSubmitting"
-                                    @click="changeStatus('no_show')"
-                                >
-                                    No-show
-                                </button>
-                                <button
-                                    v-if="selectedRoom.current_reservation.status === 'in_house'"
-                                    type="button"
-                                    class="rounded-lg bg-gray-800 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-gray-900 disabled:opacity-60"
-                                    :disabled="statusSubmitting"
-                                    @click="changeStatus('check_out')"
-                                >
-                                    Check-out
-                                </button>
-                                <button
-                                    v-if="canExtendStayAction"
-                                    type="button"
-                                    class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                                    @click="openStayModal('extend')"
-                                >
-                                    Prolonger
-                                </button>
-                                <button
-                                    v-if="canShortenStayAction"
-                                    type="button"
-                                    class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                                    @click="openStayModal('shorten')"
-                                >
-                                    Raccourcir
-                                </button>
-                                <button
-                                    v-if="canChangeRoomAction"
-                                    type="button"
-                                    class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                                    @click="openChangeRoomModal"
-                                >
-                                    Changer de chambre
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="rounded-lg border border-gray-100 bg-gray-50/60 p-3">
-                            <div class="flex items-center justify-between">
-                                <h4 class="text-xs font-semibold text-gray-700">
-                                    Inspection
-                                </h4>
-                                <span
-                                    v-if="selectedRoom?.last_inspection?.outcome"
-                                    class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                                    :class="inspectionOutcomeClasses(selectedRoom.last_inspection.outcome)"
-                                >
-                                    {{ inspectionOutcomeLabel(selectedRoom.last_inspection.outcome) }}
-                                </span>
-                            </div>
-                            <p v-if="selectedRoom?.last_inspection?.ended_at" class="mt-1 text-[11px] text-gray-500">
-                                Dernière inspection : {{ formatDateTime(selectedRoom.last_inspection.ended_at) }}
-                            </p>
-                            <p v-else class="mt-1 text-[11px] text-gray-400">
-                                Aucune inspection enregistrée.
-                            </p>
-                            <div
-                                v-if="selectedRoom?.last_inspection?.remarks?.length"
-                                class="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-2 text-[11px] text-rose-800"
-                            >
-                                <p class="font-semibold">Remarques (à refaire)</p>
-                                <ul class="mt-1 space-y-1">
-                                    <li
-                                        v-for="(remark, idx) in selectedRoom.last_inspection.remarks"
-                                        :key="idx"
-                                    >
-                                        <span v-if="remark.label" class="font-semibold">{{ remark.label }} :</span>
-                                        <span>{{ remark.note }}</span>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-
-                        <div class="space-y-3 rounded-lg border border-amber-100 bg-amber-50/40 p-3">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h4 class="text-xs font-semibold text-amber-900">
-                                        Maintenance
-                                    </h4>
-                                    <p
-                                        v-if="selectedRoomMaintenanceTickets.length"
-                                        class="text-[11px] text-amber-700"
-                                    >
-                                        {{ selectedRoomMaintenanceTickets.length }} ticket(s) ouvert(s)
-                                    </p>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <button
-                                        v-if="canReportMaintenance"
-                                        type="button"
-                                        class="rounded-lg border border-amber-300 bg-white px-3 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-50"
-                                        @click="openMaintenanceModal(selectedRoom)"
-                                    >
-                                        Déclarer un problème
-                                    </button>
-                                    <button
-                                        type="button"
-                                        class="rounded-lg border border-amber-300 bg-white px-3 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-50"
-                                        @click="goToMaintenance(selectedRoom)"
-                                    >
-                                        Voir dans Maintenance
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div class="rounded-lg border border-amber-200 bg-white/80 p-3 text-xs text-amber-900">
-                                <div class="flex flex-wrap items-center gap-2">
-                                    <span class="font-semibold">Tickets ouverts :</span>
-                                    <span>{{ selectedRoomMaintenanceTickets.length }}</span>
-                                    <span
-                                        v-if="selectedRoom.maintenance_blocking_count > 0"
-                                        class="rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700"
-                                    >
-                                        Bloque vente
-                                    </span>
-                                </div>
-                                <ul v-if="selectedRoomMaintenanceTickets.length" class="mt-2 space-y-1 text-[11px]">
-                                    <li
-                                        v-for="ticket in selectedRoomMaintenanceTickets.slice(0, 2)"
-                                        :key="ticket.id"
-                                        class="flex items-center gap-2"
-                                    >
-                                        <span class="font-semibold">•</span>
-                                        <span class="truncate">{{ ticket.title }}</span>
-                                    </li>
-                                </ul>
-                                <p v-else class="mt-2 text-[11px] text-amber-800">
-                                    Aucun ticket de maintenance actif pour cette chambre.
-                                </p>
-                            </div>
-                        </div>
-
-
-
-                        <div class="mt-3 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
-                            <div class="mb-2 flex items-center justify-between">
-                                <h4 class="text-xs font-semibold text-gray-700">
-                                    Historique de la chambre
-                                </h4>
-                                <button
-                                    type="button"
-                                    class="text-[11px] font-medium text-indigo-600 hover:text-indigo-700"
-                                    @click="loadRoomActivity"
-                                >
-                                    Actualiser
-                                </button>
-                            </div>
-                            <div v-if="roomActivityLoading" class="text-[11px] text-gray-500">
-                                Chargement de l’historique…
-                            </div>
-                            <div
-                                v-else-if="roomActivity.length === 0"
-                                class="text-[11px] text-gray-400"
-                            >
-                                Aucune activité récente sur cette chambre.
-                            </div>
-                            <ul
-                                v-else
-                                class="max-h-36 space-y-1 overflow-y-auto text-[11px] text-gray-700"
-                            >
-                                <li
-                                    v-for="entry in roomActivity"
-                                    :key="entry.id"
-                                    class="flex items-start justify-between gap-2"
-                                >
-                                    <div>
-                                        <p class="font-medium text-gray-800">
-                                            {{ roomActivityLabel(entry) }}
-                                        </p>
-                                        <p
-                                            v-if="entry.properties?.room_number"
-                                            class="text-[10px] text-gray-500"
-                                        >
-                                            Chambre {{ entry.properties.room_number }}
-                                        </p>
-                                    </div>
-                                    <span class="whitespace-nowrap text-[10px] text-gray-400">
-                                        {{ entry.created_at }}
-                                    </span>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
+                <RoomDetailsPanel
+                    :selected-room="selectedRoom"
+                    :is-loading="selectedRoom && loadingRoomId === selectedRoom.id"
+                    :folio-loading="folioLoading"
+                    :status-submitting="statusSubmitting"
+                    :can-manage-housekeeping-actions="canManageHousekeepingActions"
+                    :can-mark-dirty="canMarkDirty"
+                    :can-report-maintenance="canReportMaintenance"
+                    :can-extend-stay-action="canExtendStayAction"
+                    :can-shorten-stay-action="canShortenStayAction"
+                    :can-change-room-action="canChangeRoomAction"
+                    :room-activity="roomActivity"
+                    :room-activity-loading="roomActivityLoading"
+                    :format-date-time="formatDateTime"
+                    :on-open-walk-in="openWalkInForRoom"
+                    :on-open-folio="openFolioFromRoom"
+                    :on-view-reservation="viewCurrentReservation"
+                    :on-update-room-hk-status="updateRoomHkStatus"
+                    :on-change-status="changeStatus"
+                    :on-open-stay-modal="openStayModal"
+                    :on-open-change-room-modal="openChangeRoomModal"
+                    :on-open-maintenance-modal="openMaintenanceModal"
+                    :on-go-to-maintenance="goToMaintenance"
+                    :on-load-room-activity="loadRoomActivity"
+                />
             </div>
         </div>
 
@@ -1223,6 +822,7 @@ import PrimaryButton from '@/components/PrimaryButton.vue';
 import SecondaryButton from '@/components/SecondaryButton.vue';
 import TextInput from '@/components/TextInput.vue';
 import FolioModal from '@/components/Frontdesk/FolioModal.vue';
+import RoomDetailsPanel from '@/components/Frontdesk/RoomDetailsPanel.vue';
 import { dashboard as frontdeskDashboard } from '@/routes/frontdesk';
 import { enqueue } from '@/offline/outbox';
 
@@ -1237,6 +837,7 @@ export default {
         SecondaryButton,
         TextInput,
         FolioModal,
+        RoomDetailsPanel,
         Multiselect,
     },
     props: {
