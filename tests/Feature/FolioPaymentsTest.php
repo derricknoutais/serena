@@ -315,3 +315,68 @@ it('generates an invoice from a folio and exposes the pdf view', function (): vo
 
     $pdfResponse->assertOk()->assertSee('Facture');
 });
+
+it('regenerates an invoice from a folio when requested', function (): void {
+    [
+        'tenant' => $tenant,
+        'hotel' => $hotel,
+        'reservation' => $reservation,
+        'user' => $user,
+    ] = setupReservationEnvironment('invoiceregen');
+
+    $user->assignRole('owner');
+
+    $billingService = app(FolioBillingService::class);
+    $folio = $billingService->ensureMainFolioForReservation($reservation);
+
+    FolioItem::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'folio_id' => $folio->id,
+        'description' => 'Nuitée',
+        'quantity' => 1,
+        'unit_price' => 10000,
+        'base_amount' => 10000,
+        'tax_amount' => 1500,
+        'total_amount' => 11500,
+    ]);
+
+    $generateResponse = $this->actingAs($user)->postJson(sprintf(
+        'http://%s/folios/%s/invoices',
+        tenantDomain($tenant),
+        $folio->id,
+    ));
+
+    $generateResponse->assertOk();
+    $invoiceId = $generateResponse->json('invoice.id');
+
+    FolioItem::query()->create([
+        'tenant_id' => $tenant->id,
+        'hotel_id' => $hotel->id,
+        'folio_id' => $folio->id,
+        'description' => 'Petit-déjeuner',
+        'quantity' => 1,
+        'unit_price' => 5000,
+        'base_amount' => 5000,
+        'tax_amount' => 750,
+        'total_amount' => 5750,
+    ]);
+
+    $regenerateResponse = $this->actingAs($user)->postJson(sprintf(
+        'http://%s/folios/%s/invoices',
+        tenantDomain($tenant),
+        $folio->id,
+    ), [
+        'regenerate' => true,
+    ]);
+
+    $regenerateResponse->assertOk();
+
+    expect($regenerateResponse->json('invoice.id'))->toBe($invoiceId)
+        ->and(Invoice::query()->count())->toBe(1);
+
+    $invoice = Invoice::query()->firstOrFail();
+
+    expect($invoice->items()->count())->toBe(2)
+        ->and($invoice->total_amount)->toBe(17250);
+});

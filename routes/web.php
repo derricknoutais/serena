@@ -425,6 +425,21 @@ Route::middleware([
             ->name('notifications.read_all');
         Route::patch('/notifications/{notification}', [\App\Http\Controllers\NotificationController::class, 'markRead'])
             ->name('notifications.read');
+
+        Route::middleware('can:guests.view')->group(function () {
+            Route::get('/guests', [GuestController::class, 'index'])->name('guests.index');
+            Route::get('/guests/{guest}/summary', [GuestController::class, 'summary'])->name('guests.summary');
+            Route::get('/guests/{guest}', [GuestController::class, 'show'])->name('guests.show');
+            Route::post('/guests', [GuestController::class, 'store'])
+                ->middleware('can:guests.create')
+                ->name('guests.store');
+            Route::put('/guests/{guest}', [GuestController::class, 'update'])
+                ->middleware('can:guests.update')
+                ->name('guests.update');
+            Route::delete('/guests/{guest}', [GuestController::class, 'destroy'])
+                ->middleware('can:guests.delete')
+                ->name('guests.destroy');
+        });
     });
 
     Route::get('/activity', [ActivityController::class, 'index'])
@@ -514,6 +529,7 @@ Route::middleware([
             Route::get('guests/create', [GuestController::class, 'create'])->name('guests.create');
             Route::post('guests', [GuestController::class, 'store'])->name('guests.store');
             Route::get('guests/search', [GuestController::class, 'search'])->name('guests.search');
+            Route::get('guests/{guest}/summary', [GuestController::class, 'summary'])->name('guests.summary');
             Route::get('guests/{guest}', [GuestController::class, 'show'])->name('guests.show');
             Route::get('guests/{guest}/edit', [GuestController::class, 'edit'])->name('guests.edit');
             Route::put('guests/{guest}', [GuestController::class, 'update'])->name('guests.update');

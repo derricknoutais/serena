@@ -27,8 +27,9 @@ class InvoiceController extends Controller
         $this->authorizeFolio($request, $folio);
 
         $existing = $folio->invoices()->latest()->first();
+        $regenerate = $request->boolean('regenerate');
 
-        if ($existing) {
+        if ($existing && ! $regenerate) {
             if ($request->wantsJson()) {
                 return response()->json([
                     'message' => 'Facture déjà générée.',
@@ -42,24 +43,33 @@ class InvoiceController extends Controller
         $data = $request->validate([
             'notes' => ['nullable', 'string'],
             'close_folio' => ['nullable', 'boolean'],
+            'regenerate' => ['nullable', 'boolean'],
         ]);
 
         $hotel = $this->hotelForFolio($folio);
         $businessDate = $this->businessDayService->resolveBusinessDate($hotel, Carbon::now());
         $this->lockService->assertBusinessDateOpen($hotel, $businessDate, $request->user(), $request->boolean('override_business_day'));
 
-        $invoice = $billingService->generateInvoiceFromFolio($folio, [
-            'notes' => $data['notes'] ?? null,
-            'close_folio' => (bool) ($data['close_folio'] ?? false),
-            'user_id' => $request->user()->id,
-        ]);
+        $invoice = $existing && $regenerate
+            ? $billingService->regenerateInvoiceFromFolio($folio, $existing, [
+                'notes' => $data['notes'] ?? null,
+                'close_folio' => (bool) ($data['close_folio'] ?? false),
+                'user_id' => $request->user()->id,
+            ])
+            : $billingService->generateInvoiceFromFolio($folio, [
+                'notes' => $data['notes'] ?? null,
+                'close_folio' => (bool) ($data['close_folio'] ?? false),
+                'user_id' => $request->user()->id,
+            ]);
 
         if (! $request->wantsJson()) {
-            return back()->with('success', 'Facture générée : '.$invoice->number);
+            return back()->with('success', $existing && $regenerate
+                ? 'Facture régénérée : '.$invoice->number
+                : 'Facture générée : '.$invoice->number);
         }
 
         return response()->json([
-            'message' => 'Facture générée.',
+            'message' => $existing && $regenerate ? 'Facture régénérée.' : 'Facture générée.',
             'invoice' => $this->invoicePayload($invoice),
         ]);
     }

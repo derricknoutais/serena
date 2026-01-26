@@ -108,6 +108,72 @@ class FolioBillingService
         });
     }
 
+    /**
+     * @param  array<string, mixed>  $options
+     */
+    public function regenerateInvoiceFromFolio(Folio $folio, Invoice $invoice, array $options = []): Invoice
+    {
+        return DB::transaction(function () use ($folio, $invoice, $options) {
+            $folio->loadMissing([
+                'items' => fn ($query) => $query->whereNull('deleted_at'),
+                'reservation.guest',
+            ]);
+            $guest = $folio->reservation?->guest;
+            $items = $folio->items;
+
+            foreach ($items as $item) {
+                $item->recalculateAmounts();
+                $item->save();
+            }
+
+            $subTotal = (float) $items->sum('net_amount');
+            $taxTotal = (float) $items->sum('tax_amount');
+            $totalAmount = $subTotal + $taxTotal;
+
+            $invoice->items()->delete();
+
+            $invoice->fill([
+                'guest_id' => $guest?->id,
+                'status' => Invoice::STATUS_ISSUED,
+                'issue_date' => now()->toDateString(),
+                'due_date' => now()->toDateString(),
+                'currency' => $folio->currency,
+                'sub_total' => $subTotal,
+                'tax_total' => $taxTotal,
+                'total_amount' => $totalAmount,
+                'billing_name' => $guest?->full_name,
+                'billing_address' => $guest?->address,
+                'billing_tax_id' => $guest?->document_number,
+                'notes' => array_key_exists('notes', $options) ? $options['notes'] : $invoice->notes,
+                'created_by_user_id' => $options['user_id'] ?? $invoice->created_by_user_id,
+            ]);
+
+            $invoice->save();
+
+            $sortOrder = 1;
+
+            foreach ($items as $folioItem) {
+                InvoiceItem::query()->create([
+                    'tenant_id' => $folio->tenant_id,
+                    'invoice_id' => $invoice->id,
+                    'folio_item_id' => $folioItem->id,
+                    'description' => $folioItem->description,
+                    'quantity' => $folioItem->quantity,
+                    'unit_price' => $folioItem->unit_price,
+                    'tax_amount' => $folioItem->tax_amount,
+                    'total_amount' => $folioItem->total_amount,
+                    'sort_order' => $sortOrder++,
+                ]);
+            }
+
+            if (! empty($options['close_folio'])) {
+                $folio->close();
+            }
+
+            return $invoice->refresh();
+        });
+    }
+
     protected function generateInvoiceNumber(int $hotelId): string
     {
         return sprintf('INV-%s-%s', $hotelId, now()->format('YmdHis'));

@@ -219,6 +219,11 @@ export default defineComponent({
 
             return Boolean(permissions.analytics_view ?? false);
         },
+        guestsLinkVisible(): boolean {
+            const permissions = this.$page?.props?.auth?.can ?? {};
+
+            return Boolean(permissions.guests_view ?? false);
+        },
         journalLinkVisible(): boolean {
             const permissions = this.$page?.props?.auth?.can ?? {};
 
@@ -417,41 +422,52 @@ export default defineComponent({
                         </div>
                     </div>
 
-        <div v-if="financeLinkVisible || analyticsLinkVisible || stockMenuItems.length || journalLinkVisible" class="relative" data-dropdown="finance">
-            <button
-                type="button"
-                class="rounded-full px-3 py-1 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
-                @click="financeOpen = !financeOpen"
-            >
-                Management ▾
-            </button>
-            <div
-                v-if="financeOpen"
-                class="absolute right-0 z-30 mt-2 w-44 rounded-xl border border-serena-border bg-white shadow-lg"
-            >
-                <Link
-                    v-if="cashLinkVisible"
-                    href="/cash"
-                    class="block px-3 py-2 text-sm text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
-                >
-                    Caisse
-                </Link>
-                <Link
-                    v-if="analyticsLinkVisible"
-                    href="/analytics"
-                    class="block px-3 py-2 text-sm text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
-                >
-                    Analytics
-                </Link>
-                <Link
-                    v-if="journalLinkVisible"
-                    href="/journal"
-                    class="block px-3 py-2 text-sm text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
-                >
-                    Journal
-                </Link>
-            </div>
-        </div>
+                    <div
+                        v-if="financeLinkVisible || analyticsLinkVisible || guestsLinkVisible || stockMenuItems.length || journalLinkVisible"
+                        class="relative"
+                        data-dropdown="finance"
+                    >
+                        <button
+                            type="button"
+                            class="rounded-full px-3 py-1 text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
+                            @click="financeOpen = !financeOpen"
+                        >
+                            Management ▾
+                        </button>
+                        <div
+                            v-if="financeOpen"
+                            class="absolute right-0 z-30 mt-2 w-44 rounded-xl border border-serena-border bg-white shadow-lg"
+                        >
+                            <Link
+                                v-if="cashLinkVisible"
+                                href="/cash"
+                                class="block px-3 py-2 text-sm text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
+                            >
+                                Caisse
+                            </Link>
+                            <Link
+                                v-if="guestsLinkVisible"
+                                href="/guests"
+                                class="block px-3 py-2 text-sm text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
+                            >
+                                Clients
+                            </Link>
+                            <Link
+                                v-if="analyticsLinkVisible"
+                                href="/analytics"
+                                class="block px-3 py-2 text-sm text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
+                            >
+                                Analytics
+                            </Link>
+                            <Link
+                                v-if="journalLinkVisible"
+                                href="/journal"
+                                class="block px-3 py-2 text-sm text-serena-text-muted transition hover:bg-serena-primary-soft hover:text-serena-primary"
+                            >
+                                Journal
+                            </Link>
+                        </div>
+                    </div>
 
                     <div class="relative">
                         <button
@@ -577,6 +593,9 @@ export default defineComponent({
                         <p class="text-[11px] font-semibold uppercase tracking-wide text-serena-text-muted">Management</p>
                         <Link v-if="cashLinkVisible" href="/cash" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
                             Caisse
+                        </Link>
+                        <Link v-if="guestsLinkVisible" href="/guests" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
+                            Clients
                         </Link>
                         <Link v-if="analyticsLinkVisible" href="/analytics" class="rounded-lg px-3 py-2 text-serena-text-muted hover:bg-serena-primary-soft hover:text-serena-primary" @click="mobileNavOpen = false">
                             Analytics

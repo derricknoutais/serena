@@ -40,13 +40,18 @@
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200">
-                    <tr v-for="guest in guests.data" :key="guest.id" class="hover:bg-gray-50">
+                    <tr
+                        v-for="guest in guests.data"
+                        :key="guest.id"
+                        class="cursor-pointer hover:bg-gray-50"
+                        @click="openDetailsModal(guest)"
+                    >
                         <td class="px-4 py-3 text-sm text-gray-800">{{ guest.full_name || `${guest.first_name} ${guest.last_name}` }}</td>
                         <td class="px-4 py-3 text-sm text-gray-600">{{ guest.email || '—' }}</td>
                         <td class="px-4 py-3 text-sm text-gray-600">{{ guest.phone || '—' }}</td>
                         <td class="px-4 py-3 text-sm text-gray-600 space-x-3">
-                            <button class="text-indigo-600 hover:underline cursor-pointer" @click="openEditModal(guest)">Éditer</button>
-                            <button class="text-red-600 hover:underline cursor-pointer" @click="destroy(guest.id)">Supprimer</button>
+                            <button class="text-indigo-600 hover:underline cursor-pointer" @click.stop="openEditModal(guest)">Éditer</button>
+                            <button class="text-red-600 hover:underline cursor-pointer" @click.stop="destroy(guest.id)">Supprimer</button>
                         </td>
                     </tr>
                 </tbody>
@@ -228,19 +233,114 @@
                 </Form>
             </div>
         </div>
+
+        <div
+            v-if="showDetailsModal"
+            class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 py-10 sm:items-center"
+            @click.self="closeDetailsModal"
+        >
+            <div class="w-full max-w-4xl rounded-xl bg-white p-6 shadow-xl">
+                <div class="mb-4 flex items-center justify-between">
+                    <div>
+                        <h2 class="text-lg font-semibold">Fiche client</h2>
+                        <p class="text-sm text-gray-500">Aperçu des informations et de la fidélité.</p>
+                    </div>
+                    <button type="button" class="text-sm text-gray-500 hover:text-gray-700 cursor-pointer" @click="closeDetailsModal">Fermer</button>
+                </div>
+
+                <div v-if="detailsLoading" class="py-10 text-center text-sm text-gray-500">
+                    Chargement des informations…
+                </div>
+                <div v-else-if="detailsError" class="rounded-lg border border-red-100 bg-red-50 p-4 text-sm text-red-600">
+                    {{ detailsError }}
+                </div>
+                <div v-else class="space-y-6">
+                    <div class="grid gap-4 md:grid-cols-3">
+                        <div class="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                            <p class="text-xs font-semibold uppercase text-gray-400">Coordonnées</p>
+                            <p class="mt-2 text-sm font-semibold text-gray-800">{{ details?.guest?.full_name || '—' }}</p>
+                            <p class="text-sm text-gray-600">{{ details?.guest?.email || '—' }}</p>
+                            <p class="text-sm text-gray-600">{{ details?.guest?.phone || '—' }}</p>
+                            <p class="mt-2 text-xs text-gray-500">
+                                {{ details?.guest?.document_type || 'Document' }} : {{ details?.guest?.document_number || '—' }}
+                            </p>
+                        </div>
+                        <div class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                            <p class="text-xs font-semibold uppercase text-gray-400">Analyse rapide</p>
+                            <div class="mt-3 space-y-2 text-sm text-gray-700">
+                                <div class="flex items-center justify-between">
+                                    <span>Réservations</span>
+                                    <span class="font-semibold">{{ details?.analytics?.reservations_total ?? 0 }}</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span>Nuits cumulées</span>
+                                    <span class="font-semibold">{{ details?.analytics?.total_nights ?? 0 }}</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span>Dépensé</span>
+                                    <span class="font-semibold">{{ formatCurrency(details?.analytics?.total_spent) }}</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span>Solde</span>
+                                    <span class="font-semibold">{{ formatCurrency(details?.analytics?.balance_due) }}</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span>Dernier séjour</span>
+                                    <span class="font-semibold">{{ formatDate(details?.analytics?.last_stay_at) }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                            <p class="text-xs font-semibold uppercase text-gray-400">Fidélité</p>
+                            <p class="mt-2 text-2xl font-semibold text-indigo-600">{{ details?.loyalty?.total_points ?? 0 }}</p>
+                            <p class="text-xs text-gray-500">Points cumulés</p>
+                            <div class="mt-4 space-y-2 text-xs text-gray-600">
+                                <p class="font-semibold text-gray-500">Derniers points</p>
+                                <div v-if="details?.loyalty?.recent?.length">
+                                    <div v-for="point in details.loyalty.recent" :key="point.id" class="flex items-center justify-between">
+                                        <span>{{ point.reservation_code || point.type || 'Séjour' }}</span>
+                                        <span class="font-semibold">{{ point.points }}</span>
+                                    </div>
+                                </div>
+                                <p v-else class="text-gray-400">Aucun point récent.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                        <p class="text-xs font-semibold uppercase text-gray-400">Adresse & notes</p>
+                        <p class="mt-2 text-sm text-gray-700">
+                            {{ formatAddress(details?.guest) }}
+                        </p>
+                        <p class="mt-2 text-sm text-gray-500">{{ details?.guest?.notes || 'Aucune note.' }}</p>
+                    </div>
+
+                    <div class="flex items-center justify-end">
+                        <Link
+                            v-if="details?.guest?.id"
+                            :href="guestDetailsUrl(details.guest.id)"
+                            class="rounded-lg border border-indigo-600 px-4 py-2 text-sm font-semibold text-indigo-600 transition hover:bg-indigo-50"
+                        >
+                            Voir plus
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        </div>
     </ConfigLayout>
 </template>
 
 <script>
 import Swal from 'sweetalert2';
-import { router } from '@inertiajs/vue3';
+import axios from 'axios';
+import { Link, router } from '@inertiajs/vue3';
 import { ErrorMessage, Field, Form, configure, defineRule } from 'vee-validate';
 import ConfigLayout from '@/layouts/ConfigLayout.vue';
 import PrimaryButton from '@/components/PrimaryButton.vue';
 
 export default {
     name: 'GuestsIndex',
-    components: { ConfigLayout, Form, Field, ErrorMessage, PrimaryButton },
+    components: { ConfigLayout, Form, Field, ErrorMessage, PrimaryButton, Link },
     props: {
         guests: {
             type: Object,
@@ -262,6 +362,10 @@ export default {
             submitting: false,
             editId: null,
             formKey: 0,
+            showDetailsModal: false,
+            detailsLoading: false,
+            detailsError: null,
+            details: null,
             form: {
                 first_name: '',
                 last_name: '',
@@ -283,7 +387,15 @@ export default {
         resourceBasePath() {
             const currentUrl = this.$page?.url ?? '';
 
-            return currentUrl.startsWith('/settings/resources') ? '/settings/resources' : '/resources';
+            if (currentUrl.startsWith('/settings/resources')) {
+                return '/settings/resources';
+            }
+
+            if (currentUrl.startsWith('/guests')) {
+                return '';
+            }
+
+            return '/resources';
         },
     },
     watch: {
@@ -350,6 +462,29 @@ export default {
             this.formKey += 1;
             this.showModal = true;
         },
+        async openDetailsModal(guest) {
+            this.showDetailsModal = true;
+            this.detailsLoading = true;
+            this.detailsError = null;
+            this.details = null;
+
+            try {
+                const response = await axios.get(`${this.resourceBasePath}/guests/${guest.id}/summary`, {
+                    headers: { Accept: 'application/json' },
+                });
+                this.details = response.data;
+            } catch (error) {
+                this.detailsError = 'Impossible de charger les informations du client.';
+            } finally {
+                this.detailsLoading = false;
+            }
+        },
+        closeDetailsModal() {
+            this.showDetailsModal = false;
+            this.detailsLoading = false;
+            this.detailsError = null;
+            this.details = null;
+        },
         closeModal() {
             this.showModal = false;
             this.resetForm();
@@ -400,6 +535,23 @@ export default {
                     this.submitting = false;
                 },
             });
+        },
+        guestDetailsUrl(guestId) {
+            return `${this.resourceBasePath}/guests/${guestId}`;
+        },
+        formatCurrency(amount, currency = 'XAF') {
+            const value = Number(amount || 0);
+            return `${value.toFixed(0)} ${currency}`;
+        },
+        formatDate(value) {
+            return value ? new Date(value).toLocaleDateString('fr-FR') : '—';
+        },
+        formatAddress(guest) {
+            if (!guest) {
+                return '—';
+            }
+
+            return [guest.address, guest.city, guest.country].filter(Boolean).join(', ') || '—';
         },
         destroy(id) {
             Swal.fire({

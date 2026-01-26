@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Frontdesk;
 use App\Http\Controllers\Controller;
 use App\Models\Folio;
 use App\Models\Guest;
+use App\Models\LoyaltyPoint;
+use App\Models\Payment;
+use App\Models\Reservation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -77,7 +80,7 @@ class GuestController extends Controller
         }
 
         return redirect()
-            ->route('guests.index')
+            ->route($this->guestIndexRoute($request))
             ->with('success', 'Client créé avec succès.');
     }
 
@@ -87,11 +90,67 @@ class GuestController extends Controller
 
         abort_unless($guest->tenant_id === $tenantId, 404);
 
+        $reservations = Reservation::query()
+            ->where('tenant_id', $tenantId)
+            ->where('guest_id', $guest->id)
+            ->with([
+                'room:id,number',
+                'roomType:id,name',
+                'offer:id,name',
+                'folios' => function ($query): void {
+                    $query->where('is_main', true)
+                        ->with([
+                            'payments' => function ($query): void {
+                                $query->whereNull('deleted_at')
+                                    ->with('paymentMethod:id,name');
+                            },
+                        ]);
+                },
+            ])
+            ->orderByDesc('check_in_date')
+            ->get();
+
+        $history = $reservations->map(function (Reservation $reservation): array {
+            $folio = $reservation->folios->first();
+            $payments = $folio?->payments?->map(function (Payment $payment): array {
+                return [
+                    'id' => $payment->id,
+                    'amount' => $payment->amount,
+                    'currency' => $payment->currency,
+                    'paid_at' => $payment->paid_at,
+                    'method' => $payment->paymentMethod?->name,
+                    'entry_type' => $payment->entry_type,
+                ];
+            })?->values() ?? collect();
+
+            return [
+                'id' => $reservation->id,
+                'code' => $reservation->code,
+                'status' => $reservation->status,
+                'status_label' => $reservation->status_label,
+                'check_in_date' => $reservation->check_in_date,
+                'check_out_date' => $reservation->check_out_date,
+                'room' => $reservation->room?->number,
+                'room_type' => $reservation->roomType?->name,
+                'offer' => $reservation->offer?->name ?? $reservation->offer_name,
+                'total_amount' => $reservation->total_amount,
+                'currency' => $reservation->currency,
+                'folio_balance' => $folio?->balance,
+                'payments' => $payments,
+            ];
+        });
+
+        $loyaltyTotal = LoyaltyPoint::query()
+            ->where('tenant_id', $tenantId)
+            ->where('guest_id', $guest->id)
+            ->sum('points');
+
         return Inertia::render('Frontdesk/Guests/Show', [
             'guest' => $guest->only([
                 'id',
                 'first_name',
                 'last_name',
+                'full_name',
                 'email',
                 'phone',
                 'document_type',
@@ -101,7 +160,10 @@ class GuestController extends Controller
                 'country',
                 'notes',
             ]),
-            // TODO: ajouter historique quand Reservation existera.
+            'reservations' => $history,
+            'loyalty' => [
+                'total_points' => (int) $loyaltyTotal,
+            ],
         ]);
     }
 
@@ -150,7 +212,7 @@ class GuestController extends Controller
         $guest->update($data);
 
         return redirect()
-            ->route('guests.index')
+            ->route($this->guestIndexRoute($request))
             ->with('success', 'Client mis à jour.');
     }
 
@@ -163,7 +225,7 @@ class GuestController extends Controller
         $guest->delete();
 
         return redirect()
-            ->route('guests.index')
+            ->route($this->guestIndexRoute($request))
             ->with('success', 'Client supprimé.');
     }
 
@@ -209,5 +271,112 @@ class GuestController extends Controller
         });
 
         return response()->json($payload);
+    }
+
+    public function summary(Request $request, Guest $guest): JsonResponse
+    {
+        $tenantId = $request->user()->tenant_id;
+
+        abort_unless($guest->tenant_id === $tenantId, 404);
+
+        $reservationsBase = Reservation::query()
+            ->where('tenant_id', $tenantId)
+            ->where('guest_id', $guest->id);
+
+        $reservations = (clone $reservationsBase)
+            ->orderByDesc('check_in_date')
+            ->get(['check_in_date', 'check_out_date']);
+
+        $totalNights = $reservations->sum(function (Reservation $reservation): int {
+            $checkIn = $reservation->check_in_date?->copy()?->startOfDay();
+            $checkOut = $reservation->check_out_date?->copy()?->startOfDay();
+
+            if (! $checkIn || ! $checkOut) {
+                return 0;
+            }
+
+            return max(0, $checkIn->diffInDays($checkOut));
+        });
+
+        $lastStay = (clone $reservationsBase)
+            ->orderByDesc('check_in_date')
+            ->value('check_in_date');
+
+        $balanceDue = Folio::query()
+            ->where('tenant_id', $tenantId)
+            ->where('guest_id', $guest->id)
+            ->where('is_main', true)
+            ->sum('balance');
+
+        $totalSpent = Payment::query()
+            ->whereNull('deleted_at')
+            ->whereHas('folio', function ($query) use ($tenantId, $guest): void {
+                $query->where('tenant_id', $tenantId)
+                    ->where('guest_id', $guest->id);
+            })
+            ->sum('amount');
+
+        $loyaltyTotal = LoyaltyPoint::query()
+            ->where('tenant_id', $tenantId)
+            ->where('guest_id', $guest->id)
+            ->sum('points');
+
+        $recentPoints = LoyaltyPoint::query()
+            ->where('tenant_id', $tenantId)
+            ->where('guest_id', $guest->id)
+            ->with('reservation:id,code')
+            ->latest()
+            ->limit(5)
+            ->get()
+            ->map(function (LoyaltyPoint $point): array {
+                return [
+                    'id' => $point->id,
+                    'points' => $point->points,
+                    'type' => $point->type,
+                    'reservation_code' => $point->reservation?->code,
+                    'created_at' => $point->created_at,
+                ];
+            });
+
+        return response()->json([
+            'guest' => [
+                'id' => $guest->id,
+                'first_name' => $guest->first_name,
+                'last_name' => $guest->last_name,
+                'full_name' => $guest->full_name,
+                'email' => $guest->email,
+                'phone' => $guest->phone,
+                'document_type' => $guest->document_type,
+                'document_number' => $guest->document_number,
+                'address' => $guest->address,
+                'city' => $guest->city,
+                'country' => $guest->country,
+                'notes' => $guest->notes,
+            ],
+            'analytics' => [
+                'reservations_total' => (clone $reservationsBase)->count(),
+                'reservations_active' => (clone $reservationsBase)
+                    ->whereIn('status', Reservation::activeStatusForAvailability())
+                    ->count(),
+                'reservations_completed' => (clone $reservationsBase)
+                    ->where('status', Reservation::STATUS_CHECKED_OUT)
+                    ->count(),
+                'total_nights' => (int) $totalNights,
+                'total_spent' => (float) $totalSpent,
+                'balance_due' => (float) $balanceDue,
+                'last_stay_at' => $lastStay,
+            ],
+            'loyalty' => [
+                'total_points' => (int) $loyaltyTotal,
+                'recent' => $recentPoints,
+            ],
+        ]);
+    }
+
+    private function guestIndexRoute(Request $request): string
+    {
+        return $request->is('settings/resources/*')
+            ? 'ressources.guests.index'
+            : 'guests.index';
     }
 }

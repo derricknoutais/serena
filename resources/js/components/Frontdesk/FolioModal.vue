@@ -1202,7 +1202,7 @@ export default {
             }
 
             if (!window.Swal) {
-                await this.generateInvoice();
+                await this.generateInvoice(this.invoices.length > 0);
 
                 return;
             }
@@ -1218,10 +1218,10 @@ export default {
             });
 
             if (result.isConfirmed) {
-                await this.generateInvoice();
+                await this.generateInvoice(this.invoices.length > 0);
             }
         },
-        async generateInvoice() {
+        async generateInvoice(regenerate = false) {
             if (!this.folio) {
                 return;
             }
@@ -1242,6 +1242,7 @@ export default {
                 const http = window.axios ?? axios;
                 await http.post(`/folios/${this.folio.id}/invoices`, {
                     close_folio: false,
+                    regenerate,
                 });
                 this.$emit('updated');
             } catch (error) {

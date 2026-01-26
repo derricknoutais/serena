@@ -116,6 +116,7 @@ class HandleInertiaRequests extends Middleware
             'cash_sessions.close',
             'rooms.view', 'rooms.create', 'rooms.update', 'rooms.delete',
             'room_types.view', 'room_types.create', 'room_types.update', 'room_types.delete',
+            'guests.view',
             'offers.view', 'offers.create', 'offers.update', 'offers.delete',
             'products.view', 'products.create', 'products.update', 'products.delete',
             'product_categories.view', 'product_categories.create', 'product_categories.update', 'product_categories.delete',
