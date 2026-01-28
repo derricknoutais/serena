@@ -66,7 +66,7 @@ const submit = () => {
                 <Card class="space-y-6">
                     <div class="flex flex-col gap-2 text-sm text-serena-text-muted">
                         <span class="font-medium text-serena-text-main">{{ hotel.name }}</span>
-                        <span>Les points sont attribués uniquement après le check-out.</span>
+                        <span>Les points sont attribués à l’enregistrement des paiements.</span>
                     </div>
 
                     <form class="space-y-6" @submit.prevent="submit">

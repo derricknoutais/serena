@@ -190,6 +190,41 @@ it('creates the stay folio item on check-in', function (): void {
         ->and($stayItem?->unit_price)->toBe(18000.0);
 });
 
+it('blocks check-in when the room is not inspected', function (): void {
+    [
+        'tenant' => $tenant,
+        'user' => $user,
+        'reservation' => $reservation,
+        'room' => $room,
+    ] = setupReservationEnvironment('status-checkin-blocked');
+
+    grantFrontdeskAccess($user);
+
+    $room->update([
+        'hk_status' => \App\Models\Room::HK_STATUS_AWAITING_INSPECTION,
+    ]);
+
+    $reservation->update([
+        'status' => Reservation::STATUS_CONFIRMED,
+        'check_in_date' => now()->toDateString(),
+        'check_out_date' => now()->addDay()->toDateString(),
+    ]);
+
+    $response = $this->actingAs($user)->patch(sprintf(
+        'http://%s/reservations/%s/status',
+        tenantDomain($tenant),
+        $reservation->id,
+    ), [
+        'action' => 'check_in',
+        'actual_check_in_at' => now()->setTime(15, 0)->toDateTimeString(),
+    ]);
+
+    $response->assertSessionHasErrors('check_in');
+
+    expect($reservation->fresh()->status)->toBe(Reservation::STATUS_CONFIRMED)
+        ->and($room->fresh()->hk_status)->toBe(\App\Models\Room::HK_STATUS_AWAITING_INSPECTION);
+});
+
 it('requires an open frontdesk cash session when applying a cancellation penalty', function (): void {
     [
         'tenant' => $tenant,

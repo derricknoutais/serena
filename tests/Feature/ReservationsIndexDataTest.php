@@ -159,3 +159,91 @@ it('includes guest balance due in planner data', function (): void {
     expect($guestEntry)->not->toBeNull()
         ->and($guestEntry['balance_due'])->toBe(12500.0);
 });
+
+it('returns all reservations without capping the planner list', function (): void {
+    $user = User::factory()->create();
+    $tenantId = $user->tenant_id;
+
+    $hotel = Hotel::query()->create([
+        'tenant_id' => $tenantId,
+        'name' => 'Hotel Planner',
+        'code' => 'HPL',
+        'currency' => 'XAF',
+        'timezone' => 'Africa/Douala',
+        'address' => '3 Test St',
+        'city' => 'Douala',
+        'country' => 'CM',
+        'check_in_time' => '14:00',
+        'check_out_time' => '11:00',
+    ]);
+
+    $user->forceFill(['active_hotel_id' => $hotel->id])->save();
+
+    $roomType = RoomType::query()->create([
+        'tenant_id' => $tenantId,
+        'hotel_id' => $hotel->id,
+        'name' => 'Standard',
+        'capacity_adults' => 2,
+        'capacity_children' => 0,
+        'base_price' => 5000,
+        'description' => null,
+    ]);
+
+    $room = Room::query()->create([
+        'tenant_id' => $tenantId,
+        'hotel_id' => $hotel->id,
+        'room_type_id' => $roomType->id,
+        'number' => '202',
+        'floor' => '2',
+        'status' => 'available',
+        'hk_status' => Room::HK_STATUS_INSPECTED,
+    ]);
+
+    $guest = Guest::query()->create([
+        'tenant_id' => $tenantId,
+        'first_name' => 'Planner',
+        'last_name' => 'Guest',
+        'email' => 'planner@example.com',
+        'phone' => null,
+    ]);
+
+    $checkIn = Carbon::create(2024, 6, 1, 14, 0, 0, 'UTC');
+    $checkOut = Carbon::create(2024, 6, 2, 11, 0, 0, 'UTC');
+
+    foreach (range(1, 205) as $index) {
+        Reservation::query()->create([
+            'tenant_id' => $tenantId,
+            'hotel_id' => $hotel->id,
+            'guest_id' => $guest->id,
+            'room_type_id' => $roomType->id,
+            'room_id' => $room->id,
+            'offer_id' => null,
+            'code' => 'RSV-PLN-'.$index,
+            'status' => Reservation::STATUS_CONFIRMED,
+            'source' => 'web',
+            'offer_name' => null,
+            'offer_kind' => null,
+            'adults' => 2,
+            'children' => 0,
+            'check_in_date' => $checkIn,
+            'check_out_date' => $checkOut,
+            'expected_arrival_time' => null,
+            'actual_check_in_at' => null,
+            'actual_check_out_at' => null,
+            'currency' => 'XAF',
+            'unit_price' => 5000,
+            'base_amount' => 5000,
+            'tax_amount' => 0,
+            'total_amount' => 5000,
+            'notes' => null,
+            'booked_by_user_id' => $user->id,
+        ]);
+    }
+
+    $request = Request::create('/frontdesk/reservations', 'GET');
+    $request->setUserResolver(static fn () => $user);
+
+    $data = ReservationsIndexData::build($request);
+
+    expect($data['events'])->toHaveCount(205);
+});

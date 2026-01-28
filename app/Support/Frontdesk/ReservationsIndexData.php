@@ -34,7 +34,6 @@ class ReservationsIndexData
             ->when($hotelId, fn ($q) => $q->forHotel($hotelId))
             ->with(['room', 'roomType', 'offer'])
             ->orderBy('check_in_date')
-            ->limit(200)
             ->get()
             ->map(function (Reservation $reservation) {
                 $start = $reservation->check_in_date ? Carbon::parse($reservation->check_in_date) : null;

@@ -42,7 +42,6 @@ class ReservationStateMachine
         private readonly Notifier $notifier,
         private readonly HousekeepingService $housekeepingService,
         private readonly HousekeepingPriorityService $housekeepingPriorityService,
-        private readonly LoyaltyEarningService $loyaltyEarningService,
         private readonly VapidEventNotifier $vapidEventNotifier,
     ) {}
 
@@ -110,6 +109,10 @@ class ReservationStateMachine
             ], [
                 'cta_route' => 'rooms.board',
                 'cta_params' => ['date' => now()->toDateString()],
+            ]);
+
+            throw ValidationException::withMessages([
+                'check_in' => 'La chambre doit être inspectée avant le check-in.',
             ]);
         }
 
@@ -242,8 +245,6 @@ class ReservationStateMachine
             $lateOverride,
             $canOverrideFees,
         );
-
-        $this->recordLoyaltyPoints($updated);
 
         $remainingBalance = $mainFolio?->balance ?? 0;
         $remainingCurrency = $mainFolio?->currency;
@@ -413,36 +414,5 @@ class ReservationStateMachine
                 'status' => 'Transition de statut non autorisée.',
             ]);
         }
-    }
-
-    private function recordLoyaltyPoints(Reservation $reservation): void
-    {
-        if (! $reservation->guest_id) {
-            return;
-        }
-
-        $points = $this->loyaltyEarningService->computeEarnedPoints($reservation);
-
-        if ($points <= 0) {
-            return;
-        }
-
-        $alreadyEarned = \App\Models\LoyaltyPoint::query()
-            ->where('reservation_id', $reservation->id)
-            ->where('type', 'earn')
-            ->exists();
-
-        if ($alreadyEarned) {
-            return;
-        }
-
-        \App\Models\LoyaltyPoint::query()->create([
-            'tenant_id' => $reservation->tenant_id,
-            'hotel_id' => $reservation->hotel_id,
-            'reservation_id' => $reservation->id,
-            'guest_id' => $reservation->guest_id,
-            'type' => 'earn',
-            'points' => $points,
-        ]);
     }
 }

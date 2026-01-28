@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\LoyaltyEarningService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -207,6 +208,7 @@ class Folio extends Model
         $payload['hotel_id'] = $this->hotel_id;
         $payload['currency'] = $data['currency'] ?? $this->currency;
         $payload['paid_at'] = $data['paid_at'] ?? now();
+        $payload['entry_type'] = $data['entry_type'] ?? Payment::ENTRY_TYPE_PAYMENT;
 
         $payment = $this->payments()->create($payload);
 
@@ -224,6 +226,16 @@ class Folio extends Model
                 ])
                 ->event('created')
                 ->log('created');
+
+            if ($created->entry_type === Payment::ENTRY_TYPE_PAYMENT && $created->amount > 0) {
+                $reservation = $this->relationLoaded('reservation')
+                    ? $this->reservation
+                    : $this->reservation()->first();
+
+                if ($reservation) {
+                    app(LoyaltyEarningService::class)->recordPointsForReservation($reservation);
+                }
+            }
         });
     }
 

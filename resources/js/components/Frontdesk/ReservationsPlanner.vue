@@ -1,9 +1,25 @@
 <template>
     <div class="space-y-4">
-        <div class="mb-4 flex items-center justify-between">
+        <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
                 <h1 class="text-xl font-semibold">Réservations</h1>
                 <p class="text-sm text-gray-500">Vue calendrier des réservations.</p>
+            </div>
+            <div class="w-full max-w-xs">
+                <label class="text-xs font-semibold text-gray-600">Filtrer par offre</label>
+                <Multiselect
+                    v-model="selectedOfferFilters"
+                    :options="offers"
+                    track-by="id"
+                    label="name"
+                    placeholder="Toutes les offres"
+                    class="mt-1"
+                    :multiple="true"
+                    :close-on-select="false"
+                    :clear-on-select="false"
+                    :preserve-search="true"
+                    :show-labels="false"
+                />
             </div>
         </div>
 
@@ -635,6 +651,7 @@
                 selectedRoomType: null,
                 selectedRoom: null,
                 selectedOffer: null,
+                selectedOfferFilters: [],
                 priceMatrix: {},
                 showFolioModal: false,
                 folioData: null,
@@ -671,10 +688,7 @@
                 immediate: true,
                 handler(newEvents) {
                     this.eventsLocal = [...newEvents];
-                    this.calendarOptions = {
-                        ...this.calendarOptions,
-                        events: this.eventsLocal,
-                    };
+                    this.refreshCalendarEvents();
 
                     if (this.selectedEvent?.id) {
                         const fresh = this.eventsLocal.find((e) => e.id == this.selectedEvent.id);
@@ -695,6 +709,9 @@
                 handler(newGuests) {
                     this.localGuests = [...(newGuests || [])];
                 },
+            },
+            selectedOfferFilters() {
+                this.refreshCalendarEvents();
             },
             selectedGuest(newVal) {
                 this.form.guest_id = newVal ? newVal.id : '';
@@ -789,6 +806,17 @@
         computed: {
             createStatusOptions() {
                 return (this.statusOptions || []).filter((status) => ['pending', 'confirmed'].includes(status));
+            },
+            filteredEvents() {
+                if (!this.selectedOfferFilters.length) {
+                    return this.eventsLocal;
+                }
+
+                const offerIds = this.selectedOfferFilters.map((offer) => offer.id);
+
+                return (this.eventsLocal || []).filter((event) =>
+                    offerIds.includes(event.offer_id ?? event.extendedProps?.offer_id ?? null),
+                );
             },
             filteredRooms() {
                 if (this.selectedRoomType && this.selectedRoomType.id) {
@@ -1028,6 +1056,12 @@
             },
         },
         methods: {
+            refreshCalendarEvents() {
+                this.calendarOptions = {
+                    ...this.calendarOptions,
+                    events: this.filteredEvents,
+                };
+            },
             showUnauthorizedAlert() {
                 Swal.fire({
                     icon: 'error',
@@ -2076,18 +2110,14 @@
                     const hkStatus = this.getReservationHkStatus(targetId);
 
                     if (hkStatus && hkStatus !== 'inspected') {
-                        const warning = await Swal.fire({
-                            title: 'Chambre non prête',
-                            text: 'Cette chambre n’est pas inspectée. Voulez-vous continuer le check-in ?',
-                            icon: 'warning',
-                            showCancelButton: true,
-                            confirmButtonText: 'Oui',
-                            cancelButtonText: 'Non',
+                        await Swal.fire({
+                            title: 'Inspection requise',
+                            text: 'La chambre doit être inspectée avant le check-in.',
+                            icon: 'error',
+                            confirmButtonText: 'Compris',
                         });
 
-                        if (!warning.isConfirmed) {
-                            return;
-                        }
+                        return;
                     }
                 }
 

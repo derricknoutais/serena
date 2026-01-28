@@ -125,7 +125,11 @@
                 <div class="flex flex-wrap gap-2">
                     <button
                         type="button"
-                        class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700"
+                        class="rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm"
+                        :class="canOpenWalkIn
+                            ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                            : 'cursor-not-allowed border border-indigo-200 bg-indigo-50 text-indigo-400'"
+                        :disabled="!canOpenWalkIn"
                         @click="onOpenWalkIn(selectedRoom)"
                     >
                         Nouvelle réservation / Check-in rapide
@@ -141,6 +145,12 @@
                         {{ folioLoading ? 'Ouverture du folio...' : 'Encaisser / Folio' }}
                     </button>
                 </div>
+                <p
+                    v-if="!canOpenWalkIn && walkInBlockers.length"
+                    class="text-[11px] text-amber-700"
+                >
+                    Impossible pour le moment : {{ walkInBlockers.join(' ') }}
+                </p>
 
                 <div class="mt-2 flex flex-wrap gap-2">
                     <button
@@ -501,6 +511,48 @@ export default {
             }
 
             return this.selectedRoom.maintenance_ticket ? [this.selectedRoom.maintenance_ticket] : [];
+        },
+        walkInBlockers() {
+            if (!this.selectedRoom) {
+                return [];
+            }
+
+            const blockers = [];
+
+            if (this.selectedRoom.current_reservation) {
+                blockers.push('Une réservation est déjà en cours.');
+            }
+
+            if (this.selectedRoom.ui_status === 'occupied') {
+                blockers.push('La chambre est occupée.');
+            }
+
+            if (this.selectedRoom.status === 'out_of_order' || this.selectedRoom.ui_status === 'out_of_order') {
+                blockers.push('La chambre est hors service.');
+            }
+
+            if (this.selectedRoom.status === 'inactive') {
+                blockers.push('La chambre est inactive.');
+            }
+
+            if (this.selectedRoom.is_sellable === false) {
+                blockers.push('La chambre est non vendable.');
+            }
+
+            if ((this.selectedRoom.maintenance_blocking_count ?? 0) > 0) {
+                blockers.push('La maintenance bloque la vente.');
+            }
+
+            if (this.selectedRoom.hk_status !== 'inspected') {
+                blockers.push(
+                    `Inspection requise (statut ménage : ${this.hkStatusLabel(this.selectedRoom.hk_status)}).`,
+                );
+            }
+
+            return blockers;
+        },
+        canOpenWalkIn() {
+            return Boolean(this.selectedRoom && this.walkInBlockers.length === 0);
         },
     },
     methods: {
